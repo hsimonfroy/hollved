@@ -165,7 +165,7 @@ function sceneRenderer(container) {
       if (degree) {
         sizes[i] = ((200 / maxInDegree) * degree.length + 15);
       } else {
-        sizes[i] = 30;
+        sizes[i] = 10;
       }
     }
     view.sizes(sizes);
