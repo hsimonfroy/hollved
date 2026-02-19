@@ -27,7 +27,6 @@ import appConfig from './appConfig.js';
 export default sceneRenderer;
 
 var defaultNodeColor = 0xffffffff;
-
 var highlightNodeColor = 0xff0000ff;
 
 function sceneRenderer(container) {
@@ -36,8 +35,15 @@ function sceneRenderer(container) {
   var lineView, links, lineViewNeedsUpdate;
   var queryUpdateId = setInterval(updateQuery, 200);
 
+  // Tracer state
+  var tracerRanges = null;      // [{ id, name, color, startNode, nodeCount }]
+  var baseColors = null;        // Uint8Array: per-node "resting" colors (source of truth)
+  var tracerVisibility = {};    // { tracerId: boolean }
+
   appEvents.positionsDownloaded.on(setPositions);
   appEvents.linksDownloaded.on(setLinks);
+  appEvents.tracerRangesReady.on(setTracerRanges);
+  appEvents.setTracerVisibility.on(handleSetTracerVisibility);
   appEvents.toggleSteering.on(toggleSteering);
   appEvents.focusOnNode.on(focusOnNode);
   appEvents.around.on(around);
@@ -72,17 +78,13 @@ function sceneRenderer(container) {
   function updateQuery() {
     if (!renderer) return;
     var camera = renderer.camera();
-
     appConfig.setCameraConfig(camera.position, camera.quaternion);
   }
 
   function toggleSteering() {
     if (!renderer) return;
-
     var input = renderer.input();
     var isDragToLookEnabled = input.toggleDragToLook();
-
-    // steering does not require "drag":
     var isSteering = !isDragToLookEnabled;
     appEvents.showSteeringMode.fire(isSteering);
   }
@@ -96,9 +98,7 @@ function sceneRenderer(container) {
 
   function focusOnNode(nodeId) {
     if (!renderer) return;
-
     renderer.lookAt(nodeId * 3, highlightFocused);
-
     function highlightFocused() {
       appEvents.selectNode.fire(nodeId);
     }
@@ -112,10 +112,18 @@ function sceneRenderer(container) {
     destroyHitTest();
 
     positions = _positions;
+    // Reset tracer state when new positions arrive
+    tracerRanges = null;
+    baseColors = null;
+    tracerVisibility = {};
+
     focusScene();
 
     if (!renderer) {
       renderer = unrender(container);
+      var camera = renderer.camera();
+      camera.fov = 60;
+      camera.updateProjectionMatrix();
       touchControl = createTouchControl(renderer);
       moveCameraInternal();
       var input = renderer.input();
@@ -131,6 +139,80 @@ function sceneRenderer(container) {
     hitTest.on('hitTestReady', adjustMovementSpeed);
   }
 
+  function setTracerRanges(ranges) {
+    if (!renderer) return;
+    tracerRanges = ranges;
+
+    // Initialize all tracers as visible, applying initial visibility from appConfig
+    var configVisible = appConfig.getVisibleTracers(); // null = all visible
+    ranges.forEach(function(tracer) {
+      tracerVisibility[tracer.id] = configVisible
+        ? configVisible.indexOf(tracer.id) >= 0
+        : true;
+    });
+
+    var view = renderer.getParticleView();
+    var colors = view.colors();
+
+    applyTracerColors(colors);
+
+    // Snapshot as base colors
+    baseColors = new Uint8Array(colors.length);
+    baseColors.set(colors);
+
+    view.colors(colors);
+  }
+
+  function applyTracerColors(colors) {
+    if (!tracerRanges) return;
+    tracerRanges.forEach(function(tracer) {
+      var visible = tracerVisibility[tracer.id] !== false;
+      var color = visible ? tracer.color : (tracer.color & 0xFFFFFF00);
+      for (var n = 0; n < tracer.nodeCount; ++n) {
+        colorNode((tracer.startNode + n) * 3, colors, color);
+      }
+    });
+  }
+
+  function handleSetTracerVisibility(tracerId, visible) {
+    if (!tracerRanges || !renderer) return;
+
+    var tracer = null;
+    for (var i = 0; i < tracerRanges.length; ++i) {
+      if (tracerRanges[i].id === tracerId) {
+        tracer = tracerRanges[i];
+        break;
+      }
+    }
+    if (!tracer) return;
+
+    tracerVisibility[tracerId] = visible;
+    var color = visible ? tracer.color : (tracer.color & 0xFFFFFF00);
+
+    // Update baseColors and live colors for nodes in this tracer's range
+    var view = renderer.getParticleView();
+    var colors = view.colors();
+
+    for (var n = 0; n < tracer.nodeCount; ++n) {
+      var nativeIdx = (tracer.startNode + n) * 3;
+      colorNode(nativeIdx, colors, color);
+      if (baseColors) {
+        colorNode(nativeIdx, baseColors, color);
+      }
+    }
+
+    // Reapply highlight if the highlighted node is in this tracer (only when visible)
+    if (visible && lastHighlight !== undefined) {
+      var highlightedNode = lastHighlight / 3;
+      if (highlightedNode >= tracer.startNode &&
+          highlightedNode < tracer.startNode + tracer.nodeCount) {
+        colorNode(lastHighlight, colors, highlightNodeColor);
+      }
+    }
+
+    view.colors(colors);
+  }
+
   function adjustMovementSpeed(tree) {
     var input = renderer.input();
     if (tree) {
@@ -142,8 +224,6 @@ function sceneRenderer(container) {
   }
 
   function focusScene() {
-    // need to be within timeout, in case if we are detached (e.g.
-    // first load)
     setTimeout(function() {
       container.focus();
     }, 30);
@@ -177,7 +257,6 @@ function sceneRenderer(container) {
       var item = sparseArray[i];
       if (item && item.length > maxSize) maxSize = item.length;
     }
-
     return maxSize;
   }
 
@@ -205,7 +284,6 @@ function sceneRenderer(container) {
 
   function moveCameraInternal() {
     if (!renderer) return;
-
     var camera = renderer.camera();
     var pos = appConfig.getCameraPosition();
     if (pos) {
@@ -218,8 +296,7 @@ function sceneRenderer(container) {
   }
 
   function destroyHitTest() {
-    if (!hitTest) return; // nothing to destroy
-
+    if (!hitTest) return;
     hitTest.off('over', handleOver);
     hitTest.off('click', handleClick);
     hitTest.off('dblclick', handleDblClick);
@@ -228,7 +305,6 @@ function sceneRenderer(container) {
 
   function handleClick(e) {
     var nearestIndex = getNearestIndex(positions, e.indexes, e.ray, 30);
-
     appEvents.selectNode.fire(getModelIndex(nearestIndex));
   }
 
@@ -241,7 +317,6 @@ function sceneRenderer(container) {
 
   function handleOver(e) {
     var nearestIndex = getNearestIndex(positions, e.indexes, e.ray, 30);
-
     highlightNode(nearestIndex);
     appEvents.nodeHover.fire({
       nodeIndex: getModelIndex(nearestIndex),
@@ -255,7 +330,9 @@ function sceneRenderer(container) {
     var sizes = view.sizes();
 
     if (lastHighlight !== undefined) {
-      colorNode(lastHighlight, colors, defaultNodeColor);
+      // Restore from baseColors if available, else use default
+      var restoreColor = getBaseColor(lastHighlight);
+      colorNode(lastHighlight, colors, restoreColor);
       sizes[lastHighlight/3] = lastHighlightSize;
     }
 
@@ -271,17 +348,25 @@ function sceneRenderer(container) {
     view.sizes(sizes);
   }
 
+  function getBaseColor(nativeIdx) {
+    if (baseColors) {
+      var offset = (nativeIdx / 3) * 4;
+      return ((baseColors[offset] << 24) |
+              (baseColors[offset + 1] << 16) |
+              (baseColors[offset + 2] << 8) |
+               baseColors[offset + 3]) >>> 0;
+    }
+    return defaultNodeColor;
+  }
+
   function highlightQuery(query, color, scale) {
     if (!renderer) return;
-
     var nodeIds = query.results.map(toNativeIndex);
     var view = renderer.getParticleView();
     var colors = view.colors();
-
     for (var i = 0; i < nodeIds.length; ++i) {
-      colorNode(nodeIds[i], colors, color)
+      colorNode(nodeIds[i], colors, color);
     }
-
     view.colors(colors);
     appEvents.queryHighlighted.fire(query, color);
   }
@@ -309,8 +394,14 @@ function sceneRenderer(container) {
     var view = renderer.getParticleView();
     var colors = view.colors();
 
-    for (var i = 0; i < colors.length/4; i++) {
-      colorNode(i * 3, colors, 0xffffffff);
+    if (baseColors) {
+      // Restore tracer colors
+      colors.set(baseColors);
+    } else {
+      // No tracer info: reset to default white
+      for (var i = 0; i < colors.length/4; i++) {
+        colorNode(i * 3, colors, defaultNodeColor);
+      }
     }
 
     view.colors(colors);
@@ -322,9 +413,7 @@ function sceneRenderer(container) {
 
   function getModelIndex(nearestIndex) {
     if (nearestIndex !== undefined) {
-      // since each node represented as triplet we need to divide by 3 to
-      // get actual index:
-      return nearestIndex/3
+      return nearestIndex/3;
     }
   }
 
@@ -334,6 +423,8 @@ function sceneRenderer(container) {
     renderer.destroy();
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.linksDownloaded.off(setLinks);
+    appEvents.tracerRangesReady.off(setTracerRanges);
+    appEvents.setTracerVisibility.off(handleSetTracerVisibility);
 
     if (touchControl) touchControl.destroy();
     renderer = null;
@@ -341,7 +432,5 @@ function sceneRenderer(container) {
     clearInterval(queryUpdateId);
     appConfig.off('camera', moveCamera);
     appConfig.off('showLinks', toggleLinks);
-
-    // todo: app events?
   }
 }

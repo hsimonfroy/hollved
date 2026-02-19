@@ -10,7 +10,7 @@ var defaultConfig = {
   showLinks: true,
   maxVisibleDistance: 150,
   scale: 1.,
-  manifestVersion: 0
+  visibleTracers: null  // null means all tracers visible
 };
 
 export default appConfig();
@@ -27,8 +27,8 @@ function appConfig() {
     getMaxVisibleEdgeLength: getMaxVisibleEdgeLength,
     setCameraConfig: setCameraConfig,
     setShowLinks: setShowLinks,
-    getManifestVersion: getManifestVersion,
-    setManifestVersion: setManifestVersion
+    getVisibleTracers: getVisibleTracers,
+    setVisibleTracers: setVisibleTracers
   };
 
   appEvents.toggleLinks.on(toggleLinks);
@@ -42,8 +42,8 @@ function appConfig() {
     return hashConfig.scale;
   }
 
-  function getManifestVersion() {
-    return hashConfig.manifestVersion;
+  function getVisibleTracers() {
+    return hashConfig.visibleTracers;
   }
 
   function getMaxVisibleEdgeLength() {
@@ -71,6 +71,7 @@ function appConfig() {
     var cameraChanged = !same(currentHashConfig.pos, hashConfig.pos) ||
                         !same(currentHashConfig.lookAt, hashConfig.lookAt);
     var showLinksChanged = hashConfig.showLinks !== currentHashConfig.showLinks;
+    var tracersChanged = !sameTracers(currentHashConfig.visibleTracers, hashConfig.visibleTracers);
 
     if (cameraChanged) {
       setCameraConfig(currentHashConfig.pos, currentHashConfig.lookAt);
@@ -79,7 +80,10 @@ function appConfig() {
     if (showLinksChanged) {
       setShowLinks(currentHashConfig.showLinks);
     }
-    setManifestVersion(currentHashConfig.manifestVersion);
+    if (tracersChanged) {
+      hashConfig.visibleTracers = currentHashConfig.visibleTracers;
+      api.fire('tracersChanged');
+    }
   }
 
   function setShowLinks(linksVisible) {
@@ -89,14 +93,9 @@ function appConfig() {
     updateHash();
   }
 
-  function setManifestVersion(version) {
-    if (version === hashConfig.manifestVersion) return;
-    hashConfig = parseFromHash(window.location.hash);
-    hashConfig.manifestVersion = version;
+  function setVisibleTracers(tracerIds) {
+    hashConfig.visibleTracers = tracerIds && tracerIds.length > 0 ? tracerIds : null;
     updateHash();
-
-    var name = scene.getGraphName();
-    appEvents.downloadGraphRequested.fire(name);
   }
 
   function setCameraConfig(pos, lookAt) {
@@ -117,8 +116,6 @@ function appConfig() {
   }
 
   function updateHash() {
-    // TODO: This needs to be rewritten. It should not update all fields,
-    // only those that modified.
     var name = scene.getGraphName();
     var pos = hashConfig.pos;
     var lookAt = hashConfig.lookAt;
@@ -132,19 +129,19 @@ function appConfig() {
       '&lw=' + lookAt.w.toFixed(4) +
       '&ml=' + hashConfig.maxVisibleDistance +
       '&s=' + hashConfig.scale +
-      '&l=' + (hashConfig.showLinks ? '1' : '0') +
-      '&v=' + hashConfig.manifestVersion;
+      '&l=' + (hashConfig.showLinks ? '1' : '0');
+
+    if (hashConfig.visibleTracers) {
+      hash += '&tracers=' + hashConfig.visibleTracers.join(',');
+    }
 
     setHash(hash);
   }
 
   function setHash(hash) {
-    // I noticed Chrome address string becomes very slow if we update URL too
-    // often. Thus, I'm adding small throttling here.
     if (hashUpdate) {
       window.clearTimeout(hashUpdate);
     }
-
     hashUpdate = setTimeout(function() {
       if (window.history) {
         window.history.replaceState(undefined, undefined, hash);
@@ -160,6 +157,16 @@ function appConfig() {
     return v1.x === v2.x &&
            v1.y === v2.y &&
            v1.z === v2.z;
+  }
+
+  function sameTracers(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; ++i) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
   }
 
   function parseFromHash(hash) {
@@ -184,13 +191,19 @@ function appConfig() {
 
     var showLinks = (query.l === '1');
 
+    var visibleTracers = null;
+    if (query.tracers) {
+      visibleTracers = query.tracers.split(',').filter(function(s) { return s.length > 0; });
+      if (visibleTracers.length === 0) visibleTracers = null;
+    }
+
     return {
       pos: normalize(pos),
       lookAt: normalize(lookAt),
       showLinks: showLinks,
       maxVisibleDistance: getNumber(query.ml, defaultConfig.maxVisibleDistance),
       scale: getNumber(query.s, defaultConfig.scale),
-      manifestVersion: query.v || defaultConfig.manifestVersion
+      visibleTracers: visibleTracers
     };
   }
 }
@@ -205,7 +218,6 @@ function normalize(v) {
 
 function getNumber(x, defaultValue) {
   if (defaultValue === undefined) defaultValue = 0;
-
   x = parseFloat(x);
   if (isNaN(x)) return defaultValue;
   return x;

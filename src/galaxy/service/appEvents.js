@@ -86,6 +86,18 @@ export default eventMirror([
    'around',
    'queryChanged',
 
-   'accelerateNavigation'
+   'accelerateNavigation',
+
+   /**
+    * Fired when tracer ranges are computed after multi-tracer positions are loaded.
+    * Carries an array of { id, name, color, startNode, nodeCount }.
+    */
+   'tracerRangesReady',
+
+   /**
+    * Fired to toggle visibility of a single tracer.
+    * Arguments: (tracerId: string, visible: boolean)
+    */
+   'setTracerVisibility'
 ], appEvents);
 

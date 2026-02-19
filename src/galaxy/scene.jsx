@@ -10,6 +10,7 @@ import Help from './help.jsx';
 import About from './about.jsx';
 
 import WindowCollection from './windows/windowCollectionView.jsx';
+import TracerSelector from './tracerSelector.jsx';
 import createNativeRenderer from './native/renderer.js';
 import createKeyboardBindings from './native/sceneKeyboardBinding.js';
 
@@ -29,6 +30,7 @@ function scene(x) {
     return (
       <div>
         <div ref='graphContainer' className='graph-full-size'/>
+        <TracerSelector />
         <HoverInfo />
         <NodeDetails />
         <SteeringIndicator />
