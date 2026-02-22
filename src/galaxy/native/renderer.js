@@ -6,7 +6,7 @@
  * managed here. Hit-testing, hover, click and link rendering have been
  * removed for performance with multi-million-node datasets.
  */
-import unrender from 'unrender';
+import unrender from '../../unrender';
 window.THREE = unrender.THREE;
 
 import eventify from 'ngraph.events';
@@ -101,6 +101,7 @@ function sceneRenderer(container) {
     var sizes = view.sizes();
     sizes.fill(NODE_SIZE);
     view.sizes(sizes);
+    renderer.markDirty();
   }
 
   function setTracerRanges(ranges) {
@@ -126,6 +127,7 @@ function sceneRenderer(container) {
 
     view.colors(colors);
     applyTracerSizes();
+    renderer.markDirty();
   }
 
   function applyTracerColors(colors) {
@@ -186,6 +188,7 @@ function sceneRenderer(container) {
       sizes[tracer.startNode + m] = sz;
     }
     view.sizes(sizes);
+    renderer.markDirty();
   }
 
   function colorNode(nodeId, colors, color) {
@@ -211,6 +214,7 @@ function sceneRenderer(container) {
     if (lookAt) {
       camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
     }
+    renderer.markDirty();
   }
 
   function destroy() {

@@ -17,7 +17,6 @@ function createMobileControl(renderer) {
   var joystickTouchId = null;
   var lookTouchId     = null;
   var joystickOrigin  = null; // { x, y } center in client coords at touch start
-  var lookLast        = null; // { x, y } last position of the look touch
   var lookStartQuat   = null; // camera quaternion snapshot at look touch start
   var lookOriginX     = null; // touch x at look touch start
   var lookOriginY     = null; // touch y at look touch start
@@ -42,7 +41,6 @@ function createMobileControl(renderer) {
         updateJoystick(t);
       } else if (lookTouchId === null) {
         lookTouchId   = t.identifier;
-        lookLast      = { x: t.clientX, y: t.clientY };
         lookOriginX   = t.clientX;
         lookOriginY   = t.clientY;
         lookStartQuat = renderer.camera().quaternion.clone();
@@ -72,7 +70,6 @@ function createMobileControl(renderer) {
       }
       if (t.identifier === lookTouchId) {
         lookTouchId   = null;
-        lookLast      = null;
         lookStartQuat = null;
         lookOriginX   = null;
         lookOriginY   = null;
@@ -137,7 +134,7 @@ function createMobileControl(renderer) {
 
     // Full screen width drag = one camera FOV of rotation
     var fovRad     = camera.fov * Math.PI / 180;
-    var yawAngle   = -(totalDx / container.clientWidth)  * fovRad;
+    var yawAngle   =  (totalDx / container.clientWidth)  * fovRad;
     var pitchAngle =  (totalDy / container.clientHeight) * fovRad;
 
     // Apply rotations in camera-local space (same convention as FlyControls)
