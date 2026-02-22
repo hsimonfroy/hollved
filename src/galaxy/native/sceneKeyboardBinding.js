@@ -26,10 +26,6 @@ function sceneKeyboardBinding(container) {
   function keydown(e) {
     if (e.which === Key.Space) {
       events.toggleSteering.fire();
-    } else if (e.which === Key.L) { // L - toggle links
-      if (!e.ctrlKey && !e.metaKey) {
-        events.toggleLinks.fire();
-      }
     } else if (e.which === Key.H || (e.which === Key['/'] && e.shiftKey)) { // 'h' or '?' key
       // Need to stop propagation, since help screen attempts to close itself
       // once user presses any key. We don't want that now, since this is

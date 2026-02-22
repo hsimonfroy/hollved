@@ -1,6 +1,5 @@
 /**
- * Graph loader downloads graph from repository. Each graph consist of multiple
- * files:
+ * Graph loader downloads graph from repository. Each graph consist of:
  *
  * manifest.json - declares where the data is stored.
  *   Legacy format: { "all": ["v1", "v2"], "last": "v2" } (pick one version)
@@ -10,16 +9,10 @@
  *
  * positions.bin - a binary file of int32 triplets. Each triplet defines
  *   node position in 3d space. Index of triplet is considered as node id.
- * links.bin - a sequence of edges. Read https://github.com/anvaka/ngraph.tobinary#linksbin-format
- *   for more information about its structure.
- * labels.json - array of node names. Position of a label in the array corresponds
- *   to the triplet index.
  * meta.json - optional metadata. If it has a "tracer" field the graph is treated
  *   as a multi-tracer dataset and all entries in manifest.all are loaded together.
  *
  * During download this downloader will report on global event bus its progress:
- *  appEvents.labelsDownloaded - labels file is downloaded;
- *  appEvents.linksDownloaded - links file is downloaded;
  *  appEvents.positionsDownloaded - positions file is downloaded;
  *  appEvents.tracerRangesReady - fired after positionsDownloaded with tracer metadata;
  */
@@ -29,7 +22,6 @@ import request from './request.js';
 import createGraph from './graph.js';
 import appEvents from './appEvents.js';
 import appConfig from '../native/appConfig.js';
-import asyncFor from 'rafor';
 import Promise from 'bluebird';
 
 export default loadGraph;
@@ -84,16 +76,11 @@ function loadLegacy(manifest, manifestEndpoint, name, progress) {
 }
 
 function loadSingleGraph(endpoint, name, progress) {
-  var positions, labels;
-  var outLinks = [];
-  var inLinks = [];
+  var positions;
 
-  return loadPositions()
-    .then(loadLinks)
-    .then(loadLabels)
-    .then(function() {
-      return { positions: positions, labels: labels, outLinks: outLinks, inLinks: inLinks };
-    });
+  return loadPositions().then(function() {
+    return { positions: positions };
+  });
 
   function loadPositions() {
     return request(endpoint + '/positions.bin', {
@@ -106,63 +93,6 @@ function loadSingleGraph(endpoint, name, progress) {
         positions[i] *= scaleFactor;
       }
       appEvents.positionsDownloaded.fire(positions);
-    });
-  }
-
-  function loadLinks() {
-    return request(endpoint + '/links.bin', {
-      responseType: 'arraybuffer',
-      progress: reportProgress(name, 'links', progress)
-    }).then(function(buffer) {
-      var links = new Int32Array(buffer);
-      if (links.length === 0) {
-        appEvents.linksDownloaded.fire(outLinks, inLinks);
-        return;
-      }
-
-      var lastArray = [];
-      outLinks[0] = lastArray;
-      var srcIndex;
-      var processed = 0;
-      var total = links.length;
-      var deffered = defer();
-
-      asyncFor(links, function processLink(link) {
-        if (link < 0) {
-          srcIndex = -link - 1;
-          lastArray = outLinks[srcIndex] = [];
-        } else {
-          var toNode = link - 1;
-          lastArray.push(toNode);
-          if (inLinks[toNode] === undefined) {
-            inLinks[toNode] = [srcIndex];
-          } else {
-            inLinks[toNode].push(srcIndex);
-          }
-        }
-        processed += 1;
-        if (processed % 10000 === 0) {
-          progress({
-            message: name + ': initializing edges ',
-            completed: Math.round(processed / total * 100) + '%'
-          });
-        }
-      }, function() {
-        appEvents.linksDownloaded.fire(outLinks, inLinks);
-        deffered.resolve();
-      });
-
-      return deffered.promise;
-    });
-  }
-
-  function loadLabels() {
-    return request(endpoint + '/labels.json', {
-      responseType: 'json',
-      progress: reportProgress(name, 'labels', progress)
-    }).then(function(data) {
-      labels = data;
-      appEvents.labelsDownloaded.fire(labels);
     });
   }
 }
@@ -184,24 +114,16 @@ function loadMultiTracer(manifest, manifestEndpoint, name, progress) {
 function loadTracerData(endpoint, tracerId, graphName, scaleFactor, progress) {
   var tracerMeta = {};
   var tracerPositions;
-  var tracerLabels = [];
-  var tracerOutLinks = [];
-  var tracerInLinks = [];
 
   return loadMeta()
     .then(loadPositions)
-    .then(loadLinks)
-    .then(loadLabels)
     .then(function() {
       var tracer = tracerMeta.tracer || {};
       return {
         id: tracer.id || tracerId,
         name: tracer.name || tracerId,
         color: parseColor(tracer.color || '0xffffffff'),
-        positions: tracerPositions,
-        labels: tracerLabels,
-        outLinks: tracerOutLinks,
-        inLinks: tracerInLinks
+        positions: tracerPositions
       };
     });
 
@@ -222,44 +144,6 @@ function loadTracerData(endpoint, tracerId, graphName, scaleFactor, progress) {
       }
     });
   }
-
-  function loadLinks() {
-    return request(endpoint + '/links.bin', {
-      responseType: 'arraybuffer',
-      progress: reportProgress(graphName + '/' + tracerId, 'links', progress)
-    }).then(function(buffer) {
-      var links = new Int32Array(buffer);
-      if (links.length === 0) return;
-
-      var lastArray = [];
-      tracerOutLinks[0] = lastArray;
-      var srcIndex;
-
-      return new Promise(function(resolve) {
-        asyncFor(links, function processLink(link) {
-          if (link < 0) {
-            srcIndex = -link - 1;
-            lastArray = tracerOutLinks[srcIndex] = [];
-          } else {
-            var toNode = link - 1;
-            lastArray.push(toNode);
-            if (tracerInLinks[toNode] === undefined) {
-              tracerInLinks[toNode] = [srcIndex];
-            } else {
-              tracerInLinks[toNode].push(srcIndex);
-            }
-          }
-        }, resolve);
-      });
-    });
-  }
-
-  function loadLabels() {
-    return request(endpoint + '/labels.json', {
-      responseType: 'json',
-      progress: reportProgress(graphName + '/' + tracerId, 'labels', progress)
-    }).then(function(data) { tracerLabels = data || []; });
-  }
 }
 
 function mergeTracers(tracerDataArray) {
@@ -268,10 +152,7 @@ function mergeTracers(tracerDataArray) {
   }, 0);
 
   var allPositions = new Int32Array(totalNodes * 3);
-  var allLabels = [];
   var tracerRanges = [];
-  var allOutLinks = [];
-  var allInLinks = [];
   var nodeOffset = 0;
   var posOffset = 0;
 
@@ -280,22 +161,6 @@ function mergeTracers(tracerDataArray) {
 
     allPositions.set(tracer.positions, posOffset);
     posOffset += tracer.positions.length;
-
-    allLabels = allLabels.concat(tracer.labels);
-
-    // Copy links with node-index offset applied
-    for (var i = 0; i < tracer.outLinks.length; ++i) {
-      var srcLinks = tracer.outLinks[i];
-      if (srcLinks) {
-        allOutLinks[i + nodeOffset] = srcLinks.map(function(n) { return n + nodeOffset; });
-      }
-    }
-    for (var j = 0; j < tracer.inLinks.length; ++j) {
-      var inList = tracer.inLinks[j];
-      if (inList) {
-        allInLinks[j + nodeOffset] = inList.map(function(n) { return n + nodeOffset; });
-      }
-    }
 
     tracerRanges.push({
       id: tracer.id,
@@ -310,15 +175,8 @@ function mergeTracers(tracerDataArray) {
 
   appEvents.positionsDownloaded.fire(allPositions);
   appEvents.tracerRangesReady.fire(tracerRanges);
-  appEvents.linksDownloaded.fire(allOutLinks, allInLinks);
-  appEvents.labelsDownloaded.fire(allLabels);
 
-  return buildGraph({
-    positions: allPositions,
-    labels: allLabels,
-    outLinks: allOutLinks,
-    inLinks: allInLinks
-  });
+  return buildGraph({ positions: allPositions });
 }
 
 // ---------------------------------------------------------------------------
@@ -328,9 +186,9 @@ function mergeTracers(tracerDataArray) {
 function buildGraph(data) {
   return createGraph({
     positions: data.positions,
-    labels: data.labels,
-    outLinks: data.outLinks,
-    inLinks: data.inLinks
+    labels: [],
+    outLinks: [],
+    inLinks: []
   });
 }
 
@@ -350,18 +208,5 @@ function reportProgress(name, file, progress) {
       progressInfo.completed = Math.round(e.loaded) + ' bytes';
     }
     progress(progressInfo);
-  };
-}
-
-function defer() {
-  var resolve, reject;
-  var promise = new Promise(function() {
-    resolve = arguments[0];
-    reject = arguments[1];
-  });
-  return {
-    resolve: resolve,
-    reject: reject,
-    promise: promise
   };
 }

@@ -82,14 +82,10 @@ function help(x) {
       <td>Fly down</td>
       </tr>
       <tr>
-      <td><code>L</code></td>
-      <td>Toggle links</td>
-      <td><code>spacebar</code></td>
-      <td>Toggle Steering</td>
-      </tr>
-      <tr>
       <td><code>shift</code></td>
       <td>Move faster</td>
+      <td><code>spacebar</code></td>
+      <td>Toggle Steering</td>
       <td><code></code></td>
       <td></td>
       </tr>

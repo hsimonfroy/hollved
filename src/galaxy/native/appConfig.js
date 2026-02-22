@@ -6,11 +6,10 @@ import qs from 'qs';
 
 var defaultConfig = {
   pos: {x : 0, y: 0, z: 0 },
-  lookAt: {x: 0, y: 0, z: 0, w: 1},
-  showLinks: true,
+  lookAt: {x: -0.3582, y: -0.7468, z: -0.4612, w: -0.3182},
   maxVisibleDistance: 150,
   scale: 1.,
-  visibleTracers: null  // null means all tracers visible
+  visibleTracers: ['lrg', 'elg', 'qso']  // null means all tracers visible
 };
 
 export default appConfig();
@@ -22,16 +21,13 @@ function appConfig() {
   var api = {
     getCameraPosition: getCameraPosition,
     getCameraLookAt: getCameraLookAt,
-    getShowLinks: getShowLinks,
     getScaleFactor: getScaleFactor,
     getMaxVisibleEdgeLength: getMaxVisibleEdgeLength,
     setCameraConfig: setCameraConfig,
-    setShowLinks: setShowLinks,
     getVisibleTracers: getVisibleTracers,
     setVisibleTracers: setVisibleTracers
   };
 
-  appEvents.toggleLinks.on(toggleLinks);
   appEvents.queryChanged.on(queryChanged);
 
   eventify(api);
@@ -54,43 +50,24 @@ function appConfig() {
     return hashConfig.pos;
   }
 
-  function toggleLinks() {
-    setShowLinks(!hashConfig.showLinks);
-  }
-
   function getCameraLookAt() {
     return hashConfig.lookAt;
-  }
-
-  function getShowLinks() {
-    return hashConfig.showLinks;
   }
 
   function queryChanged() {
     var currentHashConfig = parseFromHash(window.location.hash);
     var cameraChanged = !same(currentHashConfig.pos, hashConfig.pos) ||
                         !same(currentHashConfig.lookAt, hashConfig.lookAt);
-    var showLinksChanged = hashConfig.showLinks !== currentHashConfig.showLinks;
     var tracersChanged = !sameTracers(currentHashConfig.visibleTracers, hashConfig.visibleTracers);
 
     if (cameraChanged) {
       setCameraConfig(currentHashConfig.pos, currentHashConfig.lookAt);
       api.fire('camera');
     }
-    if (showLinksChanged) {
-      setShowLinks(currentHashConfig.showLinks);
-    }
     if (tracersChanged) {
       hashConfig.visibleTracers = currentHashConfig.visibleTracers;
       api.fire('tracersChanged');
     }
-  }
-
-  function setShowLinks(linksVisible) {
-    if (linksVisible === hashConfig.showLinks) return;
-    hashConfig.showLinks = linksVisible;
-    api.fire('showLinks');
-    updateHash();
   }
 
   function setVisibleTracers(tracerIds) {
@@ -128,8 +105,7 @@ function appConfig() {
       '&lz=' + lookAt.z.toFixed(4) +
       '&lw=' + lookAt.w.toFixed(4) +
       '&ml=' + hashConfig.maxVisibleDistance +
-      '&s=' + hashConfig.scale +
-      '&l=' + (hashConfig.showLinks ? '1' : '0');
+      '&s=' + hashConfig.scale;
 
     if (hashConfig.visibleTracers) {
       hash += '&tracers=' + hashConfig.visibleTracers.join(',');
@@ -177,30 +153,27 @@ function appConfig() {
     var query = qs.parse(hash.split('?')[1]);
 
     var pos = {
-      x: query.cx || 0,
-      y: query.cy || 0,
-      z: query.cz || 0
+      x: getNumber(query.cx, defaultConfig.pos.x),
+      y: getNumber(query.cy, defaultConfig.pos.y),
+      z: getNumber(query.cz, defaultConfig.pos.z)
     };
 
     var lookAt = {
-      x: query.lx || 0,
-      y: query.ly || 0,
-      z: query.lz || 0,
-      w: getNumber(query.lw || 1)
+      x: getNumber(query.lx, defaultConfig.lookAt.x),
+      y: getNumber(query.ly, defaultConfig.lookAt.y),
+      z: getNumber(query.lz, defaultConfig.lookAt.z),
+      w: getNumber(query.lw, defaultConfig.lookAt.w)
     };
 
-    var showLinks = (query.l === '1');
-
-    var visibleTracers = null;
+    var visibleTracers = defaultConfig.visibleTracers;
     if (query.tracers) {
-      visibleTracers = query.tracers.split(',').filter(function(s) { return s.length > 0; });
-      if (visibleTracers.length === 0) visibleTracers = null;
+      var parsed = query.tracers.split(',').filter(function(s) { return s.length > 0; });
+      visibleTracers = parsed.length > 0 ? parsed : null;
     }
 
     return {
       pos: normalize(pos),
       lookAt: normalize(lookAt),
-      showLinks: showLinks,
       maxVisibleDistance: getNumber(query.ml, defaultConfig.maxVisibleDistance),
       scale: getNumber(query.s, defaultConfig.scale),
       visibleTracers: visibleTracers
