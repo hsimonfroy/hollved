@@ -12,13 +12,14 @@ window.THREE = unrender.THREE;
 import eventify from 'ngraph.events';
 import appEvents from '../service/appEvents.js';
 import appConfig from './appConfig.js';
+import createMobileControl from './mobileControl.js';
 
 export default sceneRenderer;
 
 var NODE_SIZE = 10; // change this to resize all nodes
 
 function sceneRenderer(container) {
-  var renderer, positions;
+  var renderer, positions, mobileControl;
   var queryUpdateId = setInterval(updateQuery, 200);
 
   // Tracer state
@@ -87,9 +88,10 @@ function sceneRenderer(container) {
     if (!renderer) {
       renderer = unrender(container);
       var camera = renderer.camera();
-      camera.fov = 60; // default is 45
+      camera.fov = 70; // default is 45, human central vision is about 60
       camera.updateProjectionMatrix();
       moveCameraInternal();
+      mobileControl = createMobileControl(renderer);
     }
 
     renderer.particles(positions);
@@ -212,6 +214,7 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
+    if (mobileControl) { mobileControl.destroy(); mobileControl = null; }
     renderer.destroy();
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.tracerRangesReady.off(setTracerRanges);
