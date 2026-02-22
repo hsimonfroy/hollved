@@ -22,6 +22,7 @@ function createParticleMaterial() {
       type: "c",
       value: new THREE.Color(0xffffff)
     },
+
     texture: {
       type: "t",
       value: THREE.ImageUtils.loadTexture(defaultTexture)
@@ -33,7 +34,9 @@ function createParticleMaterial() {
     attributes: attributes,
     vertexShader: vertexShader,
     fragmentShader: fragmentShader,
-    transparent: true
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
   });
 
   return material;

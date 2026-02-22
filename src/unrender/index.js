@@ -31,7 +31,8 @@ function unrender(container, options) {
     lookAt: lookAt,
     around: around,
     getContainer: getContainer,
-    markDirty: markDirty
+    markDirty: markDirty,
+    setExposure: setExposure
   };
 
   options = combineOptions(options);
@@ -51,6 +52,12 @@ function unrender(container, options) {
   var scene = createScene();
   var camera = createCamera();
   var renderer = createRenderer();
+  var hdrTarget = createHdrTarget();
+  var tmMesh = createToneMappingMesh();
+  var tmScene = new THREE.Scene();
+  var tmCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  tmScene.add(tmMesh);
+
   var particleView = createParticleView(scene);
   var lineView = createLineView(scene);
   var input = createInputHandler();
@@ -86,7 +93,8 @@ function unrender(container, options) {
     if (moved || _needsRender) {
       _lastCamPos.copy(camera.position);
       _lastCamQuat.copy(camera.quaternion);
-      renderer.render(scene, camera);
+      renderer.render(scene, camera, hdrTarget, true);
+      renderer.render(tmScene, tmCamera);
       _needsRender = false;
     }
 
@@ -122,6 +130,9 @@ function unrender(container, options) {
     input.destroy();
     stopEventsListening();
     container.removeChild(renderer.domElement);
+    hdrTarget.dispose();
+    tmMesh.material.dispose();
+    tmMesh.geometry.dispose();
   }
 
   function createScene() {
@@ -135,7 +146,7 @@ function unrender(container, options) {
   }
 
   function createCamera() {
-    var camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 20000);
+    var camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 10000);
     scene.add(camera);
 
     return camera;
@@ -188,6 +199,7 @@ function unrender(container, options) {
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
+    hdrTarget.setSize(container.clientWidth, container.clientHeight);
     markDirty();
   }
 
@@ -209,6 +221,55 @@ function unrender(container, options) {
     };
 
     autoPilot.flyTo(pos, done, distanceFromTarget);
+  }
+
+  function createHdrTarget() {
+    return new THREE.WebGLRenderTarget(
+      container.clientWidth, container.clientHeight,
+      {
+        type:          THREE.FloatType,
+        format:        THREE.RGBAFormat,
+        minFilter:     THREE.NearestFilter,
+        magFilter:     THREE.NearestFilter,
+        depthBuffer:   false,
+        stencilBuffer: false
+      }
+    );
+  }
+
+  function createToneMappingMesh() {
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        uniforms: {
+          tDiffuse: { type: 't', value: hdrTarget },
+          exposure: { type: 'f', value: 1.0 }
+        },
+        vertexShader: [
+          'varying vec2 vUv;',
+          'void main() {',
+          '  vUv = uv;',
+          '  gl_Position = vec4(position.xy, 0.0, 1.0);',
+          '}'
+        ].join('\n'),
+        fragmentShader: [
+          'uniform sampler2D tDiffuse;',
+          'uniform float exposure;',
+          'varying vec2 vUv;',
+          'void main() {',
+          '  vec3 c = texture2D(tDiffuse, vUv).rgb * exposure;',
+          '  gl_FragColor = vec4(c / (1.0 + c), 1.0);',
+          '}'
+        ].join('\n'),
+        depthTest:  false,
+        depthWrite: false
+      })
+    );
+  }
+
+  function setExposure(v) {
+    tmMesh.material.uniforms.exposure.value = v;
+    markDirty();
   }
 
   function highResTimer(time) {

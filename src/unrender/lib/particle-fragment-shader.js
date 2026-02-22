@@ -6,7 +6,7 @@ module.exports = [
 '',
 'void main() {',
 '  vec4 tColor = texture2D( texture, gl_PointCoord );',
-'  if (tColor.a < 0.5) discard;',
+'  if (tColor.a < 0.01) discard;',
 '  gl_FragColor = vec4( color * vColor.rgb, tColor.a * vColor.a );',
 '}'
 ].join('\n');

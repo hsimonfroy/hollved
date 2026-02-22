@@ -16,7 +16,7 @@ import createMobileControl from './mobileControl.js';
 
 export default sceneRenderer;
 
-var NODE_SIZE = 10; // change this to resize all nodes
+var NODE_SIZE = 5; // change this to resize all nodes
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl;

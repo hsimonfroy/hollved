@@ -17,14 +17,14 @@ module.exports = [
 '',
 '  float pSize = size * ( 351.0 / length( mvPosition.xyz ) );',
 '',
-'  // Cull sub-pixel points: avoids fragment shader invocation for distant nodes',
-'  if (pSize < 0.5) {',
+'  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
+'  if (pSize < 0.05) {',
 '    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
 '    gl_PointSize = 0.0;',
 '    return;',
 '  }',
 '',
-'  gl_PointSize = pSize;',
+'  gl_PointSize = max(pSize, 1.0);',
 '  gl_Position = projectionMatrix * mvPosition;',
 '}'
 ].join('\n');
