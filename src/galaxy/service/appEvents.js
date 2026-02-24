@@ -47,21 +47,21 @@ export default eventMirror([
   'selectNode',
 
   /**
-   * Fired when user wants to toggle camera steering mode. In steering
-   * mode camera will always try to focus on mouse position. Thus
-   * middle point of the screen is the only stable point.
+   * Fired when user wants to toggle between turntable and spaceship control modes.
+   * Fired by F key (desktop) or the on-screen mode button.
    */
-  'toggleSteering',
+  'toggleControlMode',
+
+  /**
+   * Fired after a control mode switch with the new mode string ('spaceship' | 'turntable').
+   * Consumed by the UI button to update its icon.
+   */
+  'controlModeChanged',
 
   /**
    * Fired when user wants to show or hide links
    */
   'toggleLinks',
-
-  /**
-   * Requests the application to show "Steering mode" indicator.
-   */
-  'showSteeringMode',
 
   /**
    * fired when user inputs a text into the search bar

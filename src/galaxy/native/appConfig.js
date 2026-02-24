@@ -7,9 +7,11 @@ import qs from 'qs';
 var defaultConfig = {
   pos: {x : 0, y: 0, z: 0 },
 //   lookAt: {x: -0.3582, y: -0.7468, z: -0.4612, w: -0.3182},
-  lookAt: {x: -0.8317, y: -0.1663, z: -0.5269, w: 0.0539},
+//   lookAt: {x: -0.8317, y: -0.1663, z: -0.5269, w: 0.0539},
+  lookAt: {x: 0.7192, y: -0.6143, z: -0.2046, w: 0.2521},
   maxVisibleDistance: 150,
   scale: 1.,
+  controlMode: 'turntable',
   visibleTracers: ['lrg', 'elg', 'qso']  // null means all tracers visible
 };
 
@@ -26,7 +28,9 @@ function appConfig() {
     getMaxVisibleEdgeLength: getMaxVisibleEdgeLength,
     setCameraConfig: setCameraConfig,
     getVisibleTracers: getVisibleTracers,
-    setVisibleTracers: setVisibleTracers
+    setVisibleTracers: setVisibleTracers,
+    getControlMode: getControlMode,
+    setControlMode: setControlMode
   };
 
   appEvents.queryChanged.on(queryChanged);
@@ -71,6 +75,15 @@ function appConfig() {
     }
   }
 
+  function getControlMode() {
+    return hashConfig.controlMode;
+  }
+
+  function setControlMode(m) {
+    hashConfig.controlMode = m;
+    updateHash();
+  }
+
   function setVisibleTracers(tracerIds) {
     hashConfig.visibleTracers = tracerIds && tracerIds.length > 0 ? tracerIds : null;
     updateHash();
@@ -111,6 +124,8 @@ function appConfig() {
     if (hashConfig.visibleTracers) {
       hash += '&tracers=' + hashConfig.visibleTracers.join(',');
     }
+
+    hash += '&cm=' + hashConfig.controlMode;
 
     setHash(hash);
   }
@@ -177,6 +192,7 @@ function appConfig() {
       lookAt: normalize(lookAt),
       maxVisibleDistance: getNumber(query.ml, defaultConfig.maxVisibleDistance),
       scale: getNumber(query.s, defaultConfig.scale),
+      controlMode: (query.cm === 'spaceship') ? 'spaceship' : defaultConfig.controlMode,
       visibleTracers: visibleTracers
     };
   }

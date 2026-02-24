@@ -100,20 +100,6 @@ h4 {
   top: 10px;
 }
 
-.about {
-  padding: 10px;
-  right: 10px;
-  top: 0px;
-}
-
-@media (max-width: @screen-sm-min) {
-  .about {
-    padding: 10px;
-    right: 13px;
-    bottom: 22px;
-    top: inherit;
-  }
-}
 
 .node-hover-tooltip {
   position: absolute;
@@ -236,10 +222,11 @@ a.media {
   }
 }
 
-// ── Virtual joystick (mobile only) ─────────────────────────────────────────
+// ── Virtual joysticks (mobile only, shown in spaceship mode) ────────────────
 
-.joystick-base {
-  display: none; // hidden on desktop
+.joystick-base,
+.joystick-right-base {
+  display: none; // hidden on desktop; shown/hidden by JS via .style.display
 }
 
 @media (pointer: coarse) {
@@ -269,7 +256,75 @@ a.media {
     flex-shrink: 0;
   }
 
+  // Right joystick — same styling, bottom-right corner
+  .joystick-right-base {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .joystick-right-knob {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
   .navigation-help {
     display: none;
   }
+}
+
+// ── Top-right icon buttons (control mode + info) ────────────────────────────
+
+// Shared button style
+.control-mode-btn,
+.info-btn {
+  position: fixed;
+  top: 12px;
+  z-index: 20;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  text-decoration: none;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.70);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+  }
+}
+
+// Info button — rightmost (top-right corner)
+.info-btn {
+  right: 12px;
+}
+
+// Control mode button — just to the left of the info button (44px + 8px gap)
+.control-mode-btn {
+  right: 64px;
 }

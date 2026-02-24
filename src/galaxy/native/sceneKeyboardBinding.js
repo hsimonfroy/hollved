@@ -24,8 +24,8 @@ function sceneKeyboardBinding(container) {
   }
 
   function keydown(e) {
-    if (e.which === Key.Space) {
-      events.toggleSteering.fire();
+    if (e.which === 70) { // F key — toggle control mode (spaceship ↔ turntable)
+      events.toggleControlMode.fire();
     } else if (e.which === Key.H || (e.which === Key['/'] && e.shiftKey)) { // 'h' or '?' key
       // Need to stop propagation, since help screen attempts to close itself
       // once user presses any key. We don't want that now, since this is

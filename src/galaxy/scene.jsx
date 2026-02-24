@@ -1,6 +1,6 @@
 import React from 'react';
 import {findDOMNode} from 'react-dom';
-import SteeringIndicator from './steeringIndicator.jsx';
+import ControlModeButton from './controlModeButton.jsx';
 import NoWebGL from './noWebgl.jsx';
 import Help from './help.jsx';
 import About from './about.jsx';
@@ -25,7 +25,7 @@ function scene(x) {
       <div>
         <div ref='graphContainer' className='graph-full-size'/>
         <TracerSelector />
-        <SteeringIndicator />
+        <ControlModeButton />
         <WindowCollection />
         <Help />
         <About />

@@ -79,9 +79,44 @@ function unrender(container, options) {
   }
 
   function createInputHandler() {
+    // Block F (mode switch) and R (unused) before flyControls registers its keydown
+    // listener. Same-element same-phase listeners fire in registration order, so
+    // stopImmediatePropagation() here prevents three.fly from ever seeing these keys.
+    var BLOCKED_KEYS = { 70: true, 82: true }; // F, R
+    container.addEventListener('keydown', function(e) {
+      if (BLOCKED_KEYS[e.keyCode]) e.stopImmediatePropagation();
+    }, false);
+
     var controls = flyControls(camera, container, THREE);
     controls.movementSpeed = 200;
     controls.rollSpeed = 0.065;
+
+    // Space (32) = fly up, Ctrl (17) = fly down — not in three.fly's default keymap
+    var _enabled = true;
+    container.addEventListener('keydown', function(e) {
+      if (!_enabled) return;
+      if (e.keyCode === 32) { controls.moveState.up   = 1; controls.updateMovementVector(); }
+      if (e.keyCode === 17) { controls.moveState.down = 1; controls.updateMovementVector(); }
+    }, false);
+    container.addEventListener('keyup', function(e) {
+      if (e.keyCode === 32) { controls.moveState.up   = 0; controls.updateMovementVector(); }
+      if (e.keyCode === 17) { controls.moveState.down = 0; controls.updateMovementVector(); }
+    }, false);
+
+    // Wrap update() and expose setEnabled() so callers can pause fly controls
+    // (e.g. when switching to turntable mode).
+    var _origUpdate = controls.update;
+    controls.update = function(delta) { if (_enabled) _origUpdate(delta); };
+    controls.setEnabled = function(val) {
+      _enabled = val;
+      if (!val) {
+        // Clear all movement so the camera doesn't drift when re-enabled
+        var ms = controls.moveState;
+        Object.keys(ms).forEach(function(k) { ms[k] = 0; });
+        controls.updateMovementVector();
+        controls.updateRotationVector();
+      }
+    };
 
     return controls;
   }
@@ -273,8 +308,8 @@ function unrender(container, options) {
           
             '  gl_FragColor = vec4(clamp(c * (Lm / max(L, 0.0001)), 0.0, 1.0), 1.0);',
           
-        // Generalized Reinhard luminance tone mapping
-            '  gl_FragColor = vec4(c / pow(1.0 + pow(c, vec3(power)), vec3(1.0/power)), 1.0);',
+        // Generalized Reinhard RGB tone mapping
+            // '  gl_FragColor = vec4(c / pow(1.0 + pow(c, vec3(power)), vec3(1.0/power)), 1.0);',
           '}'
         ].join('\n'),
         depthTest:  false,

@@ -5,6 +5,12 @@
  * the native renderer to display them. Tracer colors and visibility are
  * managed here. Hit-testing, hover, click and link rendering have been
  * removed for performance with multi-million-node datasets.
+ *
+ * Control modes
+ * -------------
+ * Default: turntable (orbit around pivot at origin).
+ * Press F (desktop) or tap the on-screen mode button to toggle to spaceship
+ * mode (WASD + tethered mouse pitch/yaw + Q/E roll + Space/Ctrl up/down).
  */
 import unrender from '../../unrender';
 window.THREE = unrender.THREE;
@@ -13,13 +19,15 @@ import eventify from 'ngraph.events';
 import appEvents from '../service/appEvents.js';
 import appConfig from './appConfig.js';
 import createMobileControl from './mobileControl.js';
+import createTurntableControl from './turntableControl.js';
 
 export default sceneRenderer;
 
 var NODE_SIZE = 2; // change this to resize all nodes
 
 function sceneRenderer(container) {
-  var renderer, positions, mobileControl;
+  var renderer, positions, mobileControl, turntableControl;
+  var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
 
   // Tracer state
@@ -30,7 +38,7 @@ function sceneRenderer(container) {
   appEvents.positionsDownloaded.on(setPositions);
   appEvents.tracerRangesReady.on(setTracerRanges);
   appEvents.setTracerVisibility.on(handleSetTracerVisibility);
-  appEvents.toggleSteering.on(toggleSteering);
+  appEvents.toggleControlMode.on(toggleControlMode);
   appEvents.accelerateNavigation.on(accelarate);
   appEvents.focusScene.on(focusScene);
 
@@ -45,6 +53,7 @@ function sceneRenderer(container) {
   return api;
 
   function accelarate(isPrecise) {
+    if (!renderer) return;
     var input = renderer.input();
     if (isPrecise) {
       input.movementSpeed *= 4;
@@ -61,12 +70,27 @@ function sceneRenderer(container) {
     appConfig.setCameraConfig(camera.position, camera.quaternion);
   }
 
-  function toggleSteering() {
+  function toggleControlMode() {
     if (!renderer) return;
     var input = renderer.input();
-    var isDragToLookEnabled = input.toggleDragToLook();
-    var isSteering = !isDragToLookEnabled;
-    appEvents.showSteeringMode.fire(isSteering);
+
+    if (currentMode === 'turntable') {
+      // → spaceship
+      currentMode = 'spaceship';
+      turntableControl.setEnabled(false);
+      input.dragToLook = false; // tethered: cursor position always drives pitch/yaw
+      input.setEnabled(true);
+      if (mobileControl) mobileControl.setMode('spaceship');
+    } else {
+      // → turntable
+      currentMode = 'turntable';
+      input.setEnabled(false);  // also clears all moveState
+      turntableControl.setEnabled(true, renderer.camera());
+      if (mobileControl) mobileControl.setMode('turntable');
+    }
+
+    appEvents.controlModeChanged.fire(currentMode);
+    appConfig.setControlMode(currentMode);
   }
 
   function focusScene() {
@@ -91,7 +115,21 @@ function sceneRenderer(container) {
       camera.fov = 70; // default is 45, human central vision is about 60
       camera.updateProjectionMatrix();
       moveCameraInternal();
-      mobileControl = createMobileControl(renderer);
+
+      var cam   = renderer.camera();
+      var input = renderer.input();
+      turntableControl = createTurntableControl(cam, container, renderer.markDirty);
+      if (currentMode === 'turntable') {
+        input.setEnabled(false);
+        turntableControl.setEnabled(true, cam);
+      } else {
+        turntableControl.setEnabled(false);
+        input.dragToLook = false;
+        input.setEnabled(true);
+      }
+      mobileControl = createMobileControl(renderer, turntableControl);
+      mobileControl.setMode(currentMode);
+      appEvents.controlModeChanged.fire(currentMode); // sync UI button on load
     }
 
     renderer.particles(positions);
@@ -218,12 +256,13 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
-    if (mobileControl) { mobileControl.destroy(); mobileControl = null; }
+    if (turntableControl) { turntableControl.destroy(); turntableControl = null; }
+    if (mobileControl)    { mobileControl.destroy();    mobileControl = null; }
     renderer.destroy();
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.tracerRangesReady.off(setTracerRanges);
     appEvents.setTracerVisibility.off(handleSetTracerVisibility);
-    appEvents.toggleSteering.off(toggleSteering);
+    appEvents.toggleControlMode.off(toggleControlMode);
     appEvents.accelerateNavigation.off(accelarate);
     appEvents.focusScene.off(focusScene);
     renderer = null;
