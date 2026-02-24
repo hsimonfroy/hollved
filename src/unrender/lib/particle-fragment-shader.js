@@ -3,10 +3,12 @@ module.exports = [
 'uniform sampler2D texture;',
 '',
 'varying vec4 vColor;',
+'varying float vPointSize;',
 '',
 'void main() {',
 '  vec4 tColor = texture2D( texture, gl_PointCoord );',
 '  if (tColor.a < 0.01) discard;',
-'  gl_FragColor = vec4( color * vColor.rgb, tColor.a * vColor.a );',
+'  float alpha = tColor.a * vColor.a * min(vPointSize, 1.0);',
+'  gl_FragColor = vec4( color * vColor.rgb, alpha );',
 '}'
 ].join('\n');

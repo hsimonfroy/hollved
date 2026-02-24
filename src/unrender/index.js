@@ -32,7 +32,8 @@ function unrender(container, options) {
     around: around,
     getContainer: getContainer,
     markDirty: markDirty,
-    setExposure: setExposure
+    setExposure: setExposure,
+    setPower: setPower
   };
 
   options = combineOptions(options);
@@ -243,7 +244,10 @@ function unrender(container, options) {
       new THREE.ShaderMaterial({
         uniforms: {
           tDiffuse: { type: 't', value: hdrTarget },
-          exposure: { type: 'f', value: 1.0 }
+          exposure: { type: 'f', value: 5.0 },
+          power:    { type: 'f', value: 0.5 }
+        //   exposure: { type: 'f', value: 2.0 },
+        //   power:    { type: 'f', value: 1.0 }
         },
         vertexShader: [
           'varying vec2 vUv;',
@@ -253,12 +257,24 @@ function unrender(container, options) {
           '}'
         ].join('\n'),
         fragmentShader: [
-          'uniform sampler2D tDiffuse;',
-          'uniform float exposure;',
-          'varying vec2 vUv;',
-          'void main() {',
-          '  vec3 c = texture2D(tDiffuse, vUv).rgb * exposure;',
-          '  gl_FragColor = vec4(c / (1.0 + c), 1.0);',
+            'uniform sampler2D tDiffuse;',
+            'uniform float exposure;',
+            'uniform float power;',
+            'varying vec2 vUv;',
+            'void main() {',
+            '  vec3 c = texture2D(tDiffuse, vUv).rgb * exposure;',
+            '  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+        // Generalized Reinhard luminance tone mapping
+            '  float Lm = L / pow(1.0 + pow(L, power), 1.0/power);', 
+          
+          //   '  float Lm = (L*(2.51*L+0.03)) / (L*(2.43*L+0.59)+0.14);',
+          //   '  float bL = power * max(L, 0.0);',
+          //   '  float Lm = log(bL + sqrt(bL * bL + 1.0)) / power;', // asinh(beta*L) / beta
+          
+            '  gl_FragColor = vec4(clamp(c * (Lm / max(L, 0.0001)), 0.0, 1.0), 1.0);',
+          
+        // Generalized Reinhard luminance tone mapping
+            '  gl_FragColor = vec4(c / pow(1.0 + pow(c, vec3(power)), vec3(1.0/power)), 1.0);',
           '}'
         ].join('\n'),
         depthTest:  false,
@@ -269,6 +285,11 @@ function unrender(container, options) {
 
   function setExposure(v) {
     tmMesh.material.uniforms.exposure.value = v;
+    markDirty();
+  }
+
+  function setPower(v) {
+    tmMesh.material.uniforms.power.value = v;
     markDirty();
   }
 
