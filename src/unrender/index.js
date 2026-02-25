@@ -5,7 +5,6 @@ var createParticleView = require('./lib/particle-view.js');
 var createLineView = require('./lib/line-view.js');
 var createHitTest = require('./lib/hit-test.js');
 var createAutoPilot = require('./lib/auto-pilot.js');
-var flyControls = require('three.fly');
 var normalizeColor = require('./lib/normalize-color.js');
 
 // Expose three.js as well, so simple clients do not have to require it
@@ -44,10 +43,15 @@ function unrender(container, options) {
   // data changed (markDirty). Eliminates all GPU work on idle frames.
   var _lastCamPos  = new THREE.Vector3();
   var _lastCamQuat = new THREE.Quaternion();
-  var _needsRender = true; // render at least once on startup
+  var _needsRender  = true;  // render at least once on startup
+  var _loopRunning  = false;
 
   function markDirty() {
     _needsRender = true;
+    if (!_loopRunning) {
+      _loopRunning = true;
+      lastFrame = requestAnimationFrame(frame);
+    }
   }
 
   var scene = createScene();
@@ -61,7 +65,15 @@ function unrender(container, options) {
 
   var particleView = createParticleView(scene);
   var lineView = createLineView(scene);
-  var input = createInputHandler();
+  // Stub — renderer.js replaces input.update with the combined control updater.
+  // isMoving() is used by hit-test.js to skip raycasting while camera is moving.
+  var input = {
+    update:    function() {},
+    destroy:   function() {},
+    isMoving:  function() {
+      return !camera.position.equals(_lastCamPos) || !camera.quaternion.equals(_lastCamQuat);
+    }
+  };
   var autoPilot = createAutoPilot(camera);
 
   // TODO: This doesn't seem to belong here... Not sure where to put it
@@ -70,7 +82,7 @@ function unrender(container, options) {
 
   startEventsListening();
 
-  frame();
+  markDirty(); // trigger initial render
 
   return api;
 
@@ -78,53 +90,16 @@ function unrender(container, options) {
     return hitTest;
   }
 
-  function createInputHandler() {
-    // Block F (mode switch) and R (unused) before flyControls registers its keydown
-    // listener. Same-element same-phase listeners fire in registration order, so
-    // stopImmediatePropagation() here prevents three.fly from ever seeing these keys.
-    var BLOCKED_KEYS = { 70: true, 82: true }; // F, R
-    container.addEventListener('keydown', function(e) {
-      if (BLOCKED_KEYS[e.keyCode]) e.stopImmediatePropagation();
-    }, false);
-
-    var controls = flyControls(camera, container, THREE);
-    controls.movementSpeed = 200;
-    controls.rollSpeed = 0.065;
-
-    // Space (32) = fly up, Ctrl (17) = fly down — not in three.fly's default keymap
-    var _enabled = true;
-    container.addEventListener('keydown', function(e) {
-      if (!_enabled) return;
-      if (e.keyCode === 32) { controls.moveState.up   = 1; controls.updateMovementVector(); }
-      if (e.keyCode === 17) { controls.moveState.down = 1; controls.updateMovementVector(); }
-    }, false);
-    container.addEventListener('keyup', function(e) {
-      if (e.keyCode === 32) { controls.moveState.up   = 0; controls.updateMovementVector(); }
-      if (e.keyCode === 17) { controls.moveState.down = 0; controls.updateMovementVector(); }
-    }, false);
-
-    // Wrap update() and expose setEnabled() so callers can pause fly controls
-    // (e.g. when switching to turntable mode).
-    var _origUpdate = controls.update;
-    controls.update = function(delta) { if (_enabled) _origUpdate(delta); };
-    controls.setEnabled = function(val) {
-      _enabled = val;
-      if (!val) {
-        // Clear all movement so the camera doesn't drift when re-enabled
-        var ms = controls.moveState;
-        Object.keys(ms).forEach(function(k) { ms[k] = 0; });
-        controls.updateMovementVector();
-        controls.updateRotationVector();
-      }
-    };
-
-    return controls;
-  }
-
   function frame(time) {
-    lastFrame = requestAnimationFrame(frame);
+    // Update controls first (may move camera)
+    input.update(0.1);
+    var tweenActive = updateTween(time);
 
-    // Demand rendering: skip GPU work when nothing has changed
+    for (var i = 0; i < rafCallbacks.length; ++i) {
+      rafCallbacks[i](time);
+    }
+
+    // Render only when camera moved or data changed
     var moved = !camera.position.equals(_lastCamPos) || !camera.quaternion.equals(_lastCamQuat);
     if (moved || _needsRender) {
       _lastCamPos.copy(camera.position);
@@ -134,11 +109,11 @@ function unrender(container, options) {
       _needsRender = false;
     }
 
-    input.update(0.1);
-    updateTween(time);
-
-    for (var i = 0; i < rafCallbacks.length; ++i) {
-      rafCallbacks[i](time);
+    // Continue loop only while there is work; otherwise pause until markDirty()
+    if (moved || _needsRender || tweenActive || rafCallbacks.length > 0) {
+      lastFrame = requestAnimationFrame(frame);
+    } else {
+      _loopRunning = false;
     }
   }
 
@@ -329,10 +304,10 @@ function unrender(container, options) {
   }
 
   function highResTimer(time) {
-    TWEEN.update(time);
+    return TWEEN.update(time);
   }
 
-  function dateTimer(time) {
-    TWEEN.update(+new Date());
+  function dateTimer() {
+    return TWEEN.update(+new Date());
   }
 }

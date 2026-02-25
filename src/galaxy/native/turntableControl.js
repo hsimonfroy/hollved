@@ -18,6 +18,11 @@
  *   Right-drag → pan pivot in camera's right/up plane
  *   Scroll     → zoom (change radius)
  *
+ * Keyboard (via shared keyState from baseControl, always active):
+ *   W/A/S/D/Space/Ctrl → translate pivot in camera-local space
+ *   Arrow keys         → orbit (theta / phi), same as left-drag
+ *   Q/E               → tilt orbit frame (rotate upAxis around camera forward)
+ *
  * Mobile (called externally by mobileControl.js):
  *   onTouchRotate(dx, dy)
  *   onTouchZoom(scale)    — scale = newPinchDist / prevPinchDist
@@ -25,7 +30,7 @@
  */
 export default createTurntableControl;
 
-function createTurntableControl(camera, container, markDirty) {
+function createTurntableControl(camera, container, markDirty, keyState) {
   // window.THREE is set by renderer.js before this function is ever called
   var THREE = window.THREE;
   var enabled = false;
@@ -50,8 +55,13 @@ function createTurntableControl(camera, container, markDirty) {
   var PAN_SPEED = 0.001;
   // Zoom constants
   var MIN_RADIUS    = 1;     // minimum orbit radius
-  var SWITCH_RADIUS = 1;   // initial orbit radius when switching from spaceship mode
+  var SWITCH_RADIUS = 1;     // initial orbit radius when switching from spaceship mode
   var ZOOM_SPEED    = 0.002; // exponential factor per clamped scroll pixel
+  var MAX_DELTA_Y   = 100;   // scroll clamp — prevents trackpad burst zooms
+  // Keyboard-driven rates (per second)
+  var MOVE_SPEED  = 200; // pivot translate speed, matches spaceship
+  var ORBIT_SPEED = 1.2; // arrow-key orbit speed (rad/s)
+  var ROLL_SPEED  = 0.5; // Q/E upAxis tilt speed (rad/s)
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });
@@ -60,12 +70,63 @@ function createTurntableControl(camera, container, markDirty) {
   document.addEventListener('mouseup',       onMouseUp,    false);
 
   return {
+    update:          update,
     setEnabled:      setEnabled,
     onTouchRotate:   onTouchRotate,
     onTouchZoom:     onTouchZoom,
     onTouchPan:      onTouchPan,
     destroy:         destroy
   };
+
+  // ── Keyboard-driven per-frame update ──────────────────────────────────────
+
+  function update(delta) {
+    if (!enabled || !keyState) return;
+    var hasMoved = false;
+
+    // WASD / Space / Ctrl → translate pivot in camera-local space
+    var dFwd   = (keyState.forward - keyState.back ) * MOVE_SPEED * delta;
+    var dRight = (keyState.right   - keyState.left ) * MOVE_SPEED * delta;
+    var dUp    = (keyState.up      - keyState.down ) * MOVE_SPEED * delta;
+    if (dFwd || dRight || dUp) {
+      var fwd   = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(dFwd);
+      var right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(dRight);
+      var up    = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(dUp);
+      pivot.add(fwd).add(right).add(up);
+      hasMoved = true;
+    }
+
+    // Arrow keys → orbit (same as left-drag)
+    var dTheta = (keyState.yawLeft  - keyState.yawRight ) * ORBIT_SPEED * delta;
+    var dPhi   = (keyState.pitchDown - keyState.pitchUp  ) * ORBIT_SPEED * delta;
+    if (dTheta || dPhi) {
+      theta += dTheta;
+      phi    = Math.max(0.01, Math.min(Math.PI - 0.01, phi + dPhi));
+      hasMoved = true;
+    }
+
+    // Q/E → rotate upAxis around camera forward (tilts the orbit horizon)
+    var dRoll = (keyState.rollLeft - keyState.rollRight) * ROLL_SPEED * delta;
+    if (dRoll) {
+      var fwdDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      upAxis.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(fwdDir, dRoll)).normalize();
+      // Re-orthogonalize fwdRef against the rotated upAxis
+      var d = fwdRef.dot(upAxis);
+      fwdRef.x -= upAxis.x * d;
+      fwdRef.y -= upAxis.y * d;
+      fwdRef.z -= upAxis.z * d;
+      if (fwdRef.lengthSq() < 1e-6) {
+        var seed = new THREE.Vector3(1, 0, 0);
+        if (Math.abs(upAxis.dot(seed)) > 0.9) seed.set(0, 0, 1);
+        fwdRef.crossVectors(seed, upAxis).normalize();
+      } else {
+        fwdRef.normalize();
+      }
+      hasMoved = true;
+    }
+
+    if (hasMoved) updateCamera();
+  }
 
   // ── Enable / disable ──────────────────────────────────────────────────────
 
@@ -170,7 +231,8 @@ function createTurntableControl(camera, container, markDirty) {
   function onWheel(e) {
     if (!enabled) return;
     e.preventDefault();
-    applyZoom(e.deltaY);
+    var delta = Math.max(-MAX_DELTA_Y, Math.min(MAX_DELTA_Y, e.deltaY));
+    applyZoom(delta);
   }
 
   function onContextMenu(e) {

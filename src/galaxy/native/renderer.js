@@ -3,14 +3,14 @@
  *
  * Listens to graph loading events. Once positions are downloaded it calls
  * the native renderer to display them. Tracer colors and visibility are
- * managed here. Hit-testing, hover, click and link rendering have been
- * removed for performance with multi-million-node datasets.
+ * managed here.
  *
- * Control modes
- * -------------
- * Default: turntable (orbit around pivot at origin).
- * Press F (desktop) or tap the on-screen mode button to toggle to spaceship
- * mode (WASD + tethered mouse pitch/yaw + Q/E roll + Space/Ctrl up/down).
+ * Control modes (F key or on-screen button to toggle)
+ * ----------------------------------------------------
+ * Both modes share keyboard controls (W/A/S/D, Q/E, Space/Ctrl, arrows).
+ * The mode only changes mouse behaviour:
+ *   Turntable — left-drag orbit, scroll zoom, right-drag pan
+ *   Spaceship — hold left button to look (pitch/yaw, absolute screen-centre)
  */
 import unrender from '../../unrender';
 window.THREE = unrender.THREE;
@@ -18,15 +18,17 @@ window.THREE = unrender.THREE;
 import eventify from 'ngraph.events';
 import appEvents from '../service/appEvents.js';
 import appConfig from './appConfig.js';
-import createMobileControl from './mobileControl.js';
+import createBaseControl     from './baseControl.js';
+import createSpaceshipControl from './spaceshipControl.js';
 import createTurntableControl from './turntableControl.js';
+import createMobileControl   from './mobileControl.js';
 
 export default sceneRenderer;
 
 var NODE_SIZE = 2; // change this to resize all nodes
 
 function sceneRenderer(container) {
-  var renderer, positions, mobileControl, turntableControl;
+  var renderer, positions, mobileControl, turntableControl, spaceshipControl, baseControl;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
 
@@ -53,15 +55,10 @@ function sceneRenderer(container) {
   return api;
 
   function accelarate(isPrecise) {
-    if (!renderer) return;
-    var input = renderer.input();
-    if (isPrecise) {
-      input.movementSpeed *= 4;
-      input.rollSpeed *= 4;
-    } else {
-      input.movementSpeed /= 4;
-      input.rollSpeed /= 4;
-    }
+    if (!spaceshipControl) return;
+    var factor = isPrecise ? 4 : 0.25;
+    spaceshipControl.movementSpeed *= factor;
+    spaceshipControl.rollSpeed     *= factor;
   }
 
   function updateQuery() {
@@ -72,23 +69,18 @@ function sceneRenderer(container) {
 
   function toggleControlMode() {
     if (!renderer) return;
-    var input = renderer.input();
 
     if (currentMode === 'turntable') {
-      // → spaceship
       currentMode = 'spaceship';
       turntableControl.setEnabled(false);
-      input.dragToLook = false; // tethered: cursor position always drives pitch/yaw
-      input.setEnabled(true);
-      if (mobileControl) mobileControl.setMode('spaceship');
+      spaceshipControl.setEnabled(true);
     } else {
-      // → turntable
       currentMode = 'turntable';
-      input.setEnabled(false);  // also clears all moveState
+      spaceshipControl.setEnabled(false);
       turntableControl.setEnabled(true, renderer.camera(), true);
-      if (mobileControl) mobileControl.setMode('turntable');
     }
 
+    if (mobileControl) mobileControl.setMode(currentMode);
     appEvents.controlModeChanged.fire(currentMode);
     appConfig.setControlMode(currentMode);
   }
@@ -116,18 +108,30 @@ function sceneRenderer(container) {
       camera.updateProjectionMatrix();
       moveCameraInternal();
 
-      var cam   = renderer.camera();
-      var input = renderer.input();
-      turntableControl = createTurntableControl(cam, container, renderer.markDirty);
+      var cam = renderer.camera();
+      baseControl      = createBaseControl(renderer.markDirty);
+      turntableControl = createTurntableControl(cam, container, renderer.markDirty, baseControl.keyState);
+      spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty,
+        function(v) { appEvents.accelerateNavigation.fire(v); });
+
+      // Wire both controls into the per-frame update slot exposed by unrender.
+      // baseControl.isActive() keeps the loop alive while keys are held
+      // (camera may not have moved yet on the very first key-down frame).
+      renderer.input().update = function(delta) {
+        spaceshipControl.update(delta);
+        turntableControl.update(delta);
+        if (baseControl.isActive()) renderer.markDirty();
+      };
+
       if (currentMode === 'turntable') {
-        input.setEnabled(false);
+        spaceshipControl.setEnabled(false);
         turntableControl.setEnabled(true, cam, true);
       } else {
         turntableControl.setEnabled(false);
-        input.dragToLook = false;
-        input.setEnabled(true);
+        spaceshipControl.setEnabled(true);
       }
-      mobileControl = createMobileControl(renderer, turntableControl);
+
+      mobileControl = createMobileControl(renderer, turntableControl, spaceshipControl);
       mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode); // sync UI button on load
     }
@@ -256,8 +260,10 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
+    if (baseControl)      { baseControl.destroy();      baseControl      = null; }
+    if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (turntableControl) { turntableControl.destroy(); turntableControl = null; }
-    if (mobileControl)    { mobileControl.destroy();    mobileControl = null; }
+    if (mobileControl)    { mobileControl.destroy();    mobileControl    = null; }
     renderer.destroy();
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.tracerRangesReady.off(setTracerRanges);

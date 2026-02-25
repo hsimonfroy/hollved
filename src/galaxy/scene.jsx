@@ -8,13 +8,12 @@ import About from './about.jsx';
 import WindowCollection from './windows/windowCollectionView.jsx';
 import TracerSelector from './tracerSelector.jsx';
 import createNativeRenderer from './native/renderer.js';
-import createKeyboardBindings from './native/sceneKeyboardBinding.js';
 
 var webglEnabled = require('webgl-enabled')();
 module.exports = require('maco')(scene, React);
 
 function scene(x) {
-  var nativeRenderer, keyboard;
+  var nativeRenderer;
 
   x.render = function() {
     if (!webglEnabled) {
@@ -37,11 +36,9 @@ function scene(x) {
     if (!webglEnabled) return;
     var container = findDOMNode(x.refs.graphContainer);
     nativeRenderer = createNativeRenderer(container);
-    keyboard = createKeyboardBindings(container);
   };
 
   x.componentWillUnmount = function() {
     if (nativeRenderer) nativeRenderer.destroy();
-    if (keyboard) keyboard.destroy();
   };
 }

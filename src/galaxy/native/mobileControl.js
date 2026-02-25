@@ -3,8 +3,7 @@ export default createMobileControl;
 var JOYSTICK_RADIUS = 60;   // px — half of 120px base diameter
 var DEAD_ZONE       = 0.15; // fraction of joystick radius, no input below this
 
-function createMobileControl(renderer, turntableControl) {
-  var input     = renderer.input();
+function createMobileControl(renderer, turntableControl, spaceshipControl) {
   var container = renderer.getContainer();
 
   // ── DOM — left joystick (spaceship movement) ─────────────────────────────
@@ -61,11 +60,8 @@ function createMobileControl(renderer, turntableControl) {
     joystickRightOrigin  = null;
     joystickKnob.style.transform      = 'translate(0px,0px)';
     joystickRightKnob.style.transform = 'translate(0px,0px)';
-    input.moveState.forward = input.moveState.back  = 0;
-    input.moveState.left    = input.moveState.right = 0;
-    input.moveState.yawLeft = input.moveState.pitchDown = 0;
-    input.updateMovementVector();
-    input.updateRotationVector();
+    var ms = spaceshipControl.mobileState;
+    ms.forward = ms.back = ms.left = ms.right = ms.yawLeft = ms.pitchDown = 0;
     // Clear turntable state
     turntableTouches = {};
   }
@@ -131,17 +127,15 @@ function createMobileControl(renderer, turntableControl) {
         joystickTouchId = null;
         joystickOrigin  = null;
         joystickKnob.style.transform = 'translate(0px,0px)';
-        input.moveState.forward = input.moveState.back  = 0;
-        input.moveState.left    = input.moveState.right = 0;
-        input.updateMovementVector();
+        var ms = spaceshipControl.mobileState;
+        ms.forward = ms.back = ms.left = ms.right = 0;
       }
       if (t.identifier === joystickRightTouchId) {
         joystickRightTouchId = null;
         joystickRightOrigin  = null;
         joystickRightKnob.style.transform = 'translate(0px,0px)';
-        input.moveState.yawLeft   = 0;
-        input.moveState.pitchDown = 0;
-        input.updateRotationVector();
+        spaceshipControl.mobileState.yawLeft   = 0;
+        spaceshipControl.mobileState.pitchDown = 0;
       }
     }
   }
@@ -164,11 +158,12 @@ function createMobileControl(renderer, turntableControl) {
     var ny = applyDeadZone(dy / JOYSTICK_RADIUS);
 
     // Y up (ny < 0) = forward, Y down (ny > 0) = back
-    input.moveState.forward = Math.max(0, -ny);
-    input.moveState.back    = Math.max(0,  ny);
-    input.moveState.right   = Math.max(0,  nx);
-    input.moveState.left    = Math.max(0, -nx);
-    input.updateMovementVector();
+    var ms = spaceshipControl.mobileState;
+    ms.forward = Math.max(0, -ny);
+    ms.back    = Math.max(0,  ny);
+    ms.right   = Math.max(0,  nx);
+    ms.left    = Math.max(0, -nx);
+    renderer.markDirty();
   }
 
   // ── Right joystick (look: pitch / yaw) ───────────────────────────────────
@@ -189,9 +184,9 @@ function createMobileControl(renderer, turntableControl) {
     var ny = applyDeadZone(dy / JOYSTICK_RADIUS);
 
     // nx > 0 = look right (yawLeft negative), ny > 0 = look down (pitchDown positive)
-    input.moveState.yawLeft   = -nx;
-    input.moveState.pitchDown =  ny;
-    input.updateRotationVector();
+    spaceshipControl.mobileState.yawLeft   = -nx;
+    spaceshipControl.mobileState.pitchDown =  ny;
+    renderer.markDirty();
   }
 
   // ── Turntable touch ───────────────────────────────────────────────────────

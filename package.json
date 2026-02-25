@@ -51,7 +51,6 @@
     "react-router": "^1.0.3",
     "style-loader": "^0.12.2",
     "three": "^0.71.0",
-    "three.fly": "^0.1.6",
     "three.orientation": "^1.1.0",
     "tween.js": "^0.14.0",
     "yaot": "git+https://github.com/anvaka/yaot.git",
