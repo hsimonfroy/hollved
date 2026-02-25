@@ -27,15 +27,16 @@ function createBaseControl(markDirty) {
   };
 
   var KEY = {
-    87: 'forward',   83: 'back',
-    65: 'left',      68: 'right',
-    32: 'up',        16: 'down',
-    81: 'rollLeft',  69: 'rollRight',
-    38: 'pitchUp',   40: 'pitchDown',
-    37: 'yawLeft',   39: 'yawRight'
+    87: 'forward',   83: 'back', // W (87) and S (83)
+    65: 'left',      68: 'right', // A (65) and D (68)
+     32: 'up',        16: 'down',  // Space (32) and Shift (16)
+     81: 'rollLeft',  69: 'rollRight', // Q (81) and E (69)
+     38: 'pitchUp',   40: 'pitchDown', // Up (38) and Down (40)
+     37: 'yawLeft',   39: 'yawRight' // Left (37) and Right (39)
   };
 
   function onKeyDown(e) {
+    // F (70) to switch control modes
     if (e.keyCode === 70) { appEvents.toggleControlMode.fire(); e.preventDefault(); return; }
     var k = KEY[e.keyCode];
     if (k) { e.preventDefault(); keyState[k] = 1; markDirty(); }

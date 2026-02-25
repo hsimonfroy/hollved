@@ -57,7 +57,6 @@ function createTurntableControl(camera, container, markDirty, keyState) {
   var MIN_RADIUS    = 1;     // minimum orbit radius
   var SWITCH_RADIUS = 1;     // initial orbit radius when switching from spaceship mode
   var ZOOM_SPEED    = 0.002; // exponential factor per clamped scroll pixel
-  var MAX_DELTA_Y   = 100;   // scroll clamp — prevents trackpad burst zooms
   // Keyboard-driven rates (per second)
   var MOVE_SPEED  = 200; // pivot translate speed, matches spaceship
   var ORBIT_SPEED = 1.2; // arrow-key orbit speed (rad/s)
@@ -231,8 +230,7 @@ function createTurntableControl(camera, container, markDirty, keyState) {
   function onWheel(e) {
     if (!enabled) return;
     e.preventDefault();
-    var delta = Math.max(-MAX_DELTA_Y, Math.min(MAX_DELTA_Y, e.deltaY));
-    applyZoom(delta);
+    applyZoom(e.deltaY);
   }
 
   function onContextMenu(e) {
