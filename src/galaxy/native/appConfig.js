@@ -7,8 +7,8 @@ import qs from 'qs';
 var defaultConfig = {
   pos: {x : 0, y: 0, z: 0 },
 //   lookAt: {x: -0.3582, y: -0.7468, z: -0.4612, w: -0.3182},
-//   lookAt: {x: -0.8317, y: -0.1663, z: -0.5269, w: 0.0539},
-  lookAt: {x: 0.7192, y: -0.6143, z: -0.2046, w: 0.2521},
+  lookAt: {x: -0.8317, y: -0.1663, z: -0.5269, w: 0.0539},
+//   lookAt: {x: 0.7192, y: -0.6143, z: -0.2046, w: 0.2521},
   maxVisibleDistance: 150,
   scale: 1.,
   controlMode: 'turntable',

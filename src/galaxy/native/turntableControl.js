@@ -48,6 +48,10 @@ function createTurntableControl(camera, container, markDirty) {
   var ROT_SPEED = 0.005;
   // Pan sensitivity factor (world units per pixel, relative to radius)
   var PAN_SPEED = 0.001;
+  // Zoom constants
+  var MIN_RADIUS    = 1;     // minimum orbit radius
+  var SWITCH_RADIUS = 1;   // initial orbit radius when switching from spaceship mode
+  var ZOOM_SPEED    = 0.002; // exponential factor per clamped scroll pixel
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });
@@ -65,17 +69,28 @@ function createTurntableControl(camera, container, markDirty) {
 
   // ── Enable / disable ──────────────────────────────────────────────────────
 
-  function setEnabled(val, cam) {
+  function setEnabled(val, cam, pivotInFront) {
     enabled = val;
-    if (val && cam) initFromCamera(cam);
+    if (val && cam) initFromCamera(cam, pivotInFront);
   }
 
-  function initFromCamera(cam) {
-    // Pivot at origin — galaxy data is centered there
-    pivot.set(0, 0, 0);
-
-    var d = cam.position.distanceTo(pivot);
-    radius = d > 1 ? d : 1000;
+  function initFromCamera(cam, pivotInFront) {
+    if (pivotInFront) {
+      // Place pivot in front of camera — keeps camera in place, non-degenerate orbit.
+      // Camera forward is -Z in camera space.
+      var fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+      pivot.set(
+        cam.position.x + fwd.x * SWITCH_RADIUS,
+        cam.position.y + fwd.y * SWITCH_RADIUS,
+        cam.position.z + fwd.z * SWITCH_RADIUS
+      );
+      radius = SWITCH_RADIUS;
+    } else {
+      // Orbit around galaxy center (origin) — used on startup from URL hash
+      pivot.set(0, 0, 0);
+      var d = cam.position.distanceTo(pivot);
+      radius = d > 1 ? d : 1000;
+    }
 
     // North pole = camera's current screen-up direction in world space
     upAxis.set(0, 1, 0).applyQuaternion(cam.quaternion).normalize();
@@ -184,8 +199,8 @@ function createTurntableControl(camera, container, markDirty) {
     updateCamera();
   }
 
-  function applyZoom(deltaY) {
-    radius = Math.max(1, radius * (1 + deltaY * 0.001));
+  function applyZoom(delta) {
+    radius = Math.max(MIN_RADIUS, radius * Math.exp(delta * ZOOM_SPEED));
     updateCamera();
   }
 

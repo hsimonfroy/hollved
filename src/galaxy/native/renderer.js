@@ -85,7 +85,7 @@ function sceneRenderer(container) {
       // → turntable
       currentMode = 'turntable';
       input.setEnabled(false);  // also clears all moveState
-      turntableControl.setEnabled(true, renderer.camera());
+      turntableControl.setEnabled(true, renderer.camera(), true);
       if (mobileControl) mobileControl.setMode('turntable');
     }
 
@@ -121,7 +121,7 @@ function sceneRenderer(container) {
       turntableControl = createTurntableControl(cam, container, renderer.markDirty);
       if (currentMode === 'turntable') {
         input.setEnabled(false);
-        turntableControl.setEnabled(true, cam);
+        turntableControl.setEnabled(true, cam, true);
       } else {
         turntableControl.setEnabled(false);
         input.dragToLook = false;
