@@ -5,6 +5,8 @@ module.exports = [
 'varying vec4 vColor;',
 'varying float vPointSize;',
 '',
+'const float focalLength = 351.0;',
+'',
 'void main() {',
 '  vColor = customColor/255.0;',
 '  vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );',
@@ -16,10 +18,10 @@ module.exports = [
 '    return;',
 '  }',
 '',
-'  vPointSize = size * ( 351.0 / length( mvPosition.xyz ) );',
+'  vPointSize = size * ( focalLength / length( mvPosition.xyz ) );',
 '',
 '  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
-'  if (vPointSize < 0.05) {',
+'  if (vPointSize < 0.01) {',
 '    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
 '    gl_PointSize = 0.0;',
 '    return;',
@@ -29,3 +31,4 @@ module.exports = [
 '  gl_Position = projectionMatrix * mvPosition;',
 '}'
 ].join('\n');
+

@@ -36,8 +36,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
   var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center  → yaw left
   var mousePitchDown = 0;  // -1..1: positive = cursor below center    → pitch down
 
-  var movementSpeed = 200;
-  var rollSpeed     = 0.065;
+  var MOVE_SPEED = 200; // translate speed
+  var ROT_SPEED = 0.2; // Q/E upAxis tilt speed (rad/s)
 
   var tmpQ = new THREE.Quaternion();
 
@@ -90,8 +90,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
   function update(delta) {
     if (!enabled) return;
 
-    var moveMult = delta * movementSpeed;
-    var rotMult  = delta * rollSpeed;
+    var moveMult = delta * MOVE_SPEED;
+    var rotMult  = delta * ROT_SPEED / 2; // quaternion rotation is angle divided by 2
 
     // Translation in camera-local space
     var fwd   = (keyState.forward + mobileState.forward) - (keyState.back  + mobileState.back);
@@ -139,10 +139,10 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
     setEnabled:  setEnabled,
     mobileState: mobileState,
 
-    get movementSpeed() { return movementSpeed; },
-    set movementSpeed(v) { movementSpeed = v; },
-    get rollSpeed()      { return rollSpeed; },
-    set rollSpeed(v)     { rollSpeed = v; },
+    get movementSpeed() { return MOVE_SPEED; },
+    set movementSpeed(v) { MOVE_SPEED = v; },
+    get rollSpeed()      { return ROT_SPEED; },
+    set rollSpeed(v)     { ROT_SPEED = v; },
 
     destroy: function() {
       setEnabled(false);

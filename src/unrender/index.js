@@ -7,6 +7,10 @@ var createHitTest = require('./lib/hit-test.js');
 var createAutoPilot = require('./lib/auto-pilot.js');
 var normalizeColor = require('./lib/normalize-color.js');
 
+var CAMERA_FOV  = 70; // vertical field of view (degrees), human central vision is about 60
+var CAMERA_NEAR = 1;
+var CAMERA_FAR  = 20000;
+
 // Expose three.js as well, so simple clients do not have to require it
 unrender.THREE = THREE;
 unrender.TWEEN = TWEEN;
@@ -157,7 +161,7 @@ function unrender(container, options) {
   }
 
   function createCamera() {
-    var camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 10000);
+    var camera = new THREE.PerspectiveCamera(CAMERA_FOV, container.clientWidth / container.clientHeight, CAMERA_NEAR, CAMERA_FAR);
     scene.add(camera);
 
     return camera;
@@ -254,7 +258,7 @@ function unrender(container, options) {
       new THREE.ShaderMaterial({
         uniforms: {
           tDiffuse: { type: 't', value: hdrTarget },
-          exposure: { type: 'f', value: 5.0 },
+          exposure: { type: 'f', value: 10.0 },
           power:    { type: 'f', value: 0.5 }
         //   exposure: { type: 'f', value: 2.0 },
         //   power:    { type: 'f', value: 1.0 }

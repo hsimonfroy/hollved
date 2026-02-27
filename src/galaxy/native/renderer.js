@@ -25,10 +25,12 @@ import createMobileControl   from './mobileControl.js';
 
 export default sceneRenderer;
 
-var NODE_SIZE = 2; // change this to resize all nodes
+var NODE_SIZE = 1; // change this to resize all nodes
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, turntableControl, spaceshipControl, baseControl;
+  var milkyWayCircle = null;
+  var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
 
@@ -56,7 +58,7 @@ function sceneRenderer(container) {
 
   function accelarate(isPrecise) {
     if (!spaceshipControl) return;
-    var factor = isPrecise ? 4 : 0.25;
+    var factor = isPrecise ? 5 : 0.2;
     spaceshipControl.movementSpeed *= factor;
     spaceshipControl.rollSpeed     *= factor;
   }
@@ -71,15 +73,32 @@ function sceneRenderer(container) {
     if (!renderer) return;
 
     if (currentMode === 'turntable') {
+      // Back to spaceship: teleport to pivot, orient flat in the turntable plane
+      var cam = renderer.camera();
+      var flatFwd = turntableControl.getFlatForward();
+      cam.position.copy(turntableControl.getPivot());
+      cam.up.copy(turntableControl.getUpAxis());
+      cam.lookAt(new THREE.Vector3(
+        cam.position.x + flatFwd.x,
+        cam.position.y + flatFwd.y,
+        cam.position.z + flatFwd.z
+      ));
       currentMode = 'spaceship';
       turntableControl.setEnabled(false);
       spaceshipControl.setEnabled(true);
+      if (milkyWayCircle) milkyWayCircle.visible = false;
     } else {
       currentMode = 'turntable';
       spaceshipControl.setEnabled(false);
-      turntableControl.setEnabled(true, renderer.camera(), true);
+      turntableControl.setEnabled(true, renderer.camera());
+      if (milkyWayCircle) {
+        milkyWayCircle.visible = true;
+        milkyWayCircle.position.copy(turntableControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+      }
     }
 
+    renderer.markDirty();
     if (mobileControl) mobileControl.setMode(currentMode);
     appEvents.controlModeChanged.fire(currentMode);
     appConfig.setControlMode(currentMode);
@@ -104,7 +123,6 @@ function sceneRenderer(container) {
     if (!renderer) {
       renderer = unrender(container);
       var camera = renderer.camera();
-      camera.fov = 70; // default is 45, human central vision is about 60
       camera.updateProjectionMatrix();
       moveCameraInternal();
 
@@ -121,14 +139,26 @@ function sceneRenderer(container) {
         spaceshipControl.update(delta);
         turntableControl.update(delta);
         if (baseControl.isActive()) renderer.markDirty();
+        if (milkyWayCircle && milkyWayCircle.visible) {
+          milkyWayCircle.position.copy(turntableControl.getPivot());
+          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+        }
       };
 
       if (currentMode === 'turntable') {
         spaceshipControl.setEnabled(false);
-        turntableControl.setEnabled(true, cam, true);
+        turntableControl.setEnabled(true, cam);
       } else {
         turntableControl.setEnabled(false);
         spaceshipControl.setEnabled(true);
+      }
+
+      _zUp = new THREE.Vector3(0, 0, 1);
+      milkyWayCircle = createMilkyWayCircle(renderer.scene());
+      milkyWayCircle.visible = (currentMode === 'turntable');
+      if (milkyWayCircle.visible) {
+        milkyWayCircle.position.copy(turntableControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
       }
 
       mobileControl = createMobileControl(renderer, turntableControl, spaceshipControl);
@@ -259,7 +289,30 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
+  function createMilkyWayCircle(scene) {
+    var SEGMENTS = 64, R = 0.1;
+    var geo = new THREE.Geometry();
+    for (var i = 0; i <= SEGMENTS; i++) {
+      var a = (i / SEGMENTS) * Math.PI * 2;
+      geo.vertices.push(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, 0));
+    }
+    var mat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+      depthWrite: false
+    });
+    var circle = new THREE.Line(geo, mat);
+    scene.add(circle);
+    return circle;
+  }
+
   function destroy() {
+    if (milkyWayCircle) {
+      renderer.scene().remove(milkyWayCircle);
+      milkyWayCircle.geometry.dispose();
+      milkyWayCircle.material.dispose();
+      milkyWayCircle = null;
+    }
     if (baseControl)      { baseControl.destroy();      baseControl      = null; }
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (turntableControl) { turntableControl.destroy(); turntableControl = null; }

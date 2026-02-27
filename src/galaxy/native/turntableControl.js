@@ -54,13 +54,14 @@ function createTurntableControl(camera, container, markDirty, keyState) {
   // Pan sensitivity factor (world units per pixel, relative to radius)
   var PAN_SPEED = 0.001;
   // Zoom constants
-  var MIN_RADIUS    = 1;     // minimum orbit radius
-  var SWITCH_RADIUS = 1;     // initial orbit radius when switching from spaceship mode
-  var ZOOM_SPEED    = 0.002; // exponential factor per clamped scroll pixel
+  var MIN_RADIUS    = 1;          // minimum orbit radius
+  var SWITCH_RADIUS = 100;        // orbit radius when entering turntable from spaceship
+  var SWITCH_ANGLE  = Math.PI / 4; // elevation above equatorial plane on turntable entry (rad)
+  var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel
   // Keyboard-driven rates (per second)
-  var MOVE_SPEED  = 200; // pivot translate speed, matches spaceship
-  var ORBIT_SPEED = 1.2; // arrow-key orbit speed (rad/s)
-  var ROLL_SPEED  = 0.5; // Q/E upAxis tilt speed (rad/s)
+  var MOVE_SPEED  = 200; // pivot translate speed
+  var ORBIT_SPEED = 0.2; // arrow-key orbit speed (rad/s)
+  var ROLL_SPEED  = 0.2; // Q/E upAxis tilt speed (rad/s)
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });
@@ -71,6 +72,18 @@ function createTurntableControl(camera, container, markDirty, keyState) {
   return {
     update:          update,
     setEnabled:      setEnabled,
+    getPivot:        function() { return pivot; },
+    getUpAxis:       function() { return upAxis; },
+    getFlatForward:  function() {
+      // Equatorial direction the spaceship faces when returning from turntable:
+      // opposite of the horizontal component of the direction from pivot to camera.
+      var fwdAxis = new THREE.Vector3().crossVectors(upAxis, fwdRef).normalize();
+      return new THREE.Vector3(
+        -(Math.cos(theta) * fwdRef.x + Math.sin(theta) * fwdAxis.x),
+        -(Math.cos(theta) * fwdRef.y + Math.sin(theta) * fwdAxis.y),
+        -(Math.cos(theta) * fwdRef.z + Math.sin(theta) * fwdAxis.z)
+      ).normalize();
+    },
     onTouchRotate:   onTouchRotate,
     onTouchZoom:     onTouchZoom,
     onTouchPan:      onTouchPan,
@@ -105,7 +118,7 @@ function createTurntableControl(camera, container, markDirty, keyState) {
     }
 
     // Q/E → rotate upAxis around camera forward (tilts the orbit horizon)
-    var dRoll = (keyState.rollLeft - keyState.rollRight) * ROLL_SPEED * delta;
+    var dRoll = (keyState.rollRight - keyState.rollLeft) * ROLL_SPEED * delta;
     if (dRoll) {
       var fwdDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
       upAxis.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(fwdDir, dRoll)).normalize();
@@ -129,37 +142,27 @@ function createTurntableControl(camera, container, markDirty, keyState) {
 
   // ── Enable / disable ──────────────────────────────────────────────────────
 
-  function setEnabled(val, cam, pivotInFront) {
+  function setEnabled(val, cam) {
     enabled = val;
-    if (val && cam) initFromCamera(cam, pivotInFront);
+    if (val && cam) initFromCamera(cam);
   }
 
-  function initFromCamera(cam, pivotInFront) {
-    if (pivotInFront) {
-      // Place pivot in front of camera — keeps camera in place, non-degenerate orbit.
-      // Camera forward is -Z in camera space.
-      var fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
-      pivot.set(
-        cam.position.x + fwd.x * SWITCH_RADIUS,
-        cam.position.y + fwd.y * SWITCH_RADIUS,
-        cam.position.z + fwd.z * SWITCH_RADIUS
-      );
-      radius = SWITCH_RADIUS;
-    } else {
-      // Orbit around galaxy center (origin) — used on startup from URL hash
-      pivot.set(0, 0, 0);
-      var d = cam.position.distanceTo(pivot);
-      radius = d > 1 ? d : 1000;
-    }
+  function initFromCamera(cam) {
+    // Pivot = spaceship position (where the camera was in spaceship mode).
+    // Camera steps back by SWITCH_RADIUS, so the spaceship is always at the pivot.
+    pivot.copy(cam.position);
+    radius = SWITCH_RADIUS;
 
     // North pole = camera's current screen-up direction in world space
     upAxis.set(0, 1, 0).applyQuaternion(cam.quaternion).normalize();
 
-    var dir = cam.position.clone().sub(pivot).normalize();
+    // Direction from pivot to new camera position = camera backward = (0,0,1) in camera space
+    var dir = new THREE.Vector3(0, 0, 1).applyQuaternion(cam.quaternion);
     phi = Math.acos(Math.max(-1, Math.min(1, dir.dot(upAxis))));
+    phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi - SWITCH_ANGLE));
 
-    // Reference direction = current camera direction projected onto the equatorial plane.
-    // Setting fwdRef to this and theta=0 keeps the camera exactly in place.
+    // Reference direction = dir projected onto the equatorial plane.
+    // With theta=0, updateCamera() will place the camera at pivot + radius * dir.
     var dot = dir.dot(upAxis);
     var projected = new THREE.Vector3(
       dir.x - upAxis.x * dot,
@@ -169,7 +172,7 @@ function createTurntableControl(camera, container, markDirty, keyState) {
     if (projected.lengthSq() > 1e-6) {
       fwdRef.copy(projected).normalize();
     } else {
-      // Camera is at the north/south pole — pick any perpendicular direction
+      // dir is parallel to upAxis — pick any perpendicular direction
       var seed = new THREE.Vector3(1, 0, 0);
       if (Math.abs(upAxis.dot(seed)) > 0.9) seed.set(0, 0, 1);
       fwdRef.crossVectors(seed, upAxis).normalize();
