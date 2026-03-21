@@ -5,7 +5,6 @@ import NoWebGL from './noWebgl.jsx';
 import Help from './help.jsx';
 import About from './about.jsx';
 
-import WindowCollection from './windows/windowCollectionView.jsx';
 import TracerSelector from './tracerSelector.jsx';
 import createNativeRenderer from './native/renderer.js';
 
@@ -25,7 +24,6 @@ function scene(x) {
         <div ref='graphContainer' className='graph-full-size'/>
         <TracerSelector />
         <ControlModeButton />
-        <WindowCollection />
         <Help />
         <About />
       </div>

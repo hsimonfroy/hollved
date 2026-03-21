@@ -12,19 +12,9 @@ var appEvents = eventify({});
 
 export default eventMirror([
   /**
-   * Fired when labels are downloaded
-   */
-  'labelsDownloaded',
-
-  /**
    * Fired when positions are downloaded
    */
   'positionsDownloaded',
-
-  /**
-   * Fired when links are downloaded
-   */
-  'linksDownloaded',
 
   /**
    * Fired when entire graph is downloaded
@@ -35,16 +25,6 @@ export default eventMirror([
    * Fired when new galaxy page is opened and graph download is required
    */
   'downloadGraphRequested',
-
-  /**
-   * Fired when user hover mouse over a node
-   */
-  'nodeHover',
-
-  /**
-   * Fired when user wants to select a node
-   */
-  'selectNode',
 
   /**
    * Fired when user wants to toggle between turntable and spaceship control modes.
@@ -64,40 +44,24 @@ export default eventMirror([
   'toggleLinks',
 
   /**
-   * fired when user inputs a text into the search bar
-   */
-  'commandBarChanged',
-
-  /**
    * fired when user requesed to show or hide help screen
    */
   'toggleHelp',
 
-  // These events are not documented since I'm not sure whether to keep them
-   'showNodeListWindow',
-   'hideNodeListWindow',
-   'showDegree',
-   'focusOnNode',
-   'focusScene',
-   'highlightQuery',
-   'queryHighlighted',
-   'highlightLinks',
-   'cls',
-   'around',
-   'queryChanged',
+  'focusScene',
+  'queryChanged',
 
-   'accelerateNavigation',
+  'accelerateNavigation',
 
-   /**
-    * Fired when tracer ranges are computed after multi-tracer positions are loaded.
-    * Carries an array of { id, name, color, startNode, nodeCount }.
-    */
-   'tracerRangesReady',
+  /**
+   * Fired when tracer ranges are computed after multi-tracer positions are loaded.
+   * Carries an array of { id, name, color, startNode, nodeCount }.
+   */
+  'tracerRangesReady',
 
-   /**
-    * Fired to toggle visibility of a single tracer.
-    * Arguments: (tracerId: string, visible: boolean)
-    */
-   'setTracerVisibility'
+  /**
+   * Fired to toggle visibility of a single tracer.
+   * Arguments: (tracerId: string, visible: boolean)
+   */
+  'setTracerVisibility'
 ], appEvents);
-

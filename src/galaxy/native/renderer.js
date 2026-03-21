@@ -208,7 +208,7 @@ function sceneRenderer(container) {
       var visible = tracerVisibility[tracer.id] !== false;
       var color = visible ? tracer.color : (tracer.color & 0xFFFFFF00);
       for (var n = 0; n < tracer.nodeCount; ++n) {
-        colorNode((tracer.startNode + n) * 3, colors, color);
+        colorNode(tracer.startNode + n, colors, color);
       }
     });
   }
@@ -245,10 +245,9 @@ function sceneRenderer(container) {
     var colors = view.colors();
 
     for (var n = 0; n < tracer.nodeCount; ++n) {
-      var nativeIdx = (tracer.startNode + n) * 3;
-      colorNode(nativeIdx, colors, color);
+      colorNode(tracer.startNode + n, colors, color);
       if (baseColors) {
-        colorNode(nativeIdx, baseColors, color);
+        colorNode(tracer.startNode + n, baseColors, color);
       }
     }
     view.colors(colors);
@@ -263,8 +262,8 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
-  function colorNode(nodeId, colors, color) {
-    var colorOffset = (nodeId / 3) * 4;
+  function colorNode(nodeIndex, colors, color) {
+    var colorOffset = nodeIndex * 4;
     colors[colorOffset + 0] = (color >> 24) & 0xff;
     colors[colorOffset + 1] = (color >> 16) & 0xff;
     colors[colorOffset + 2] = (color >> 8) & 0xff;

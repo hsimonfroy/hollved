@@ -2,10 +2,6 @@ var THREE = require('three');
 var TWEEN = require('tween.js');
 var combineOptions = require('./options.js');
 var createParticleView = require('./lib/particle-view.js');
-var createLineView = require('./lib/line-view.js');
-var createHitTest = require('./lib/hit-test.js');
-var createAutoPilot = require('./lib/auto-pilot.js');
-var normalizeColor = require('./lib/normalize-color.js');
 
 var CAMERA_FOV  = 70; // vertical field of view (degrees), human central vision is about 60
 var CAMERA_NEAR = 1;
@@ -27,12 +23,8 @@ function unrender(container, options) {
     // todo: this should all be refactored into single particles class.
     particles: particles,
     getParticleView: getParicleView,
-    hitTest: getHitTest,
-    lines: drawLines,
     onFrame: onFrame,
     offFrame: offFrame,
-    lookAt: lookAt,
-    around: around,
     getContainer: getContainer,
     markDirty: markDirty,
     setExposure: setExposure,
@@ -68,9 +60,7 @@ function unrender(container, options) {
   tmScene.add(tmMesh);
 
   var particleView = createParticleView(scene);
-  var lineView = createLineView(scene);
   // Stub — renderer.js replaces input.update with the combined control updater.
-  // isMoving() is used by hit-test.js to skip raycasting while camera is moving.
   var input = {
     update:    function() {},
     destroy:   function() {},
@@ -78,10 +68,6 @@ function unrender(container, options) {
       return !camera.position.equals(_lastCamPos) || !camera.quaternion.equals(_lastCamQuat);
     }
   };
-  var autoPilot = createAutoPilot(camera);
-
-  // TODO: This doesn't seem to belong here... Not sure where to put it
-  var hitTest = createHitTest(particleView, container, input);
   var updateTween = window.performance ? highResTimer : dateTimer;
 
   startEventsListening();
@@ -89,10 +75,6 @@ function unrender(container, options) {
   markDirty(); // trigger initial render
 
   return api;
-
-  function getHitTest() {
-    return hitTest;
-  }
 
   function frame(time) {
     // Update controls first (may move camera)
@@ -141,7 +123,6 @@ function unrender(container, options) {
   }
 
   function destroy() {
-    hitTest.destroy();
     input.destroy();
     stopEventsListening();
     container.removeChild(renderer.domElement);
@@ -216,26 +197,6 @@ function unrender(container, options) {
     renderer.setSize(container.clientWidth, container.clientHeight);
     hdrTarget.setSize(container.clientWidth, container.clientHeight);
     markDirty();
-  }
-
-  function drawLines(lines, color) {
-    lineView.draw(lines, color);
-  }
-
-  function around(r, x, y, z) {
-    autoPilot.around(r, x, y, z);
-  }
-
-  function lookAt(index, done, distanceFromTarget) {
-    // todo: this should tak x,y,z instead
-    var points = particleView.coordinates()
-    var pos = {
-      x: points[index],
-      y: points[index + 1],
-      z: points[index + 2]
-    };
-
-    autoPilot.flyTo(pos, done, distanceFromTarget);
   }
 
   function createHdrTarget() {

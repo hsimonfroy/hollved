@@ -1,11 +1,12 @@
 module.exports = combineOptions;
 
-var normalizeColor = require('./lib/normalize-color.js');
-
 function combineOptions(options) {
   options = options || Object.create(null);
 
-  var clearColor = normalizeColor(options.clearColor);
+  var clearColor = options.clearColor;
+  if (typeof clearColor === 'string') {
+    clearColor = parseInt(clearColor.replace(/^#/, ''), 16);
+  }
 
   /**
    * Background of the scene in hexadecimal form. Default value is 0x000000 (black);

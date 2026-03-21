@@ -19,7 +19,6 @@
 
 import config from '../../config.js';
 import request from './request.js';
-import createGraph from './graph.js';
 import appEvents from './appEvents.js';
 import appConfig from '../native/appConfig.js';
 import Promise from 'bluebird';
@@ -45,7 +44,7 @@ function loadFromManifest(manifest, manifestEndpoint, name, progress) {
 
   if (allEntries.length === 0) {
     var endpoint = manifest.endpoint || manifestEndpoint;
-    return loadSingleGraph(endpoint, name, progress).then(buildGraph);
+    return loadSingleGraph(endpoint, name, progress);
   }
 
   // Probe the first entry's meta.json to detect tracer-mode vs version-mode
@@ -72,7 +71,7 @@ function loadLegacy(manifest, manifestEndpoint, name, progress) {
   var endpoint = manifest.endpoint
     ? manifest.endpoint
     : manifestEndpoint + '/' + manifest.last;
-  return loadSingleGraph(endpoint, name, progress).then(buildGraph);
+  return loadSingleGraph(endpoint, name, progress);
 }
 
 function loadSingleGraph(endpoint, name, progress) {
@@ -87,10 +86,11 @@ function loadSingleGraph(endpoint, name, progress) {
       responseType: 'arraybuffer',
       progress: reportProgress(name, 'positions', progress)
     }).then(function(buffer) {
-      positions = new Int32Array(buffer);
+      var int32 = new Int32Array(buffer);
       var scaleFactor = appConfig.getScaleFactor();
-      for (var i = 0; i < positions.length; ++i) {
-        positions[i] *= scaleFactor;
+      positions = new Float32Array(int32.length);
+      for (var i = 0; i < int32.length; ++i) {
+        positions[i] = int32[i] * scaleFactor;
       }
       appEvents.positionsDownloaded.fire(positions);
     });
@@ -138,9 +138,10 @@ function loadTracerData(endpoint, tracerId, graphName, scaleFactor, progress) {
       responseType: 'arraybuffer',
       progress: reportProgress(graphName + '/' + tracerId, 'positions', progress)
     }).then(function(buffer) {
-      tracerPositions = new Int32Array(buffer);
-      for (var i = 0; i < tracerPositions.length; ++i) {
-        tracerPositions[i] *= scaleFactor;
+      var int32 = new Int32Array(buffer);
+      tracerPositions = new Float32Array(int32.length);
+      for (var i = 0; i < int32.length; ++i) {
+        tracerPositions[i] = int32[i] * scaleFactor;
       }
     });
   }
@@ -151,7 +152,7 @@ function mergeTracers(tracerDataArray) {
     return sum + (t.positions.length / 3);
   }, 0);
 
-  var allPositions = new Int32Array(totalNodes * 3);
+  var allPositions = new Float32Array(totalNodes * 3);
   var tracerRanges = [];
   var nodeOffset = 0;
   var posOffset = 0;
@@ -176,21 +177,12 @@ function mergeTracers(tracerDataArray) {
   appEvents.positionsDownloaded.fire(allPositions);
   appEvents.tracerRangesReady.fire(tracerRanges);
 
-  return buildGraph({ positions: allPositions });
+  return {};
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function buildGraph(data) {
-  return createGraph({
-    positions: data.positions,
-    labels: [],
-    outLinks: [],
-    inLinks: []
-  });
-}
 
 function parseColor(colorStr) {
   if (typeof colorStr === 'number') return colorStr;
