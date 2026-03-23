@@ -1,46 +1,36 @@
-/**
- * This is the Webpack configuration file for production.
- */
-var ExtractTextPlugin = require('extract-text-webpack-plugin');
+// production config
 var path = require('path');
-var webpack = require('webpack');
+var MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
-  entry: "./src/main",
+  mode: 'production',
+
+  entry: './src/main',
 
   output: {
-    path: __dirname + "/build/",
-    filename: "app.js"
+    path: path.join(__dirname, 'build'),
+    filename: 'app.js'
   },
 
   module: {
-    loaders: [{
+    rules: [{
       test: /\.jsx?$/,
       exclude: /node_modules/,
-      loader: "babel-loader"
+      use: 'babel-loader'
     }, {
       test: /\.less$/,
-      loader: ExtractTextPlugin.extract('css-loader!less-loader')
+      use: [MiniCssExtractPlugin.loader, 'css-loader', 'less-loader']
     }, {
-      test: /\.(woff|woff2|eot|ttf|svg)$/,
-      loader: 'url-loader?limit=1&name=[name].[ext]'
+      test: /\.(woff2?|eot|ttf|svg)$/,
+      type: 'asset/resource'
     }]
   },
 
   plugins: [
-    new ExtractTextPlugin('styles.css', { allChunks: true }),
-    new webpack.optimize.DedupePlugin()
+    new MiniCssExtractPlugin({ filename: 'styles.css' })
   ],
-  resolveLoader: {
-    root:
-      path.join(__dirname, "node_modules")
-  },
 
   resolve: {
-    extensions: ['', '.js', '.jsx']
-  },
-
-  devServer: {
-    info: true
+    extensions: ['.js', '.jsx']
   }
 };

@@ -90,7 +90,10 @@ function unrender(container, options) {
     if (moved || _needsRender) {
       _lastCamPos.copy(camera.position);
       _lastCamQuat.copy(camera.quaternion);
-      renderer.render(scene, camera, hdrTarget, true);
+      renderer.setRenderTarget(hdrTarget);
+      renderer.clear();
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
       renderer.render(tmScene, tmCamera);
       _needsRender = false;
     }
@@ -133,7 +136,6 @@ function unrender(container, options) {
 
   function createScene() {
     var scene = new THREE.Scene();
-    scene.sortObjects = false;
     return scene;
   }
 
@@ -218,9 +220,9 @@ function unrender(container, options) {
       new THREE.PlaneGeometry(2, 2),
       new THREE.ShaderMaterial({
         uniforms: {
-          tDiffuse: { type: 't', value: hdrTarget },
-          exposure: { type: 'f', value: 10.0 },
-          power:    { type: 'f', value: 0.5 }
+          tDiffuse: { value: hdrTarget.texture },
+          exposure: { value: 10.0 },
+          power:    { value: 0.5 }
         //   exposure: { type: 'f', value: 2.0 },
         //   power:    { type: 'f', value: 1.0 }
         },

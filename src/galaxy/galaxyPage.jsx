@@ -1,32 +1,25 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import LoadingIndicator from './loadingIndicator.jsx';
 import Scene from './scene.jsx';
 import appEvents from './service/appEvents.js';
 
-module.exports = require('maco')(galaxyPage, React);
+export default function GalaxyPage() {
+  var { name } = useParams();
+  var currentPathRef = useRef(null);
 
-function galaxyPage(x) {
-  var currentPath;
-
-  x.render = function() {
-    // This doesn't seem to belong here. The whole routing system is a mess
-    // TODO: Come up with better routing
-    loadGraphIfRouteChanged();
-
-    return (
-      <div>
-        <LoadingIndicator />
-        <Scene />
-      </div>
-    );
-  };
-
-  function loadGraphIfRouteChanged() {
-    var routeChanged = x.props.params.name !== currentPath;
-    if (routeChanged) {
-      currentPath = x.props.params.name;
-      appEvents.downloadGraphRequested.fire(currentPath);
+  useEffect(function() {
+    if (name !== currentPathRef.current) {
+      currentPathRef.current = name;
+      appEvents.downloadGraphRequested.fire(name);
     }
     appEvents.queryChanged.fire();
-  }
+  }, [name]);
+
+  return (
+    <div>
+      <LoadingIndicator />
+      <Scene />
+    </div>
+  );
 }

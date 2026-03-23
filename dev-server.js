@@ -2,27 +2,26 @@ var devConfig = require('./webpack.local.config');
 
 ensureBuildExists();
 
-// Start webpack:
+var port = parseInt(process.env.PORT, 10) || 8082;
+
 var webpack = require('webpack');
 var WebpackDevServer = require('webpack-dev-server');
 var compiler = webpack(devConfig);
 
-new WebpackDevServer(compiler, {
-  publicPath: devConfig.output.publicPath,
-  contentBase: "./build",
-  disableHostCheck: true,
+// WebpackDevServer v5: options first, compiler second
+var server = new WebpackDevServer({
+  port: port,
+  host: '0.0.0.0',
+  static: './build',
   hot: true,
-  quiet: false,
-  filename: 'app.js',
-  stats: { colors: true },
-  noInfo: false,
-  historyApiFallback: true
-}).listen(devConfig.port, '0.0.0.0', function (err) {
-  if (err) {
-    console.log(err);
-  } else {
-    console.log('Dev Server listening at http://127.0.0.1:' + devConfig.port);
-  }
+  historyApiFallback: true,
+  allowedHosts: 'all'
+}, compiler);
+
+server.start().then(function() {
+  console.log('Dev Server listening at http://127.0.0.1:' + port);
+}).catch(function(err) {
+  console.log(err);
 });
 
 function ensureBuildExists() {

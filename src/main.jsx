@@ -3,16 +3,16 @@
  */
 import './styles/main.less';
 
-import React from 'react';
-import {render} from 'react-dom';
+import { createRoot } from 'react-dom/client';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import WelcomePage from './welcome';
 import GalaxyPage from './galaxy/galaxyPage.jsx';
-import { Router, Route, browserHistory } from 'react-router';
 
-render(
-  <Router history={browserHistory}>
-    <Route path='/' component={WelcomePage}/>
-    <Route path='/galaxy/:name' component={GalaxyPage} />
-  </Router>,
-  document.getElementById('app')
+createRoot(document.getElementById('app')).render(
+  <HashRouter>
+    <Routes>
+      <Route path='/' element={<WelcomePage />} />
+      <Route path='/galaxy/:name' element={<GalaxyPage />} />
+    </Routes>
+  </HashRouter>
 );

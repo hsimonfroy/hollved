@@ -1,7 +1,4 @@
-import React from 'react';
-export default require('maco').template(about, React);
-
-function about() {
+export default function About() {
   return (
     <a
       className='info-btn'

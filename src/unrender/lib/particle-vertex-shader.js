@@ -1,6 +1,6 @@
 module.exports = [
-'attribute float size;',
 'attribute vec4 customColor;',
+'uniform float uSize;',
 '',
 'varying vec4 vColor;',
 'varying float vPointSize;',
@@ -8,7 +8,15 @@ module.exports = [
 'const float focalLength = 351.0;',
 '',
 'void main() {',
-'  vColor = customColor/255.0;',
+'  vColor = customColor;  // GPU normalizes Uint8 [0,255] → [0.0,1.0] via normalized=true',
+'',
+'  // Cull invisible nodes (alpha == 0)',
+'  if (vColor.a < 0.004) {',
+'    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
+'    gl_PointSize = 0.0;',
+'    return;',
+'  }',
+'',
 '  vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );',
 '',
 '  // Cull points behind the camera (mvPosition.z > 0 in view space = behind)',
@@ -18,7 +26,7 @@ module.exports = [
 '    return;',
 '  }',
 '',
-'  vPointSize = size * ( focalLength / length( mvPosition.xyz ) );',
+'  vPointSize = uSize * ( focalLength / length( mvPosition.xyz ) );',
 '',
 '  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
 '  if (vPointSize < 0.01) {',
@@ -31,4 +39,3 @@ module.exports = [
 '  gl_Position = projectionMatrix * mvPosition;',
 '}'
 ].join('\n');
-

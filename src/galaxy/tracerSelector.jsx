@@ -3,82 +3,75 @@
  * visibility toggles. It only appears when a multi-tracer graph is loaded
  * (i.e. when appEvents.tracerRangesReady has fired).
  */
-import React from 'react';
+import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
-module.exports = require('maco')(tracerSelector, React);
+export default function TracerSelector() {
+  var [tracers, setTracers] = useState([]);
 
-function tracerSelector(x) {
-  var tracers = [];
+  useEffect(function() {
+    function handleTracerRanges(ranges) {
+      var configVisible = appConfig.getVisibleTracers();
+      setTracers(ranges.map(function(r) {
+        return {
+          id: r.id,
+          name: r.name,
+          color: r.color,
+          visible: configVisible ? configVisible.indexOf(r.id) >= 0 : true
+        };
+      }));
+    }
 
-  appEvents.tracerRangesReady.on(handleTracerRanges);
-
-  x.componentWillUnmount = function() {
-    appEvents.tracerRangesReady.off(handleTracerRanges);
-  };
-
-  x.render = function() {
-    if (tracers.length === 0) return null;
-
-    var rows = tracers.map(function(tracer) {
-      var swatchStyle = {
-        display: 'inline-block',
-        width: '14px',
-        height: '14px',
-        backgroundColor: colorToCSS(tracer.color),
-        border: '1px solid rgba(255,255,255,0.3)',
-        marginRight: '6px',
-        verticalAlign: 'middle',
-        flexShrink: 0
-      };
-
-      return (
-        <label key={tracer.id} style={rowStyle}>
-          <input
-            type='checkbox'
-            checked={tracer.visible}
-            onChange={function(e) { toggleTracer(tracer.id, e.target.checked); }}
-            style={{marginRight: '6px', verticalAlign: 'middle'}}
-          />
-          <span style={swatchStyle}></span>
-          <span style={{verticalAlign: 'middle'}}>{tracer.name}</span>
-        </label>
-      );
-    });
-
-    return (
-      <div style={panelStyle}>
-        {rows}
-      </div>
-    );
-  };
-
-  function handleTracerRanges(ranges) {
-    var configVisible = appConfig.getVisibleTracers();
-    tracers = ranges.map(function(r) {
-      return {
-        id: r.id,
-        name: r.name,
-        color: r.color,
-        visible: configVisible ? configVisible.indexOf(r.id) >= 0 : true
-      };
-    });
-    x.forceUpdate();
-  }
+    appEvents.tracerRangesReady.on(handleTracerRanges);
+    return function() { appEvents.tracerRangesReady.off(handleTracerRanges); };
+  }, []);
 
   function toggleTracer(tracerId, visible) {
-    tracers = tracers.map(function(t) {
+    var newTracers = tracers.map(function(t) {
       return t.id === tracerId ? {id: t.id, name: t.name, color: t.color, visible: visible} : t;
     });
+    setTracers(newTracers);
 
     appEvents.setTracerVisibility.fire(tracerId, visible);
 
-    var visibleIds = tracers.filter(function(t) { return t.visible; }).map(function(t) { return t.id; });
-    appConfig.setVisibleTracers(visibleIds.length < tracers.length ? visibleIds : null);
-
-    x.forceUpdate();
+    var visibleIds = newTracers.filter(function(t) { return t.visible; }).map(function(t) { return t.id; });
+    appConfig.setVisibleTracers(visibleIds.length < newTracers.length ? visibleIds : null);
   }
+
+  if (tracers.length === 0) return null;
+
+  var rows = tracers.map(function(tracer) {
+    var swatchStyle = {
+      display: 'inline-block',
+      width: '14px',
+      height: '14px',
+      backgroundColor: colorToCSS(tracer.color),
+      border: '1px solid rgba(255,255,255,0.3)',
+      marginRight: '6px',
+      verticalAlign: 'middle',
+      flexShrink: 0
+    };
+
+    return (
+      <label key={tracer.id} style={rowStyle}>
+        <input
+          type='checkbox'
+          checked={tracer.visible}
+          onChange={function(e) { toggleTracer(tracer.id, e.target.checked); }}
+          style={{marginRight: '6px', verticalAlign: 'middle'}}
+        />
+        <span style={swatchStyle}></span>
+        <span style={{verticalAlign: 'middle'}}>{tracer.name}</span>
+      </label>
+    );
+  });
+
+  return (
+    <div style={panelStyle}>
+      {rows}
+    </div>
+  );
 }
 
 function colorToCSS(color32) {

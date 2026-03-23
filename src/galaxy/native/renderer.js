@@ -25,7 +25,6 @@ import createMobileControl   from './mobileControl.js';
 
 export default sceneRenderer;
 
-var NODE_SIZE = 1; // change this to resize all nodes
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, turntableControl, spaceshipControl, baseControl;
@@ -167,12 +166,6 @@ function sceneRenderer(container) {
     }
 
     renderer.particles(positions);
-
-    // Apply uniform node size
-    var view = renderer.getParticleView();
-    var sizes = view.sizes();
-    sizes.fill(NODE_SIZE);
-    view.sizes(sizes);
     renderer.markDirty();
   }
 
@@ -198,7 +191,6 @@ function sceneRenderer(container) {
     baseColors.set(colors);
 
     view.colors(colors);
-    applyTracerSizes();
     renderer.markDirty();
   }
 
@@ -211,19 +203,6 @@ function sceneRenderer(container) {
         colorNode(tracer.startNode + n, colors, color);
       }
     });
-  }
-
-  function applyTracerSizes() {
-    if (!tracerRanges || !renderer) return;
-    var view = renderer.getParticleView();
-    var sizes = view.sizes();
-    tracerRanges.forEach(function(tracer) {
-      var sz = tracerVisibility[tracer.id] !== false ? NODE_SIZE : 0;
-      for (var n = 0; n < tracer.nodeCount; ++n) {
-        sizes[tracer.startNode + n] = sz;
-      }
-    });
-    view.sizes(sizes);
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
@@ -251,14 +230,6 @@ function sceneRenderer(container) {
       }
     }
     view.colors(colors);
-
-    // Fix black dots: set size=0 for hidden nodes, NODE_SIZE for visible
-    var sizes = view.sizes();
-    var sz = visible ? NODE_SIZE : 0;
-    for (var m = 0; m < tracer.nodeCount; ++m) {
-      sizes[tracer.startNode + m] = sz;
-    }
-    view.sizes(sizes);
     renderer.markDirty();
   }
 
@@ -290,11 +261,15 @@ function sceneRenderer(container) {
 
   function createMilkyWayCircle(scene) {
     var SEGMENTS = 64, R = 0.1;
-    var geo = new THREE.Geometry();
+    var positions = new Float32Array((SEGMENTS + 1) * 3);
     for (var i = 0; i <= SEGMENTS; i++) {
       var a = (i / SEGMENTS) * Math.PI * 2;
-      geo.vertices.push(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, 0));
+      positions[i * 3 + 0] = Math.cos(a) * R;
+      positions[i * 3 + 1] = Math.sin(a) * R;
+      positions[i * 3 + 2] = 0;
     }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     var mat = new THREE.LineBasicMaterial({
       color: 0xffffff,
       depthTest: false,

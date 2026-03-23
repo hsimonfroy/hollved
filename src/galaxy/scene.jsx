@@ -1,42 +1,35 @@
-import React from 'react';
-import {findDOMNode} from 'react-dom';
+import { useEffect, useRef } from 'react';
 import ControlModeButton from './controlModeButton.jsx';
 import NoWebGL from './noWebgl.jsx';
 import Help from './help.jsx';
 import About from './about.jsx';
-
 import TracerSelector from './tracerSelector.jsx';
 import createNativeRenderer from './native/renderer.js';
 
 var webglEnabled = require('webgl-enabled')();
-module.exports = require('maco')(scene, React);
 
-function scene(x) {
-  var nativeRenderer;
+export default function Scene() {
+  var containerRef = useRef(null);
 
-  x.render = function() {
-    if (!webglEnabled) {
-      return <NoWebGL />;
-    }
-
-    return (
-      <div>
-        <div ref='graphContainer' className='graph-full-size'/>
-        <TracerSelector />
-        <ControlModeButton />
-        <Help />
-        <About />
-      </div>
-    );
-  };
-
-  x.componentDidMount = function() {
+  useEffect(function() {
     if (!webglEnabled) return;
-    var container = findDOMNode(x.refs.graphContainer);
-    nativeRenderer = createNativeRenderer(container);
-  };
+    var nativeRenderer = createNativeRenderer(containerRef.current);
+    return function() {
+      nativeRenderer.destroy();
+    };
+  }, []);
 
-  x.componentWillUnmount = function() {
-    if (nativeRenderer) nativeRenderer.destroy();
-  };
+  if (!webglEnabled) {
+    return <NoWebGL />;
+  }
+
+  return (
+    <div>
+      <div ref={containerRef} className='graph-full-size' />
+      <TracerSelector />
+      <ControlModeButton />
+      <Help />
+      <About />
+    </div>
+  );
 }

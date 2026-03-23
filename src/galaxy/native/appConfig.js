@@ -12,7 +12,7 @@ var defaultConfig = {
   maxVisibleDistance: 150,
   scale: 1.,
   controlMode: 'turntable',
-  visibleTracers: ['lrg', 'elg', 'qso']  // null means all tracers visible
+  visibleTracers: null  // null means all tracers visible
 };
 
 export default appConfig();

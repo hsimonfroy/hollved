@@ -6,32 +6,14 @@ var fragmentShader = require('./particle-fragment-shader.js');
 module.exports = createParticleMaterial;
 
 function createParticleMaterial() {
-  var attributes = {
-    size: {
-      type: 'f',
-      value: null
-    },
-    customColor: {
-      type: 'c',
-      value: null
-    }
-  };
-
   var uniforms = {
-    color: {
-      type: "c",
-      value: new THREE.Color(0xffffff)
-    },
-
-    texture: {
-      type: "t",
-      value: THREE.ImageUtils.loadTexture(defaultTexture)
-    }
+    color:   { value: new THREE.Color(0xffffff) },
+    pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
+    uSize:   { value: 1.0 }
   };
 
-  var material =  new THREE.ShaderMaterial({
+  var material = new THREE.ShaderMaterial({
     uniforms: uniforms,
-    attributes: attributes,
     vertexShader: vertexShader,
     fragmentShader: fragmentShader,
     transparent: true,

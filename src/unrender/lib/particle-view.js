@@ -3,14 +3,13 @@ var THREE = require('three');
 module.exports = particleView;
 
 function particleView(scene) {
-  var points, colors, sizes;
+  var points, colors;
   var pointCloud, geometry;
   var particleMaterial = require('./particle-material.js')();
 
   var api = {
     initWithNewCoordinates: initWithNewCoordinates,
     coordinates: getOrSetCoordinates,
-    sizes: getOrSetSizes,
     colors: getOrSetColors,
     getPointCloud: getPointCloud
   };
@@ -23,39 +22,29 @@ function particleView(scene) {
 
   function initWithNewCoordinates(newPoints) {
     setPoints(newPoints);
-    // TODO: this should go away and replaced by explicit methods
     setColors();
-    setSizes();
 
     geometry = new THREE.BufferGeometry();
-    geometry.addAttribute('position', new THREE.BufferAttribute(points, 3));
-    geometry.addAttribute('customColor', new THREE.BufferAttribute(colors, 4));
-    geometry.addAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(points, 3));
+    geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 4, true)); // normalized Uint8 → [0,1]
 
     if (pointCloud) {
       scene.remove(pointCloud);
     }
 
-    pointCloud = new THREE.PointCloud(geometry, particleMaterial);
+    pointCloud = new THREE.Points(geometry, particleMaterial);
     scene.add(pointCloud);
   }
 
   function setColors() {
-    var colorsLength = 4 * (points.length/3)
-    colors = new Float32Array(colorsLength);
+    var colorsLength = 4 * (points.length / 3);
+    colors = new Uint8Array(colorsLength);
 
     for (var i = 0; i < colorsLength; i += 4) {
-      colors[i] = 0xff;
+      colors[i]     = 0xff;
       colors[i + 1] = 0xff;
       colors[i + 2] = 0xff;
       colors[i + 3] = 0xff;
-    }
-  }
-
-  function setSizes() {
-    sizes = new Float32Array(points.length / 3);
-    for (var i = 0; i < sizes.length; ++i) {
-      sizes[i] = 15;
     }
   }
 
@@ -63,7 +52,6 @@ function particleView(scene) {
     if (isFloat32Array(newPoints)) {
       points = newPoints;
     } else {
-      // todo: error checking
       points = new Float32Array(newPoints);
     }
     if (points.length > 0 && (points.length % 3) !== 0) {
@@ -79,7 +67,6 @@ function particleView(scene) {
       points = newValue;
       geometry.getAttribute('position').needsUpdate = true;
     } else {
-      // TODO: Remove this artificial thing. You can be smarter than this.
       throw new Error('Coordinates expect Float32Array and the size should be the same as original');
     }
   }
@@ -88,29 +75,19 @@ function particleView(scene) {
     if (newValue === undefined) {
       return colors;
     }
-    if (isFloat32Array(newValue) && newValue.length === colors.length) {
+    if (isUint8Array(newValue) && newValue.length === colors.length) {
       colors = newValue;
       geometry.getAttribute('customColor').needsUpdate = true;
     } else {
-      throw new Error('colors expect Float32Array and the size should be the same as original');
-    }
-  }
-
-  function getOrSetSizes(newValue) {
-    if (newValue === undefined) {
-      return sizes;
-    }
-    if (isFloat32Array(newValue) && newValue.length === sizes.length) {
-      sizes = newValue;
-      geometry.getAttribute('size').needsUpdate = true;
-    } else {
-      // TODO: Remove this artificial thing. You can be smarter than this.
-      throw new Error('Sizes expect Float32Array and the size should be the same as original');
+      throw new Error('colors expect Uint8Array and the size should be the same as original');
     }
   }
 
   function isFloat32Array(obj) {
-    return Object.prototype.toString.call(obj) === "[object Float32Array]";
+    return Object.prototype.toString.call(obj) === '[object Float32Array]';
   }
 
+  function isUint8Array(obj) {
+    return Object.prototype.toString.call(obj) === '[object Uint8Array]';
+  }
 }
