@@ -6,8 +6,9 @@ import qs from 'qs';
 
 var defaultConfig = {
   pos: { x: 0, y: 0, z: 0 },
-  rot: { x: -2.5270, y: -0.5051, z: -1.6015 },  // rotvec (axis * angle)
-  zoom: 1000,
+//   rot: { x: -2.5270, y: -0.5051, z: -1.6015 },  // rotvec (axis * angle)
+  rot: { x: -1.0710, y: 0.2761, z: -2.9080 },  // rotvec (axis * angle)
+  zoom: 4000,
   mode: 'turntable',
   visibleTracers: null  // null means all tracers visible
 };

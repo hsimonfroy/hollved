@@ -1,147 +1,50 @@
 /**
- * Graph loader downloads graph from repository. Each graph consist of:
+ * Loads a multi-tracer graph from the data server. Each graph has:
+ *   <name>/manifest.json  — { "all": ["tracer1", "tracer2", ...] }
+ *   <name>/<tracerId>/positions.bin  — int32 triplets (x,y,z per node)
+ *   <name>/<tracerId>/meta.json      — optional, contains tracer.id/name/color
  *
- * manifest.json - declares where the data is stored.
- *   Legacy format: { "all": ["v1", "v2"], "last": "v2" } (pick one version)
- *   Tracer format: same all/last structure, but each entry directory contains a
- *     meta.json with a "tracer" field → all entries are loaded simultaneously
- *     with per-tracer colors.
- *
- * positions.bin - a binary file of int32 triplets. Each triplet defines
- *   node position in 3d space. Index of triplet is considered as node id.
- * meta.json - optional metadata. If it has a "tracer" field the graph is treated
- *   as a multi-tracer dataset and all entries in manifest.all are loaded together.
- *
- * During download this downloader will report on global event bus its progress:
- *  appEvents.positionsDownloaded - positions file is downloaded;
- *  appEvents.tracerRangesReady - fired after positionsDownloaded with tracer metadata;
+ * Fires on the global event bus:
+ *   appEvents.positionsDownloaded — merged Float32Array of all positions
+ *   appEvents.tracerRangesReady   — array of { id, name, color, startNode, nodeCount }
  */
 
 import config from '../../config.js';
 import request from './request.js';
 import appEvents from './appEvents.js';
-import Promise from 'bluebird';
 
 export default loadGraph;
 
-/**
- * @param {string} name of the graph to be downloaded
- * @param {progressCallback} progress notifies when download progress event is received
- */
-function loadGraph(name, progress) {
-  var manifestEndpoint = config.dataUrl + name;
+async function loadGraph(name, progress) {
+  var manifest = await request(
+    config.dataUrl + name + '/manifest.json?nocache=' + (+new Date()),
+    { responseType: 'json' }
+  );
+  var tracers = await Promise.all(manifest.all.map(function(tracerId) {
+    return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
+  }));
+  mergeTracers(tracers);
+}
 
-  return request(manifestEndpoint + '/manifest.json?nocache=' + (+new Date()), {
-    responseType: 'json'
-  }).then(function(manifest) {
-    return loadFromManifest(manifest, manifestEndpoint, name, progress);
+async function loadTracerData(endpoint, tracerId, graphName, progress) {
+  var meta = {};
+  try {
+    meta = await request(endpoint + '/meta.json', { responseType: 'json' }) || {};
+  } catch (_) { /* meta.json is optional */ }
+
+  var buffer = await request(endpoint + '/positions.bin', {
+    responseType: 'arraybuffer',
+    progress: reportProgress(graphName + '/' + tracerId, 'positions', progress)
   });
-}
+  var positions = new Float32Array(new Int32Array(buffer));
 
-function loadFromManifest(manifest, manifestEndpoint, name, progress) {
-  var allEntries = manifest.all || [];
-
-  if (allEntries.length === 0) {
-    var endpoint = manifest.endpoint || manifestEndpoint;
-    return loadSingleGraph(endpoint, name, progress);
-  }
-
-  // Probe the first entry's meta.json to detect tracer-mode vs version-mode
-  var firstEntry = allEntries[0];
-  var metaUrl = manifestEndpoint + '/' + firstEntry + '/meta.json?nocache=' + (+new Date());
-
-  return request(metaUrl, { responseType: 'json' })
-    .then(function(meta) {
-      if (meta && meta.tracer) {
-        return loadMultiTracer(manifest, manifestEndpoint, name, progress);
-      }
-      return loadLegacy(manifest, manifestEndpoint, name, progress);
-    })
-    .catch(function() {
-      return loadLegacy(manifest, manifestEndpoint, name, progress);
-    });
-}
-
-// ---------------------------------------------------------------------------
-// Legacy (single version) loading
-// ---------------------------------------------------------------------------
-
-function loadLegacy(manifest, manifestEndpoint, name, progress) {
-  var endpoint = manifest.endpoint
-    ? manifest.endpoint
-    : manifestEndpoint + '/' + manifest.last;
-  return loadSingleGraph(endpoint, name, progress);
-}
-
-function loadSingleGraph(endpoint, name, progress) {
-  var positions;
-
-  return loadPositions().then(function() {
-    return { positions: positions };
-  });
-
-  function loadPositions() {
-    return request(endpoint + '/positions.bin', {
-      responseType: 'arraybuffer',
-      progress: reportProgress(name, 'positions', progress)
-    }).then(function(buffer) {
-      var int32 = new Int32Array(buffer);
-      positions = new Float32Array(int32.length);
-      for (var i = 0; i < int32.length; ++i) {
-        positions[i] = int32[i];
-      }
-      appEvents.positionsDownloaded.fire(positions);
-    });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Multi-tracer loading
-// ---------------------------------------------------------------------------
-
-function loadMultiTracer(manifest, manifestEndpoint, name, progress) {
-  var tracerIds = manifest.all;
-
-  return Promise.all(tracerIds.map(function(tracerId) {
-    var endpoint = manifestEndpoint + '/' + tracerId;
-    return loadTracerData(endpoint, tracerId, name, progress);
-  })).then(mergeTracers);
-}
-
-function loadTracerData(endpoint, tracerId, graphName, progress) {
-  var tracerMeta = {};
-  var tracerPositions;
-
-  return loadMeta()
-    .then(loadPositions)
-    .then(function() {
-      var tracer = tracerMeta.tracer || {};
-      return {
-        id: tracer.id || tracerId,
-        name: tracer.name || tracerId,
-        color: parseColor(tracer.color || '0xffffffff'),
-        positions: tracerPositions
-      };
-    });
-
-  function loadMeta() {
-    return request(endpoint + '/meta.json', { responseType: 'json' })
-      .then(function(meta) { tracerMeta = meta || {}; })
-      .catch(function() { /* meta.json optional */ });
-  }
-
-  function loadPositions() {
-    return request(endpoint + '/positions.bin', {
-      responseType: 'arraybuffer',
-      progress: reportProgress(graphName + '/' + tracerId, 'positions', progress)
-    }).then(function(buffer) {
-      var int32 = new Int32Array(buffer);
-      tracerPositions = new Float32Array(int32.length);
-      for (var i = 0; i < int32.length; ++i) {
-        tracerPositions[i] = int32[i];
-      }
-    });
-  }
+  var tracer = meta.tracer || {};
+  return {
+    id:        tracer.id    || tracerId,
+    name:      tracer.name  || tracerId,
+    color:     parseColor(tracer.color || '0xffffffff'),
+    positions: positions
+  };
 }
 
 function mergeTracers(tracerDataArray) {
@@ -161,9 +64,9 @@ function mergeTracers(tracerDataArray) {
     posOffset += tracer.positions.length;
 
     tracerRanges.push({
-      id: tracer.id,
-      name: tracer.name,
-      color: tracer.color,
+      id:        tracer.id,
+      name:      tracer.name,
+      color:     tracer.color,
       startNode: nodeOffset,
       nodeCount: nodeCount
     });
@@ -173,13 +76,7 @@ function mergeTracers(tracerDataArray) {
 
   appEvents.positionsDownloaded.fire(allPositions);
   appEvents.tracerRangesReady.fire(tracerRanges);
-
-  return {};
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function parseColor(colorStr) {
   if (typeof colorStr === 'number') return colorStr;
