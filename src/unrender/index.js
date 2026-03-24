@@ -209,7 +209,7 @@ function unrender(container, options) {
         format:        THREE.RGBAFormat,
         minFilter:     THREE.NearestFilter,
         magFilter:     THREE.NearestFilter,
-        depthBuffer:   false,
+        depthBuffer:   true,
         stencilBuffer: false
       }
     );

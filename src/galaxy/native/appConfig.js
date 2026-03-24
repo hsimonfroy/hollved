@@ -9,6 +9,7 @@ var defaultConfig = {
 //   rot: { x: -2.5270, y: -0.5051, z: -1.6015 },  // rotvec (axis * angle)
   rot: { x: -1.0710, y: 0.2761, z: -2.9080 },  // rotvec (axis * angle)
   zoom: 4000,
+//   zoom: 10,
   mode: 'turntable',
   visibleTracers: null  // null means all tracers visible
 };

@@ -18,6 +18,8 @@ window.THREE = unrender.THREE;
 import eventify from 'ngraph.events';
 import appEvents from '../service/appEvents.js';
 import appConfig from './appConfig.js';
+import config from '../../config.js';
+import sceneStore from '../store/scene.js';
 import createBaseControl     from './baseControl.js';
 import createSpaceshipControl from './spaceshipControl.js';
 import createTurntableControl from './turntableControl.js';
@@ -29,6 +31,8 @@ export default sceneRenderer;
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, turntableControl, spaceshipControl, baseControl;
   var milkyWayCircle = null;
+  var cmbSphere = null;
+  var cmbVisible = true;
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
@@ -164,6 +168,11 @@ function sceneRenderer(container) {
         milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
       }
 
+      var configVisible = appConfig.getVisibleTracers();
+      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : true;
+      cmbSphere = createCMBSphere(renderer.scene());
+      cmbSphere.visible = cmbVisible;
+
       mobileControl = createMobileControl(renderer, turntableControl, spaceshipControl);
       mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode); // sync UI button on load
@@ -210,6 +219,11 @@ function sceneRenderer(container) {
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
+    if (tracerId === 'cmb') {
+      cmbVisible = visible;
+      if (cmbSphere) { cmbSphere.visible = visible; renderer.markDirty(); }
+      return;
+    }
     if (!tracerRanges || !renderer) return;
 
     var tracer = null;
@@ -249,6 +263,12 @@ function sceneRenderer(container) {
     baseColors = new Uint8Array(colors.length);
     baseColors.set(colors);
     view.colors(colors);
+
+    if (cmbSphere) {
+      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : true;
+      cmbSphere.visible = cmbVisible;
+    }
+
     renderer.markDirty();
   }
 
@@ -307,6 +327,24 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
+  function createCMBSphere(scene) {
+    var geo = new THREE.SphereGeometry(9390, 64, 32);
+    var texture = new THREE.TextureLoader().load(
+      config.dataUrl + sceneStore.getGraphName() + '/cmb/planck_100ghz.jpg'
+    );
+    var mat = new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.DoubleSide,                  // visible from inside and outside
+      color: new THREE.Color(0.05, 0.05, 0.05)   // darken texture; tune to taste
+    });
+    var sphere = new THREE.Mesh(geo, mat);
+    sphere.renderOrder = -1;           // draw before particles, writes depth first
+    sphere.rotation.x = Math.PI / 2;  // SphereGeometry Y-up → Z-up (celestial north = +Z)
+    sphere.rotation.y = Math.PI;      // align RA=0° with +X axis (Rx(π/2)·Ry(π) = DESI frame)
+    scene.add(sphere);
+    return sphere;
+  }
+
   function createMilkyWayCircle(scene) {
     var SEGMENTS = 64, R = 0.1;
     var positions = new Float32Array((SEGMENTS + 1) * 3);
@@ -329,6 +367,13 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
+    if (cmbSphere) {
+      renderer.scene().remove(cmbSphere);
+      cmbSphere.geometry.dispose();
+      if (cmbSphere.material.map) cmbSphere.material.map.dispose();
+      cmbSphere.material.dispose();
+      cmbSphere = null;
+    }
     if (milkyWayCircle) {
       renderer.scene().remove(milkyWayCircle);
       milkyWayCircle.geometry.dispose();

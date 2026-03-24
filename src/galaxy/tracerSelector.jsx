@@ -13,14 +13,22 @@ export default function TracerSelector() {
   useEffect(function() {
     function handleTracerRanges(ranges) {
       var configVisible = appConfig.getVisibleTracers();
-      setTracers(ranges.map(function(r) {
+      var mapped = ranges.map(function(r) {
         return {
           id: r.id,
           name: r.name,
           color: r.color,
           visible: configVisible ? configVisible.indexOf(r.id) >= 0 : true
         };
-      }));
+      });
+      // Append synthetic CMB tracer — rendered as a sphere by renderer.js, not as particles
+      mapped.push({
+        id: 'cmb',
+        name: 'CMB',
+        color: 0x888888ff,
+        visible: configVisible ? configVisible.indexOf('cmb') >= 0 : true
+      });
+      setTracers(mapped);
     }
 
     appEvents.tracerRangesReady.on(handleTracerRanges);
