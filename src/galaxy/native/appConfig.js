@@ -5,13 +5,10 @@ import qs from 'qs';
 
 
 var defaultConfig = {
-  pos: {x : 0, y: 0, z: 0 },
-//   lookAt: {x: -0.3582, y: -0.7468, z: -0.4612, w: -0.3182},
-  lookAt: {x: -0.8317, y: -0.1663, z: -0.5269, w: 0.0539},
-//   lookAt: {x: 0.7192, y: -0.6143, z: -0.2046, w: 0.2521},
-  maxVisibleDistance: 150,
-  scale: 1.,
-  controlMode: 'turntable',
+  pos: { x: 0, y: 0, z: 0 },
+  rot: { x: -2.5270, y: -0.5051, z: -1.6015 },  // rotvec (axis * angle)
+  zoom: 1000,
+  mode: 'turntable',
   visibleTracers: null  // null means all tracers visible
 };
 
@@ -22,33 +19,29 @@ function appConfig() {
   var hashUpdate; // async hash update id
 
   var api = {
-    getCameraPosition: getCameraPosition,
-    getCameraLookAt: getCameraLookAt,
-    getScaleFactor: getScaleFactor,
-    getMaxVisibleEdgeLength: getMaxVisibleEdgeLength,
-    setCameraConfig: setCameraConfig,
-    getVisibleTracers: getVisibleTracers,
-    setVisibleTracers: setVisibleTracers,
-    getControlMode: getControlMode,
-    setControlMode: setControlMode
+    getCameraPosition:  getCameraPosition,
+    getCameraLookAt:    getCameraLookAt,
+    getZoom:            getZoom,
+    setCameraConfig:    setCameraConfig,
+    getVisibleTracers:  getVisibleTracers,
+    setVisibleTracers:  setVisibleTracers,
+    getControlMode:     getControlMode,
+    setControlMode:     setControlMode
   };
 
   appEvents.queryChanged.on(queryChanged);
+  window.addEventListener('hashchange', queryChanged, false);
 
   eventify(api);
   return api;
 
 
-  function getScaleFactor() {
-    return hashConfig.scale;
+  function getZoom() {
+    return hashConfig.zoom;
   }
 
   function getVisibleTracers() {
     return hashConfig.visibleTracers;
-  }
-
-  function getMaxVisibleEdgeLength() {
-    return hashConfig.maxVisibleDistance * hashConfig.maxVisibleDistance * hashConfig.scale;
   }
 
   function getCameraPosition() {
@@ -56,31 +49,38 @@ function appConfig() {
   }
 
   function getCameraLookAt() {
-    return hashConfig.lookAt;
+    // Convert stored rotvec → quaternion on the fly
+    return rotvecToQuat(hashConfig.rot.x, hashConfig.rot.y, hashConfig.rot.z);
   }
 
   function queryChanged() {
-    var currentHashConfig = parseFromHash(window.location.hash);
-    var cameraChanged = !same(currentHashConfig.pos, hashConfig.pos) ||
-                        !same(currentHashConfig.lookAt, hashConfig.lookAt);
-    var tracersChanged = !sameTracers(currentHashConfig.visibleTracers, hashConfig.visibleTracers);
+    var next = parseFromHash(window.location.hash);
+
+    var cameraChanged = !sameVec3(next.pos, hashConfig.pos) ||
+                        !sameVec3(next.rot, hashConfig.rot) ||
+                        next.zoom !== hashConfig.zoom ||
+                        next.mode !== hashConfig.mode;
+    var tracersChanged = !sameTracers(next.visibleTracers, hashConfig.visibleTracers);
 
     if (cameraChanged) {
-      setCameraConfig(currentHashConfig.pos, currentHashConfig.lookAt);
+      hashConfig.pos  = next.pos;
+      hashConfig.rot  = next.rot;
+      hashConfig.zoom = next.zoom;
+      hashConfig.mode = next.mode;
       api.fire('camera');
     }
     if (tracersChanged) {
-      hashConfig.visibleTracers = currentHashConfig.visibleTracers;
+      hashConfig.visibleTracers = next.visibleTracers;
       api.fire('tracersChanged');
     }
   }
 
   function getControlMode() {
-    return hashConfig.controlMode;
+    return hashConfig.mode;
   }
 
   function setControlMode(m) {
-    hashConfig.controlMode = m;
+    hashConfig.mode = m;
     updateHash();
   }
 
@@ -89,43 +89,33 @@ function appConfig() {
     updateHash();
   }
 
-  function setCameraConfig(pos, lookAt) {
-    if (same(pos, hashConfig.pos) &&
-        same(lookAt, hashConfig.lookAt) &&
-        lookAt.w === hashConfig.lookAt.w) return;
+  function setCameraConfig(pos, q, zoom) {
+    var newRot = quatToRotvec(q.x, q.y, q.z, q.w);
+    var changed = !sameVec3(pos, hashConfig.pos) ||
+                  !sameVec3(newRot, hashConfig.rot) ||
+                  zoom !== hashConfig.zoom;
+    if (!changed) return;
 
-    hashConfig.pos.x = pos.x;
-    hashConfig.pos.y = pos.y;
-    hashConfig.pos.z = pos.z;
-
-    hashConfig.lookAt.x = lookAt.x;
-    hashConfig.lookAt.y = lookAt.y;
-    hashConfig.lookAt.z = lookAt.z;
-    hashConfig.lookAt.w = lookAt.w;
+    hashConfig.pos.x = pos.x; hashConfig.pos.y = pos.y; hashConfig.pos.z = pos.z;
+    hashConfig.rot.x = newRot.x; hashConfig.rot.y = newRot.y; hashConfig.rot.z = newRot.z;
+    hashConfig.zoom  = zoom;
 
     updateHash();
   }
 
   function updateHash() {
     var name = scene.getGraphName();
-    var pos = hashConfig.pos;
-    var lookAt = hashConfig.lookAt;
+    var p = hashConfig.pos;
+    var r = hashConfig.rot;
     var hash = '#/galaxy/' + name +
-      '?cx=' + Math.round(pos.x) +
-      '&cy=' + Math.round(pos.y) +
-      '&cz=' + Math.round(pos.z) +
-      '&lx=' + lookAt.x.toFixed(4) +
-      '&ly=' + lookAt.y.toFixed(4) +
-      '&lz=' + lookAt.z.toFixed(4) +
-      '&lw=' + lookAt.w.toFixed(4) +
-      '&ml=' + hashConfig.maxVisibleDistance +
-      '&s=' + hashConfig.scale;
+      '?mode=' + hashConfig.mode +
+      '&pos='  + Math.round(p.x) + ',' + Math.round(p.y) + ',' + Math.round(p.z) +
+      '&rot='  + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4) +
+      '&zoom=' + Math.round(hashConfig.zoom);
 
     if (hashConfig.visibleTracers) {
-      hash += '&tracers=' + hashConfig.visibleTracers.join(',');
+      hash += '&trace=' + hashConfig.visibleTracers.join(',');
     }
-
-    hash += '&cm=' + hashConfig.controlMode;
 
     setHash(hash);
   }
@@ -144,11 +134,9 @@ function appConfig() {
     }, 400);
   }
 
-  function same(v1, v2) {
+  function sameVec3(v1, v2) {
     if (!v1 || !v2) return false;
-    return v1.x === v2.x &&
-           v1.y === v2.y &&
-           v1.z === v2.z;
+    return v1.x === v2.x && v1.y === v2.y && v1.z === v2.z;
   }
 
   function sameTracers(a, b) {
@@ -162,48 +150,59 @@ function appConfig() {
   }
 
   function parseFromHash(hash) {
-    if (!hash) {
-      return defaultConfig;
-    }
+    if (!hash) return cloneDefault();
 
     var query = qs.parse(hash.split('?')[1]);
 
-    var pos = {
-      x: getNumber(query.cx, defaultConfig.pos.x),
-      y: getNumber(query.cy, defaultConfig.pos.y),
-      z: getNumber(query.cz, defaultConfig.pos.z)
-    };
-
-    var lookAt = {
-      x: getNumber(query.lx, defaultConfig.lookAt.x),
-      y: getNumber(query.ly, defaultConfig.lookAt.y),
-      z: getNumber(query.lz, defaultConfig.lookAt.z),
-      w: getNumber(query.lw, defaultConfig.lookAt.w)
-    };
-
     var visibleTracers = defaultConfig.visibleTracers;
-    if (query.tracers) {
-      var parsed = query.tracers.split(',').filter(function(s) { return s.length > 0; });
+    if (query.trace) {
+      var parsed = query.trace.split(',').filter(function(s) { return s.length > 0; });
       visibleTracers = parsed.length > 0 ? parsed : null;
     }
 
     return {
-      pos: normalize(pos),
-      lookAt: normalize(lookAt),
-      maxVisibleDistance: getNumber(query.ml, defaultConfig.maxVisibleDistance),
-      scale: getNumber(query.s, defaultConfig.scale),
-      controlMode: (query.cm === 'spaceship') ? 'spaceship' : defaultConfig.controlMode,
+      pos:  parseCommaVec3(query.pos, defaultConfig.pos),
+      rot:  parseCommaVec3(query.rot, defaultConfig.rot),
+      zoom: getNumber(query.zoom, defaultConfig.zoom),
+      mode: query.mode === 'spaceship' ? 'spaceship' : defaultConfig.mode,
       visibleTracers: visibleTracers
     };
   }
 }
 
-function normalize(v) {
-  if (!v) return v;
-  v.x = getNumber(v.x);
-  v.y = getNumber(v.y);
-  v.z = getNumber(v.z);
-  return v;
+function cloneDefault() {
+  return {
+    pos:  { x: defaultConfig.pos.x, y: defaultConfig.pos.y, z: defaultConfig.pos.z },
+    rot:  { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
+    zoom: defaultConfig.zoom,
+    mode: defaultConfig.mode,
+    visibleTracers: defaultConfig.visibleTracers
+  };
+}
+
+function parseCommaVec3(str, def) {
+  if (!str) return { x: def.x, y: def.y, z: def.z };
+  var p = str.split(',');
+  return {
+    x: getNumber(p[0], def.x),
+    y: getNumber(p[1], def.y),
+    z: getNumber(p[2], def.z)
+  };
+}
+
+function quatToRotvec(qx, qy, qz, qw) {
+  if (qw < 0) { qx = -qx; qy = -qy; qz = -qz; qw = -qw; }
+  var angle = 2 * Math.acos(Math.min(1, qw));
+  if (angle < 1e-10) return { x: 0, y: 0, z: 0 };
+  var s = angle / Math.sin(angle / 2);
+  return { x: qx * s, y: qy * s, z: qz * s };
+}
+
+function rotvecToQuat(rx, ry, rz) {
+  var angle = Math.sqrt(rx * rx + ry * ry + rz * rz);
+  if (angle < 1e-10) return { x: 0, y: 0, z: 0, w: 1 };
+  var s = Math.sin(angle / 2) / angle;
+  return { x: rx * s, y: ry * s, z: rz * s, w: Math.cos(angle / 2) };
 }
 
 function getNumber(x, defaultValue) {

@@ -27,6 +27,22 @@ export default function TracerSelector() {
     return function() { appEvents.tracerRangesReady.off(handleTracerRanges); };
   }, []);
 
+  useEffect(function() {
+    function onExternalTracerChange() {
+      var configVisible = appConfig.getVisibleTracers();
+      setTracers(function(prev) {
+        return prev.map(function(t) {
+          return {
+            id: t.id, name: t.name, color: t.color,
+            visible: configVisible ? configVisible.indexOf(t.id) >= 0 : true
+          };
+        });
+      });
+    }
+    appConfig.on('tracersChanged', onExternalTracerChange);
+    return function() { appConfig.off('tracersChanged', onExternalTracerChange); };
+  }, []);
+
   function toggleTracer(tracerId, visible) {
     var newTracers = tracers.map(function(t) {
       return t.id === tracerId ? {id: t.id, name: t.name, color: t.color, visible: visible} : t;

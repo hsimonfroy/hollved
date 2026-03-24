@@ -20,7 +20,6 @@
 import config from '../../config.js';
 import request from './request.js';
 import appEvents from './appEvents.js';
-import appConfig from '../native/appConfig.js';
 import Promise from 'bluebird';
 
 export default loadGraph;
@@ -87,10 +86,9 @@ function loadSingleGraph(endpoint, name, progress) {
       progress: reportProgress(name, 'positions', progress)
     }).then(function(buffer) {
       var int32 = new Int32Array(buffer);
-      var scaleFactor = appConfig.getScaleFactor();
       positions = new Float32Array(int32.length);
       for (var i = 0; i < int32.length; ++i) {
-        positions[i] = int32[i] * scaleFactor;
+        positions[i] = int32[i];
       }
       appEvents.positionsDownloaded.fire(positions);
     });
@@ -103,15 +101,14 @@ function loadSingleGraph(endpoint, name, progress) {
 
 function loadMultiTracer(manifest, manifestEndpoint, name, progress) {
   var tracerIds = manifest.all;
-  var scaleFactor = appConfig.getScaleFactor();
 
   return Promise.all(tracerIds.map(function(tracerId) {
     var endpoint = manifestEndpoint + '/' + tracerId;
-    return loadTracerData(endpoint, tracerId, name, scaleFactor, progress);
+    return loadTracerData(endpoint, tracerId, name, progress);
   })).then(mergeTracers);
 }
 
-function loadTracerData(endpoint, tracerId, graphName, scaleFactor, progress) {
+function loadTracerData(endpoint, tracerId, graphName, progress) {
   var tracerMeta = {};
   var tracerPositions;
 
@@ -141,7 +138,7 @@ function loadTracerData(endpoint, tracerId, graphName, scaleFactor, progress) {
       var int32 = new Int32Array(buffer);
       tracerPositions = new Float32Array(int32.length);
       for (var i = 0; i < int32.length; ++i) {
-        tracerPositions[i] = int32[i] * scaleFactor;
+        tracerPositions[i] = int32[i];
       }
     });
   }

@@ -46,6 +46,7 @@ function sceneRenderer(container) {
   appEvents.focusScene.on(focusScene);
 
   appConfig.on('camera', moveCamera);
+  appConfig.on('tracersChanged', handleTracersChangedFromURL);
 
   var api = {
     destroy: destroy
@@ -65,7 +66,9 @@ function sceneRenderer(container) {
   function updateQuery() {
     if (!renderer) return;
     var camera = renderer.camera();
-    appConfig.setCameraConfig(camera.position, camera.quaternion);
+    var pos  = (currentMode === 'turntable' && turntableControl) ? turntableControl.getPivot() : camera.position;
+    var zoom = turntableControl ? turntableControl.getRadius() : appConfig.getZoom();
+    appConfig.setCameraConfig(pos, camera.quaternion, zoom);
   }
 
   function toggleControlMode() {
@@ -89,7 +92,7 @@ function sceneRenderer(container) {
     } else {
       currentMode = 'turntable';
       spaceshipControl.setEnabled(false);
-      turntableControl.setEnabled(true, renderer.camera());
+      turntableControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
       if (milkyWayCircle) {
         milkyWayCircle.visible = true;
         milkyWayCircle.position.copy(turntableControl.getPivot());
@@ -146,7 +149,8 @@ function sceneRenderer(container) {
 
       if (currentMode === 'turntable') {
         spaceshipControl.setEnabled(false);
-        turntableControl.setEnabled(true, cam);
+        turntableControl.setEnabled(true);  // just set enabled flag, no initFromCamera
+        moveCameraInternal();               // restoreFromURL with URL state
       } else {
         turntableControl.setEnabled(false);
         spaceshipControl.setEnabled(true);
@@ -233,6 +237,21 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
+  function handleTracersChangedFromURL() {
+    if (!tracerRanges || !renderer) return;
+    var configVisible = appConfig.getVisibleTracers();
+    tracerRanges.forEach(function(tracer) {
+      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : true;
+    });
+    var view = renderer.getParticleView();
+    var colors = view.colors();
+    applyTracerColors(colors);
+    baseColors = new Uint8Array(colors.length);
+    baseColors.set(colors);
+    view.colors(colors);
+    renderer.markDirty();
+  }
+
   function colorNode(nodeIndex, colors, color) {
     var colorOffset = nodeIndex * 4;
     colors[colorOffset + 0] = (color >> 24) & 0xff;
@@ -247,14 +266,43 @@ function sceneRenderer(container) {
 
   function moveCameraInternal() {
     if (!renderer) return;
-    var camera = renderer.camera();
-    var pos = appConfig.getCameraPosition();
-    if (pos) {
-      camera.position.set(pos.x, pos.y, pos.z);
-    }
-    var lookAt = appConfig.getCameraLookAt();
-    if (lookAt) {
-      camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
+    var camera  = renderer.camera();
+    var pos     = appConfig.getCameraPosition();
+    var lookAt  = appConfig.getCameraLookAt();  // {x,y,z,w} quaternion
+    var zoom    = appConfig.getZoom();
+    var newMode = appConfig.getControlMode();
+
+    if (newMode !== currentMode && turntableControl && spaceshipControl) {
+      // Mode changed via URL — perform full mode switch
+      currentMode = newMode;
+      if (newMode === 'turntable') {
+        spaceshipControl.setEnabled(false);
+        turntableControl.restoreFromURL(pos, zoom, lookAt);
+        turntableControl.setEnabled(true);
+        if (milkyWayCircle) {
+          milkyWayCircle.visible = true;
+          milkyWayCircle.position.copy(turntableControl.getPivot());
+          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+        }
+      } else {
+        turntableControl.setEnabled(false);
+        camera.position.set(pos.x, pos.y, pos.z);
+        camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
+        spaceshipControl.setEnabled(true);
+        if (milkyWayCircle) milkyWayCircle.visible = false;
+      }
+      if (mobileControl) mobileControl.setMode(currentMode);
+      appEvents.controlModeChanged.fire(currentMode);
+      appConfig.setControlMode(currentMode);
+    } else if (newMode === 'turntable' && turntableControl) {
+      turntableControl.restoreFromURL(pos, zoom, lookAt);
+      if (milkyWayCircle && milkyWayCircle.visible) {
+        milkyWayCircle.position.copy(turntableControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+      }
+    } else {
+      if (pos) camera.position.set(pos.x, pos.y, pos.z);
+      if (lookAt) camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
     }
     renderer.markDirty();
   }
@@ -302,5 +350,6 @@ function sceneRenderer(container) {
 
     clearInterval(queryUpdateId);
     appConfig.off('camera', moveCamera);
+    appConfig.off('tracersChanged', handleTracersChangedFromURL);
   }
 }

@@ -73,7 +73,9 @@ function createTurntableControl(camera, container, markDirty, keyState) {
     update:          update,
     setEnabled:      setEnabled,
     getPivot:        function() { return pivot; },
+    getRadius:       function() { return radius; },
     getUpAxis:       function() { return upAxis; },
+    restoreFromURL:  restoreFromURL,
     getFlatForward:  function() {
       // Equatorial direction the spaceship faces when returning from turntable:
       // opposite of the horizontal component of the direction from pivot to camera.
@@ -140,18 +142,48 @@ function createTurntableControl(camera, container, markDirty, keyState) {
     if (hasMoved) updateCamera();
   }
 
-  // ── Enable / disable ──────────────────────────────────────────────────────
+  // ── Restore from URL ──────────────────────────────────────────────────────
 
-  function setEnabled(val, cam) {
-    enabled = val;
-    if (val && cam) initFromCamera(cam);
+  function restoreFromURL(pivot3, radius3, quatLike) {
+    pivot.set(pivot3.x, pivot3.y, pivot3.z);
+    radius = Math.max(MIN_RADIUS, radius3);
+
+    var q = new THREE.Quaternion(quatLike.x, quatLike.y, quatLike.z, quatLike.w);
+    upAxis.set(0, 1, 0).applyQuaternion(q).normalize();
+    var backward = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+
+    phi = Math.acos(Math.max(-1, Math.min(1, backward.dot(upAxis))));
+    phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
+
+    var dot = backward.dot(upAxis);
+    var projected = new THREE.Vector3(
+      backward.x - upAxis.x * dot,
+      backward.y - upAxis.y * dot,
+      backward.z - upAxis.z * dot
+    );
+    if (projected.lengthSq() > 1e-6) {
+      fwdRef.copy(projected).normalize();
+    } else {
+      var seed = new THREE.Vector3(1, 0, 0);
+      if (Math.abs(upAxis.dot(seed)) > 0.9) seed.set(0, 0, 1);
+      fwdRef.crossVectors(seed, upAxis).normalize();
+    }
+    theta = 0;
+    updateCamera();
   }
 
-  function initFromCamera(cam) {
+  // ── Enable / disable ──────────────────────────────────────────────────────
+
+  function setEnabled(val, cam, startRadius) {
+    enabled = val;
+    if (val && cam) initFromCamera(cam, startRadius);
+  }
+
+  function initFromCamera(cam, startRadius) {
     // Pivot = spaceship position (where the camera was in spaceship mode).
-    // Camera steps back by SWITCH_RADIUS, so the spaceship is always at the pivot.
+    // Camera steps back by startRadius (or SWITCH_RADIUS if not given).
     pivot.copy(cam.position);
-    radius = SWITCH_RADIUS;
+    radius = (startRadius !== undefined) ? startRadius : SWITCH_RADIUS;
 
     // North pole = camera's current screen-up direction in world space
     upAxis.set(0, 1, 0).applyQuaternion(cam.quaternion).normalize();
