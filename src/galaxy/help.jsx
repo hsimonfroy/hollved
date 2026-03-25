@@ -3,7 +3,7 @@ import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 import Key from './utils/key.js';
 
-var isMobile = window.matchMedia('(pointer: coarse)').matches;
+var pointerCoarseQuery = window.matchMedia('(pointer: coarse)');
 
 function HelpRow({ keys, label }) {
   return (
@@ -17,8 +17,21 @@ function HelpRow({ keys, label }) {
 export default function Help() {
   var [visible, setVisible] = useState(false);
   var [mode, setMode] = useState(appConfig.getControlMode());
+  var [isMobile, setIsMobile] = useState(pointerCoarseQuery.matches);
+  var isMobileRef = useRef(pointerCoarseQuery.matches);
   var touchRef = useRef({ startTime: 0, startX: 0, startY: 0, startCount: 0, moved: false, multiSeen: false });
 
+  // Keep ref in sync with state (for use inside stable event handlers)
+  useEffect(function() { isMobileRef.current = isMobile; }, [isMobile]);
+
+  // Media query listener — updates state (re-render) and ref (handlers) on device switch
+  useEffect(function() {
+    function onChange(e) { isMobileRef.current = e.matches; setIsMobile(e.matches); }
+    pointerCoarseQuery.addEventListener('change', onChange);
+    return function() { pointerCoarseQuery.removeEventListener('change', onChange); };
+  }, []);
+
+  // All input listeners registered once; each handler checks isMobileRef.current
   useEffect(function() {
     function onGraphDownloaded() { setVisible(true); }
     function onDownloadRequested() { setVisible(false); }
@@ -28,65 +41,68 @@ export default function Help() {
     appEvents.downloadGraphRequested.on(onDownloadRequested);
     appEvents.controlModeChanged.on(onModeChanged);
 
-    if (!isMobile) {
-      function onKeyDown(e) {
-        if (Key.isControlKey(e)) { setVisible(false); return; }
-        if (Key.isModifier(e)) return;
-        setVisible(true);
-      }
-      function onWheel(e) {
-        if (e.target && e.target.nodeName === 'CANVAS') setVisible(false);
-      }
-      document.body.addEventListener('keydown', onKeyDown);
-      document.body.addEventListener('wheel', onWheel, true);
-    } else {
-      var t = touchRef.current;
-
-      function onTouchStart(e) {
-        if (e.touches.length >= 2) { setVisible(false); return; }
-        t.startTime = Date.now();
-        t.startX = e.touches[0].clientX;
-        t.startY = e.touches[0].clientY;
-        t.startCount = e.touches.length;
-        t.moved = false;
-        t.multiSeen = false;
-      }
-
-      function onTouchMove(e) {
-        if (e.touches.length >= 2) { t.multiSeen = true; setVisible(false); return; }
-        var dx = e.touches[0].clientX - t.startX;
-        var dy = e.touches[0].clientY - t.startY;
-        if (Math.sqrt(dx * dx + dy * dy) > 15) { t.moved = true; setVisible(false); }
-      }
-
-      function onTouchEnd() {
-        if (t.moved || t.multiSeen) { setVisible(false); return; }
-        var elapsed = Date.now() - t.startTime;
-        var isTap = elapsed < 250 && t.startCount === 1;
-        if (isTap) {
-          setVisible(function(v) { return !v; });
-        } else {
-          setVisible(false);
-        }
-      }
-
-      document.addEventListener('touchstart', onTouchStart, { passive: true });
-      document.addEventListener('touchmove', onTouchMove, { passive: true });
-      document.addEventListener('touchend', onTouchEnd, false);
+    function onKeyDown(e) {
+      if (isMobileRef.current) return;
+      if (Key.isControlKey(e)) { setVisible(false); return; }
+      if (Key.isModifier(e)) return;
+      setVisible(true);
     }
+    function onWheel(e) {
+      if (isMobileRef.current) return;
+      if (e.target && e.target.nodeName === 'CANVAS') setVisible(false);
+    }
+    function onMouseDown(e) {
+      if (isMobileRef.current) return;
+      if (e.target && e.target.nodeName === 'CANVAS') setVisible(false);
+    }
+
+    var t = touchRef.current;
+    function onTouchStart(e) {
+      if (!isMobileRef.current) return;
+      if (e.touches.length >= 2) { setVisible(false); return; }
+      t.startTime = Date.now();
+      t.startX = e.touches[0].clientX;
+      t.startY = e.touches[0].clientY;
+      t.startCount = e.touches.length;
+      t.moved = false;
+      t.multiSeen = false;
+    }
+    function onTouchMove(e) {
+      if (!isMobileRef.current) return;
+      if (e.touches.length >= 2) { t.multiSeen = true; setVisible(false); return; }
+      var dx = e.touches[0].clientX - t.startX;
+      var dy = e.touches[0].clientY - t.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 15) { t.moved = true; setVisible(false); }
+    }
+    function onTouchEnd() {
+      if (!isMobileRef.current) return;
+      if (t.moved || t.multiSeen) { setVisible(false); return; }
+      var elapsed = Date.now() - t.startTime;
+      var isTap = elapsed < 250 && t.startCount === 1;
+      if (isTap) {
+        setVisible(function(v) { return !v; });
+      } else {
+        setVisible(false);
+      }
+    }
+
+    document.body.addEventListener('keydown', onKeyDown);
+    document.body.addEventListener('wheel', onWheel, true);
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, false);
 
     return function() {
       appEvents.graphDownloaded.off(onGraphDownloaded);
       appEvents.downloadGraphRequested.off(onDownloadRequested);
       appEvents.controlModeChanged.off(onModeChanged);
-      if (!isMobile) {
-        document.body.removeEventListener('keydown', onKeyDown);
-        document.body.removeEventListener('wheel', onWheel, true);
-      } else {
-        document.removeEventListener('touchstart', onTouchStart);
-        document.removeEventListener('touchmove', onTouchMove);
-        document.removeEventListener('touchend', onTouchEnd);
-      }
+      document.body.removeEventListener('keydown', onKeyDown);
+      document.body.removeEventListener('wheel', onWheel, true);
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
     };
   }, []);
 
