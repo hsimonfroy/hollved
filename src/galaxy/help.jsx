@@ -60,6 +60,7 @@ export default function Help() {
     function onTouchStart(e) {
       if (!isMobileRef.current) return;
       if (e.touches.length >= 2) { setVisible(false); return; }
+      t.ignored = (e.target.nodeName !== 'CANVAS');
       t.startTime = Date.now();
       t.startX = e.touches[0].clientX;
       t.startY = e.touches[0].clientY;
@@ -69,6 +70,7 @@ export default function Help() {
     }
     function onTouchMove(e) {
       if (!isMobileRef.current) return;
+      if (t.ignored) return;
       if (e.touches.length >= 2) { t.multiSeen = true; setVisible(false); return; }
       var dx = e.touches[0].clientX - t.startX;
       var dy = e.touches[0].clientY - t.startY;
@@ -76,6 +78,7 @@ export default function Help() {
     }
     function onTouchEnd() {
       if (!isMobileRef.current) return;
+      if (t.ignored) return;
       if (t.moved || t.multiSeen) { setVisible(false); return; }
       var elapsed = Date.now() - t.startTime;
       var isTap = elapsed < 250 && t.startCount === 1;
@@ -146,14 +149,14 @@ export default function Help() {
       {isMobile && mode === 'spaceship' && <>
         <HelpRow keys={['Left stick']} label='Move' />
         <HelpRow keys={['Right stick']} label='Look around' />
-        <HelpRow keys={['Tap ⊙']} label='Turntable mode' />
+        {/* <HelpRow keys={['Tap 🚀']} label='Turntable mode' /> */}
       </>}
 
       {isMobile && mode === 'turntable' && <>
         <HelpRow keys={['1-finger drag']} label='Orbit' />
         <HelpRow keys={['Pinch']} label='Zoom' />
         <HelpRow keys={['2-finger drag']} label='Pan' />
-        <HelpRow keys={['Tap 🚀']} label='Spaceship mode' />
+        {/* <HelpRow keys={['Tap ⊙']} label='Spaceship mode' /> */}
       </>}
 
       <div className='help-dismiss-hint'>
