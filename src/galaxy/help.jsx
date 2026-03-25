@@ -1,114 +1,148 @@
-/**
- * This component shows basic navigation help. The idea is to show it only
- * first time when user opens. All subsequent page opening should not trigger
- * help screen.
- *
- * The only possible way to show help again is by triggering "show help"
- * action, which is currently bound to mouse wheel event
- */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
+import appConfig from './native/appConfig.js';
 import Key from './utils/key.js';
 
-var helpWasShown = false;
+var isMobile = window.matchMedia('(pointer: coarse)').matches;
+
+function HelpRow({ keys, label }) {
+  return (
+    <div className='help-row'>
+      <span>{keys.map(function(k) { return <kbd key={k} className='help-key'>{k}</kbd>; })}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
 
 export default function Help() {
-  var [, setTick] = useState(0);
-  var [graphDownloaded, setGraphDownloaded] = useState(false);
+  var [visible, setVisible] = useState(false);
+  var [mode, setMode] = useState(appConfig.getControlMode());
+  var touchRef = useRef({ startTime: 0, startX: 0, startY: 0, startCount: 0, moved: false, multiSeen: false });
 
   useEffect(function() {
-    if (window.orientation !== undefined) return;
+    function onGraphDownloaded() { setVisible(true); }
+    function onDownloadRequested() { setVisible(false); }
+    function onModeChanged(m) { setMode(m); }
 
-    function showHelpIfNeeded() {
-      if (helpWasShown) return;
-      setGraphDownloaded(true);
-    }
+    appEvents.graphDownloaded.on(onGraphDownloaded);
+    appEvents.downloadGraphRequested.on(onDownloadRequested);
+    appEvents.controlModeChanged.on(onModeChanged);
 
-    function toggleHelp() {
-      helpWasShown = !helpWasShown;
-      setTick(function(t) { return t + 1; });
-    }
-
-    function resetHelp() {
-      setGraphDownloaded(false);
-    }
-
-    function handlekey(e) {
-      if (Key.isModifier(e)) return;
-      var needsUpdate = !helpWasShown;
-      helpWasShown = true;
-      if (needsUpdate) setTick(function(t) { return t + 1; });
-    }
-
-    function handlewheel(e) {
-      if (e.target && e.target.nodeName === 'CANVAS') {
-        helpWasShown = false;
-        setTick(function(t) { return t + 1; });
-        appEvents.focusScene.fire();
+    if (!isMobile) {
+      function onKeyDown(e) {
+        if (Key.isControlKey(e)) { setVisible(false); return; }
+        if (Key.isModifier(e)) return;
+        setVisible(true);
       }
-    }
+      function onWheel(e) {
+        if (e.target && e.target.nodeName === 'CANVAS') setVisible(false);
+      }
+      document.body.addEventListener('keydown', onKeyDown);
+      document.body.addEventListener('wheel', onWheel, true);
+    } else {
+      var t = touchRef.current;
 
-    appEvents.graphDownloaded.on(showHelpIfNeeded);
-    appEvents.downloadGraphRequested.on(resetHelp);
-    appEvents.toggleHelp.on(toggleHelp);
-    document.body.addEventListener('keydown', handlekey);
-    document.body.addEventListener('wheel', handlewheel, true);
+      function onTouchStart(e) {
+        if (e.touches.length >= 2) { setVisible(false); return; }
+        t.startTime = Date.now();
+        t.startX = e.touches[0].clientX;
+        t.startY = e.touches[0].clientY;
+        t.startCount = e.touches.length;
+        t.moved = false;
+        t.multiSeen = false;
+      }
+
+      function onTouchMove(e) {
+        if (e.touches.length >= 2) { t.multiSeen = true; setVisible(false); return; }
+        var dx = e.touches[0].clientX - t.startX;
+        var dy = e.touches[0].clientY - t.startY;
+        if (Math.sqrt(dx * dx + dy * dy) > 15) { t.moved = true; setVisible(false); }
+      }
+
+      function onTouchEnd() {
+        if (t.moved || t.multiSeen) { setVisible(false); return; }
+        var elapsed = Date.now() - t.startTime;
+        var isTap = elapsed < 250 && t.startCount === 1;
+        if (isTap) {
+          setVisible(function(v) { return !v; });
+        } else {
+          setVisible(false);
+        }
+      }
+
+      document.addEventListener('touchstart', onTouchStart, { passive: true });
+      document.addEventListener('touchmove', onTouchMove, { passive: true });
+      document.addEventListener('touchend', onTouchEnd, false);
+    }
 
     return function() {
-      appEvents.graphDownloaded.off(showHelpIfNeeded);
-      appEvents.downloadGraphRequested.off(resetHelp);
-      appEvents.toggleHelp.off(toggleHelp);
-      document.body.removeEventListener('keydown', handlekey);
-      document.body.removeEventListener('wheel', handlewheel, true);
+      appEvents.graphDownloaded.off(onGraphDownloaded);
+      appEvents.downloadGraphRequested.off(onDownloadRequested);
+      appEvents.controlModeChanged.off(onModeChanged);
+      if (!isMobile) {
+        document.body.removeEventListener('keydown', onKeyDown);
+        document.body.removeEventListener('wheel', onWheel, true);
+      } else {
+        document.removeEventListener('touchstart', onTouchStart);
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+      }
     };
   }, []);
 
-  if (window.orientation !== undefined) return null;
-  if (helpWasShown) return null;
-  if (!graphDownloaded) return null;
+  if (!visible) return null;
 
   return (
-    <div className='navigation-help'>
-      <h3>Spaceship operating manual</h3>
-      <table><tbody>
-        <tr>
-          <td colSpan="2"><code className='important-key'>mouse wheel</code></td>
-          <td colSpan="2">show this help</td>
-        </tr>
-        <tr className='spacer-row'>
-          <td colSpan='2'><code className='important-key'>any key</code></td>
-          <td colSpan='2'>hide this help</td>
-        </tr>
-        <tr>
-          <td><code>W</code></td><td>Move forward</td>
-          <td><code>Up</code></td><td>Rotate up</td>
-        </tr>
-        <tr>
-          <td><code>S</code></td><td>Move backward</td>
-          <td><code>Down</code></td><td>Rotate down</td>
-        </tr>
-        <tr>
-          <td><code>A</code></td><td>Move left</td>
-          <td><code>Left</code></td><td>Rotate left</td>
-        </tr>
-        <tr>
-          <td><code>D</code></td><td>Move right</td>
-          <td><code>Right</code></td><td>Rotate right</td>
-        </tr>
-        <tr>
-          <td><code>Q</code></td><td>Roll right</td>
-          <td><code>R</code></td><td>Fly up</td>
-        </tr>
-        <tr>
-          <td><code>E</code></td><td>Roll left</td>
-          <td><code>F</code></td><td>Fly down</td>
-        </tr>
-        <tr>
-          <td><code>shift</code></td><td>Move faster</td>
-          <td><code>spacebar</code></td><td>Toggle Steering</td>
-          <td><code></code></td><td></td>
-        </tr>
-      </tbody></table>
+    <div className='help-panel'>
+      <div className='help-mode-badge'>
+        {mode === 'turntable' ? '⊙ Turntable' : '🚀 Spaceship'}
+      </div>
+
+      {!isMobile && mode === 'spaceship' && <>
+        <div className='help-section'>Move</div>
+        <HelpRow keys={['W', 'S']} label='Forward / Backward' />
+        <HelpRow keys={['A', 'D']} label='Left / Right' />
+        <HelpRow keys={['Space', 'Shift']} label='Up / Down' />
+        <HelpRow keys={['Right hold']} label='Accelerate' />
+        <div className='help-section'>Look</div>
+        <HelpRow keys={['Left hold']} label='Look around' />
+        <HelpRow keys={['↑↓←→']} label='Look around' />
+        <HelpRow keys={['Q', 'E']} label='Roll' />
+        <div className='help-section'>Mode</div>
+        <HelpRow keys={['F']} label='Switch to Turntable' />
+      </>}
+
+      {!isMobile && mode === 'turntable' && <>
+        <div className='help-section'>Move pivot</div>
+        <HelpRow keys={['W', 'S']} label='Forward / Backward' />
+        <HelpRow keys={['A', 'D']} label='Left / Right' />
+        <HelpRow keys={['Space', 'Shift']} label='Up / Down' />
+        <HelpRow keys={['Right drag']} label='Pan' />
+        <div className='help-section'>Orbit</div>
+        <HelpRow keys={['Left Drag']} label='Orbit' />
+        <HelpRow keys={['↑↓←→']} label='Orbit' />
+        <HelpRow keys={['Q', 'E']} label='Roll' />
+        <HelpRow keys={['Scroll']} label='Zoom' />
+        <div className='help-section'>Mode</div>
+        <HelpRow keys={['F']} label='Switch to Spaceship' />
+      </>}
+
+      {isMobile && mode === 'spaceship' && <>
+        <HelpRow keys={['Left stick']} label='Move' />
+        <HelpRow keys={['Right stick']} label='Look around' />
+        <HelpRow keys={['Tap ⊙']} label='Turntable mode' />
+      </>}
+
+      {isMobile && mode === 'turntable' && <>
+        <HelpRow keys={['1-finger drag']} label='Orbit' />
+        <HelpRow keys={['Pinch']} label='Zoom' />
+        <HelpRow keys={['2-finger drag']} label='Pan' />
+        <HelpRow keys={['Tap 🚀']} label='Spaceship mode' />
+      </>}
+
+      <div className='help-dismiss-hint'>
+        {isMobile ? 'Tap to dismiss' : 'Press any control key to dismiss'}
+      </div>
     </div>
   );
 }

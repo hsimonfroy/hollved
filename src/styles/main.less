@@ -185,41 +185,87 @@ a.media {
   color: wheat;
 }
 
-.navigation-help {
-  position: absolute;
-  background-color: rgba(0, 0, 0, 0.55);
-  padding: 7px;
+// ── Help panel ───────────────────────────────────────────────────────────────
+
+.help-panel {
+  position: fixed;
   right: 20px;
   top: 50%;
   transform: translateY(-50%);
-  font-family: 'Roboto', sans-serif;
+  width: 240px;
+  background: rgba(5, 8, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  padding: 14px 16px 12px;
   pointer-events: none;
-  h3 {
-    color: @foreground;
-    border-bottom: 1px solid white;
-    padding-bottom: 6px;
-    margin-top: 2px;
-  }
-  code {
-    font-family: 'PT Sans', sans-serif;
-    font-size: 100%;
-    color: @foreground;
-    background-color: inherit;
-  }
-  code.important-key {
-    color: #90EE90;
-  }
-  td {
-    color: #999;
-    text-align: right;
-  }
-  td:nth-child(even) {
-    text-align: left;
+  z-index: 30;
+  font-family: 'Roboto', sans-serif;
+  animation: help-panel-in 0.18s ease-out both;
+}
 
+@keyframes help-panel-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(10px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+.help-mode-badge {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.50);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  padding: 2px 8px;
+  margin-bottom: 12px;
+}
+
+.help-section {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  gap: 6px;
+  > span:first-child { display: flex; gap: 3px; flex-shrink: 0; }
+  > span:last-child {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+    text-align: right;
+    flex: 1;
+    white-space: nowrap;
   }
-  tr.spacer-row {
-    border-bottom: 10px solid transparent;
-  }
+}
+
+.help-key {
+  display: inline-block;
+  font-family: 'PT Sans', sans-serif;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.help-dismiss-hint {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.30);
 }
 
 // ── Virtual joysticks (mobile only, shown in spaceship mode) ────────────────
@@ -283,8 +329,20 @@ a.media {
     flex-shrink: 0;
   }
 
-  .navigation-help {
-    display: none;
+}
+
+@media (pointer: coarse) {
+  .help-panel {
+    right: auto;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    animation: help-panel-in-mobile 0.18s ease-out both;
+  }
+  @keyframes help-panel-in-mobile {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   }
 }
 
