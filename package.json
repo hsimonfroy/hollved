@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "mkdir -p ./build && cp ./src/index.html ./build/ && webpack --config webpack.production.config.js",
+    "build": "mkdir -p ./build && cp ./src/index.html ./build/ && cp -r ./images ./build/images && webpack --config webpack.production.config.js",
     "start": "PORT=8082 node dev-server.js"
   },
   "repository": {
