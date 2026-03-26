@@ -12,7 +12,7 @@ createRoot(document.getElementById('app')).render(
   <HashRouter>
     <Routes>
       <Route path='/' element={<WelcomePage />} />
-      <Route path='/galaxy/:name' element={<GalaxyPage />} />
+      <Route path='/:name' element={<GalaxyPage />} />
     </Routes>
   </HashRouter>
 );

@@ -328,14 +328,14 @@ function sceneRenderer(container) {
   }
 
   function createCMBSphere(scene) {
-    var geo = new THREE.SphereGeometry(9390, 64, 32);
+    var geo = new THREE.SphereGeometry(9390, 128, 64);
     var texture = new THREE.TextureLoader().load(
       config.dataUrl + sceneStore.getGraphName() + '/cmb/planck_100ghz.jpg'
     );
     var mat = new THREE.MeshBasicMaterial({
       map: texture,
       side: THREE.DoubleSide,                  // visible from inside and outside
-      color: new THREE.Color(0.05, 0.05, 0.05)   // darken texture; tune to taste
+      color: new THREE.Color(0.1, 0.1, 0.1)   // darken texture; tune to taste
     });
     var sphere = new THREE.Mesh(geo, mat);
     sphere.renderOrder = -1;           // draw before particles, writes depth first

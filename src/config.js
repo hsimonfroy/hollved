@@ -1,4 +1,4 @@
 export default {
-  dataUrl: 'https://hsimonfroy.github.io/hollved-data/'
-//   dataUrl: 'http://127.0.0.1:9090/'
+//   dataUrl: 'https://hsimonfroy.github.io/hollved-data/'
+  dataUrl: 'http://127.0.0.1:9090/'
 };

@@ -109,7 +109,7 @@ function appConfig() {
     var name = scene.getGraphName();
     var p = hashConfig.pos;
     var r = hashConfig.rot;
-    var hash = '#/galaxy/' + name +
+    var hash = '#/' + name +
       '?mode=' + hashConfig.mode +
       '&pos='  + Math.round(p.x) + ',' + Math.round(p.y) + ',' + Math.round(p.z) +
       '&rot='  + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4) +
