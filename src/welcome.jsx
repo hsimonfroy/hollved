@@ -35,7 +35,7 @@ export default function WelcomePage() {
       </div>
       <footer className='welcome-footer'>
         MIT License &middot; Copyright &copy; 2025{' '}
-        <a href='https://hsimonsfroy.github.io/' target='_blank' rel='noopener noreferrer'>
+        <a href='https://hsimonfroy.github.io/' target='_blank' rel='noopener noreferrer'>
           Hugo Simon
         </a>
       </footer>

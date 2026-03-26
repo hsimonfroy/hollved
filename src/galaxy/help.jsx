@@ -127,8 +127,9 @@ export default function Help() {
         <HelpRow keys={['Left hold']} label='Look around' />
         <HelpRow keys={['↑↓←→']} label='Look around' />
         <HelpRow keys={['Q', 'E']} label='Roll' />
-        <div className='help-section'>Mode</div>
+        <div className='help-section'>Options</div>
         <HelpRow keys={['F']} label='Switch to Turntable' />
+        <HelpRow keys={['I']} label='Show Info' />
       </>}
 
       {!isMobile && mode === 'turntable' && <>
@@ -142,8 +143,9 @@ export default function Help() {
         <HelpRow keys={['↑↓←→']} label='Orbit' />
         <HelpRow keys={['Q', 'E']} label='Roll' />
         <HelpRow keys={['Scroll']} label='Zoom' />
-        <div className='help-section'>Mode</div>
+        <div className='help-section'>Options</div>
         <HelpRow keys={['F']} label='Switch to Spaceship' />
+        <HelpRow keys={['I']} label='Show Info' />
       </>}
 
       {isMobile && mode === 'spaceship' && <>
