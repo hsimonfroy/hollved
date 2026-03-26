@@ -33,6 +33,7 @@ function sceneRenderer(container) {
   var milkyWayCircle = null;
   var cmbSphere = null;
   var cmbVisible = true;
+  var DEFAULT_HIDDEN_TRACERS = ['mw', 'cmb'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
@@ -169,7 +170,7 @@ function sceneRenderer(container) {
       }
 
       var configVisible = appConfig.getVisibleTracers();
-      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : true;
+      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere = createCMBSphere(renderer.scene());
       cmbSphere.visible = cmbVisible;
 
@@ -186,12 +187,12 @@ function sceneRenderer(container) {
     if (!renderer) return;
     tracerRanges = ranges;
 
-    // Initialize visibility from URL config (null = all visible)
+    // Initialize visibility from URL config (null = use defaults: hide mw and cmb)
     var configVisible = appConfig.getVisibleTracers();
     ranges.forEach(function(tracer) {
       tracerVisibility[tracer.id] = configVisible
         ? configVisible.indexOf(tracer.id) >= 0
-        : true;
+        : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });
 
     var view = renderer.getParticleView();
@@ -255,7 +256,7 @@ function sceneRenderer(container) {
     if (!tracerRanges || !renderer) return;
     var configVisible = appConfig.getVisibleTracers();
     tracerRanges.forEach(function(tracer) {
-      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : true;
+      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });
     var view = renderer.getParticleView();
     var colors = view.colors();
@@ -265,7 +266,7 @@ function sceneRenderer(container) {
     view.colors(colors);
 
     if (cmbSphere) {
-      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : true;
+      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere.visible = cmbVisible;
     }
 

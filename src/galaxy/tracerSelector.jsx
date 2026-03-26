@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
+var DEFAULT_HIDDEN = ['mw', 'cmb'];
+
 export default function TracerSelector() {
   var [tracers, setTracers] = useState([]);
 
@@ -18,7 +20,7 @@ export default function TracerSelector() {
           id: r.id,
           name: r.name,
           color: r.color,
-          visible: configVisible ? configVisible.indexOf(r.id) >= 0 : true
+          visible: configVisible ? configVisible.indexOf(r.id) >= 0 : DEFAULT_HIDDEN.indexOf(r.id) < 0
         };
       });
       // Append synthetic CMB tracer — rendered as a sphere by renderer.js, not as particles
@@ -26,7 +28,7 @@ export default function TracerSelector() {
         id: 'cmb',
         name: 'CMB',
         color: 0x888888ff,
-        visible: configVisible ? configVisible.indexOf('cmb') >= 0 : true
+        visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
       setTracers(mapped);
     }
@@ -42,7 +44,7 @@ export default function TracerSelector() {
         return prev.map(function(t) {
           return {
             id: t.id, name: t.name, color: t.color,
-            visible: configVisible ? configVisible.indexOf(t.id) >= 0 : true
+            visible: configVisible ? configVisible.indexOf(t.id) >= 0 : DEFAULT_HIDDEN.indexOf(t.id) < 0
           };
         });
       });
@@ -60,7 +62,10 @@ export default function TracerSelector() {
     appEvents.setTracerVisibility.fire(tracerId, visible);
 
     var visibleIds = newTracers.filter(function(t) { return t.visible; }).map(function(t) { return t.id; });
-    appConfig.setVisibleTracers(visibleIds.length < newTracers.length ? visibleIds : null);
+    var isDefault = newTracers.every(function(t) {
+      return t.visible === (DEFAULT_HIDDEN.indexOf(t.id) < 0);
+    });
+    appConfig.setVisibleTracers(isDefault ? null : visibleIds);
   }
 
   if (tracers.length === 0) return null;
