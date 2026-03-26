@@ -529,6 +529,49 @@ a.media {
   letter-spacing: 0.04em;
 }
 
+.welcome-description {
+  max-width: 640px;
+  margin-top: 48px;
+  color: rgba(255, 255, 255, 0.50);
+  font-size: 16px;
+  line-height: 1.7;
+  text-align: left;
+
+  ul {
+    padding-left: 20px;
+    margin: 0;
+    li { margin-bottom: 14px; }
+    li:last-child { margin-bottom: 0; }
+  }
+}
+
+.welcome-status {
+  max-width: 640px;
+  margin-top: 32px;
+  background: rgba(5, 8, 20, 0.60);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.50);
+  line-height: 1.6;
+
+  p { margin: 0; }
+
+  a {
+    color: rgba(120, 180, 255, 0.75);
+    &:hover { color: rgba(120, 180, 255, 1.0); text-decoration: underline; }
+  }
+}
+
+.welcome-status-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 8px;
+}
+
 .welcome-footer {
   margin-top: 60px;
   font-size: 12px;
