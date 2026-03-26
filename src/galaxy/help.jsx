@@ -114,7 +114,7 @@ export default function Help() {
   return (
     <div className='help-panel'>
       <div className='help-mode-badge'>
-        {mode === 'turntable' ? '⊙ Turntable' : '🚀 Spaceship'}
+        {mode === 'turntable' ? '🛰️ Turntable' : '🚀 Spaceship'}
       </div>
 
       {!isMobile && mode === 'spaceship' && <>
@@ -158,7 +158,7 @@ export default function Help() {
         <HelpRow keys={['1-finger drag']} label='Orbit' />
         <HelpRow keys={['Pinch']} label='Zoom' />
         <HelpRow keys={['2-finger drag']} label='Pan' />
-        {/* <HelpRow keys={['Tap ⊙']} label='Spaceship mode' /> */}
+        {/* <HelpRow keys={['Tap 🛰️']} label='Spaceship mode' /> */}
       </>}
 
       <div className='help-dismiss-hint'>
