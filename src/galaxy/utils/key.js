@@ -3,7 +3,8 @@ var CONTROL_KEYS = new Set([
   32, 16,               // Space Shift
   81, 69,               // Q E
   38, 40, 37, 39,       // ↑ ↓ ← →
-  70                    // F
+  70,                   // F
+  73                    // I
 ]);
 
 export function isControlKey(e) { return CONTROL_KEYS.has(e.keyCode); }
@@ -13,6 +14,7 @@ export default {
   isControlKey,
 
   H: 72,
+  I: 73,
   L: 76,
   Space: 32,
   '/': 191

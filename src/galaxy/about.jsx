@@ -49,8 +49,17 @@ export default function About() {
         .then(function(md) { if (md) setInfoHtml(markdownToHtml(md)); })
         .catch(function() {});
     }
+    function onKeyDown(e) {
+      if (e.keyCode === 73 && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        setOpen(function(v) { return !v; });
+      }
+    }
     appEvents.downloadGraphRequested.on(onDownloadRequested);
-    return function() { appEvents.downloadGraphRequested.off(onDownloadRequested); };
+    document.body.addEventListener('keydown', onKeyDown);
+    return function() {
+      appEvents.downloadGraphRequested.off(onDownloadRequested);
+      document.body.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   // Close on click outside

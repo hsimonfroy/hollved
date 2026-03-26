@@ -189,7 +189,7 @@ a.media {
 
 .help-panel {
   position: fixed;
-  right: 20px;
+  left: 20px;
   top: 50%;
   transform: translateY(-50%);
   width: 240px;
@@ -206,7 +206,7 @@ a.media {
 }
 
 @keyframes help-panel-in {
-  from { opacity: 0; transform: translateY(-50%) translateX(10px); }
+  from { opacity: 0; transform: translateY(-50%) translateX(-10px); }
   to   { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
@@ -382,10 +382,10 @@ a.media {
 
 .info-panel {
   position: fixed;
-  left: 20px;
+  right: 20px;
   top: 50%;
   transform: translateY(-50%);
-  width: 280px;
+  width: 300px;
   max-height: 70vh;
   overflow-y: auto;
   background: rgba(5, 8, 20, 0.82);
@@ -401,7 +401,7 @@ a.media {
 }
 
 @keyframes info-panel-in {
-  from { opacity: 0; transform: translateY(-50%) translateX(-10px); }
+  from { opacity: 0; transform: translateY(-50%) translateX(10px); }
   to   { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
