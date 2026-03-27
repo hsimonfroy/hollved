@@ -201,11 +201,26 @@ function unrender(container, options) {
     markDirty();
   }
 
+  function detectRenderTargetType() {
+    // Three.js r171 internal pattern (WebGLRenderer.js:1476).
+    // Always returns HalfFloatType or UnsignedByteType — FloatType is never used.
+    //
+    // EXT_color_buffer_half_float OR EXT_color_buffer_float signal that the device
+    // can render to float textures; either one is sufficient to confirm HalfFloat support.
+    //
+    // Result: HalfFloat on desktop, Android, AND iOS (uniform format across all devices).
+    //         UnsignedByte only on very old hardware that supports neither extension.
+    return (renderer.extensions.has('EXT_color_buffer_half_float') ||
+            renderer.extensions.has('EXT_color_buffer_float'))
+      ? THREE.HalfFloatType
+      : THREE.UnsignedByteType;
+  }
+
   function createHdrTarget() {
     return new THREE.WebGLRenderTarget(
       container.clientWidth, container.clientHeight,
       {
-        type:          THREE.FloatType,
+        type:          detectRenderTargetType(),
         format:        THREE.RGBAFormat,
         minFilter:     THREE.NearestFilter,
         magFilter:     THREE.NearestFilter,
