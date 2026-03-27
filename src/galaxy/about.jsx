@@ -82,7 +82,7 @@ export default function About() {
       <div
         ref={btnRef}
         className='info-btn'
-        title='About'
+        title='Information'
         onClick={function() { setOpen(function(v) { return !v; }); }}
       >
         ⓘ

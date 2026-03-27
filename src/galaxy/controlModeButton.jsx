@@ -21,8 +21,8 @@ export default function ControlModeButton() {
   var isTurntable = (mode === 'turntable');
   var icon  = isTurntable ? '🛰️' : '🚀';
   var title = isTurntable
-    ? 'Turntable mode — click or press F to switch to Spaceship mode'
-    : 'Spaceship mode — click or press F to switch to Turntable mode';
+    ? 'Turntable mode - click or press F to switch to Spaceship mode'
+    : 'Spaceship mode - click or press F to switch to Turntable mode';
 
   return (
     <div
