@@ -335,7 +335,7 @@ function sceneRenderer(container) {
     );
     var mat = new THREE.MeshBasicMaterial({
       map: texture,
-      side: THREE.DoubleSide,                  // visible from inside and outside
+      side: THREE.BackSide,                    // inner surface only: full sky from inside, back hemisphere from outside
       color: new THREE.Color(0.05, 0.05, 0.05)   // darken texture; tune to taste
     });
     var sphere = new THREE.Mesh(geo, mat);

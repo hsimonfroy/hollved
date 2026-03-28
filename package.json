@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "mkdir -p ./build && cp ./src/index.html ./build/ && cp -r ./assets ./build/assets && webpack --config webpack.production.config.js",
+    "build": "mkdir -p ./build/assets && cp ./src/index.html ./build/ && cp ./assets/desi_dr1_round_low.png ./build/assets/ && webpack --config webpack.production.config.js",
     "start": "PORT=8082 node dev-server.js"
   },
   "repository": {
@@ -46,7 +46,6 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.0",
     "three": "^0.171.0",
-    "tween.js": "^0.14.0",
     "webgl-enabled": "^1.0.3"
   }
 }

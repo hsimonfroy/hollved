@@ -1,15 +1,13 @@
 var THREE = require('three');
-var TWEEN = require('tween.js');
 var combineOptions = require('./options.js');
 var createParticleView = require('./lib/particle-view.js');
 
 var CAMERA_FOV  = 70; // vertical field of view (degrees), human central vision is about 60
 var CAMERA_NEAR = 1;
-var CAMERA_FAR  = 20000;
+var CAMERA_FAR  = 100000;
 
 // Expose three.js as well, so simple clients do not have to require it
 unrender.THREE = THREE;
-unrender.TWEEN = TWEEN;
 
 module.exports = unrender;
 
@@ -68,8 +66,6 @@ function unrender(container, options) {
       return !camera.position.equals(_lastCamPos) || !camera.quaternion.equals(_lastCamQuat);
     }
   };
-  var updateTween = window.performance ? highResTimer : dateTimer;
-
   startEventsListening();
 
   markDirty(); // trigger initial render
@@ -79,7 +75,6 @@ function unrender(container, options) {
   function frame(time) {
     // Update controls first (may move camera)
     input.update(0.1);
-    var tweenActive = updateTween(time);
 
     for (var i = 0; i < rafCallbacks.length; ++i) {
       rafCallbacks[i](time);
@@ -99,7 +94,7 @@ function unrender(container, options) {
     }
 
     // Continue loop only while there is work; otherwise pause until markDirty()
-    if (moved || _needsRender || tweenActive || rafCallbacks.length > 0) {
+    if (moved || _needsRender || rafCallbacks.length > 0) {
       lastFrame = requestAnimationFrame(frame);
     } else {
       _loopRunning = false;
@@ -285,11 +280,4 @@ function unrender(container, options) {
     markDirty();
   }
 
-  function highResTimer(time) {
-    return TWEEN.update(time);
-  }
-
-  function dateTimer() {
-    return TWEEN.update(+new Date());
-  }
 }
