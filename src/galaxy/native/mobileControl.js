@@ -3,7 +3,7 @@ export default createMobileControl;
 var JOYSTICK_RADIUS = 60;   // px — half of 120px base diameter
 var DEAD_ZONE       = 0.15; // fraction of joystick radius, no input below this
 
-function createMobileControl(renderer, turntableControl, spaceshipControl) {
+function createMobileControl(renderer, satelliteControl, spaceshipControl) {
   var container = renderer.getContainer();
 
   // ── DOM — left joystick (spaceship movement) ─────────────────────────────
@@ -18,8 +18,8 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
   joystickRightBase.appendChild(joystickRightKnob);
   document.body.appendChild(joystickRightBase);
 
-  // Start in turntable mode — joysticks hidden
-  var mode = 'turntable';
+  // Start in satellite mode — joysticks hidden
+  var mode = 'satellite';
   joystickBase.style.display      = 'none';
   joystickRightBase.style.display = 'none';
 
@@ -31,8 +31,8 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
   var joystickOrigin       = null;
   var joystickRightOrigin  = null;
 
-  // Turntable touch tracking (up to 3 simultaneous fingers)
-  var turntableTouches = {}; // { identifier: { x, y } }
+  // Satellite touch tracking (up to 3 simultaneous fingers)
+  var satelliteTouches = {}; // { identifier: { x, y } }
 
   // { passive: false } is required to call e.preventDefault() in modern browsers
   container.addEventListener('touchstart',  onTouchStart, { passive: false });
@@ -62,8 +62,8 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
     joystickRightKnob.style.transform = 'translate(0px,0px)';
     var ms = spaceshipControl.mobileState;
     ms.forward = ms.back = ms.left = ms.right = ms.yawLeft = ms.pitchDown = 0;
-    // Clear turntable state
-    turntableTouches = {};
+    // Clear satellite state
+    satelliteTouches = {};
   }
 
   // ── Event handlers ────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
     if (mode === 'spaceship') {
       onSpaceshipTouchStart(e);
     } else {
-      onTurntableTouchStart(e);
+      onSatelliteTouchStart(e);
     }
   }
 
@@ -82,7 +82,7 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
     if (mode === 'spaceship') {
       onSpaceshipTouchMove(e);
     } else {
-      onTurntableTouchMove(e);
+      onSatelliteTouchMove(e);
     }
   }
 
@@ -90,7 +90,7 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
     if (mode === 'spaceship') {
       onSpaceshipTouchEnd(e);
     } else {
-      onTurntableTouchEnd(e);
+      onSatelliteTouchEnd(e);
     }
   }
 
@@ -189,68 +189,68 @@ function createMobileControl(renderer, turntableControl, spaceshipControl) {
     renderer.markDirty();
   }
 
-  // ── Turntable touch ───────────────────────────────────────────────────────
+  // ── Satellite touch ───────────────────────────────────────────────────────
   //
   // 1 finger  → orbit (rotate theta/phi)
   // 2 fingers → pinch-to-zoom (scale radius)
   // 3 fingers → pan pivot
 
-  function onTurntableTouchStart(e) {
+  function onSatelliteTouchStart(e) {
     for (var i = 0; i < e.changedTouches.length; ++i) {
       var t = e.changedTouches[i];
-      turntableTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+      satelliteTouches[t.identifier] = { x: t.clientX, y: t.clientY };
     }
   }
 
-  function onTurntableTouchMove(e) {
-    var n = Object.keys(turntableTouches).length;
+  function onSatelliteTouchMove(e) {
+    var n = Object.keys(satelliteTouches).length;
 
     // Snapshot previous positions before updating
     var prev = {};
-    var ids  = Object.keys(turntableTouches);
+    var ids  = Object.keys(satelliteTouches);
     ids.forEach(function(id) {
-      prev[id] = { x: turntableTouches[id].x, y: turntableTouches[id].y };
+      prev[id] = { x: satelliteTouches[id].x, y: satelliteTouches[id].y };
     });
 
     // Update current positions
     for (var i = 0; i < e.changedTouches.length; ++i) {
       var t = e.changedTouches[i];
-      if (turntableTouches[t.identifier]) {
-        turntableTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+      if (satelliteTouches[t.identifier]) {
+        satelliteTouches[t.identifier] = { x: t.clientX, y: t.clientY };
       }
     }
 
     if (n === 1) {
       // Single finger: orbit
       var id0 = ids[0];
-      if (prev[id0] && turntableTouches[id0]) {
-        var dx = turntableTouches[id0].x - prev[id0].x;
-        var dy = turntableTouches[id0].y - prev[id0].y;
-        turntableControl.onTouchRotate(dx, dy);
+      if (prev[id0] && satelliteTouches[id0]) {
+        var dx = satelliteTouches[id0].x - prev[id0].x;
+        var dy = satelliteTouches[id0].y - prev[id0].y;
+        satelliteControl.onTouchRotate(dx, dy);
       }
     } else if (n === 2) {
       // Two fingers: pinch zoom + centroid pan simultaneously
       var id1 = ids[0], id2 = ids[1];
-      if (prev[id1] && prev[id2] && turntableTouches[id1] && turntableTouches[id2]) {
+      if (prev[id1] && prev[id2] && satelliteTouches[id1] && satelliteTouches[id2]) {
         // Zoom: distance ratio
         var prevDist = dist(prev[id1], prev[id2]);
-        var currDist = dist(turntableTouches[id1], turntableTouches[id2]);
+        var currDist = dist(satelliteTouches[id1], satelliteTouches[id2]);
         if (prevDist > 0) {
-          turntableControl.onTouchZoom(currDist / prevDist);
+          satelliteControl.onTouchZoom(currDist / prevDist);
         }
         // Pan: centroid delta
         var prevCx = (prev[id1].x + prev[id2].x) / 2;
         var prevCy = (prev[id1].y + prev[id2].y) / 2;
-        var currCx = (turntableTouches[id1].x + turntableTouches[id2].x) / 2;
-        var currCy = (turntableTouches[id1].y + turntableTouches[id2].y) / 2;
-        turntableControl.onTouchPan(currCx - prevCx, currCy - prevCy);
+        var currCx = (satelliteTouches[id1].x + satelliteTouches[id2].x) / 2;
+        var currCy = (satelliteTouches[id1].y + satelliteTouches[id2].y) / 2;
+        satelliteControl.onTouchPan(currCx - prevCx, currCy - prevCy);
       }
     }
   }
 
-  function onTurntableTouchEnd(e) {
+  function onSatelliteTouchEnd(e) {
     for (var i = 0; i < e.changedTouches.length; ++i) {
-      delete turntableTouches[e.changedTouches[i].identifier];
+      delete satelliteTouches[e.changedTouches[i].identifier];
     }
   }
 

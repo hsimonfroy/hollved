@@ -86,7 +86,7 @@ function parseColor(colorStr) {
 function reportProgress(name, file, progress) {
   return function(e) {
     var progressInfo = {
-      message: name + ': downloading ' + file,
+      message: name + ' loading',
     };
     if (e.percent !== undefined) {
       progressInfo.completed = Math.round(e.percent * 100) + '%';

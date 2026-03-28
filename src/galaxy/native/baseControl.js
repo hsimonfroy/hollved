@@ -1,5 +1,5 @@
 /**
- * Shared keyboard state for both Spaceship and Turntable modes.
+ * Shared keyboard state for both Spaceship and Satellite modes.
  *
  * Always registered on document (not gated by mode). Both controls read keyState
  * in their update(delta) calls. Also handles global shortcuts (F = mode switch).
@@ -10,7 +10,7 @@
  *   Space/Shift up / down
  *   Q/E        rollLeft / rollRight
  *   ↑↓←→       pitchUp/pitchDown/yawLeft/yawRight  (same as mouse in each mode)
- *   F          mode switch (spaceship ↔ turntable)
+ *   F          mode switch (spaceship ↔ satellite)
  */
 export default createBaseControl;
 

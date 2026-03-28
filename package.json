@@ -1,34 +1,28 @@
 {
-  "name": "pmviz",
+  "name": "hollved",
   "version": "1.0.0",
-  "description": "Visualization of common package managers",
+  "description": "An interactive visualizer of the largest 3D maps of the Universe.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "mkdir -p ./build && cp ./src/index.html ./build/ && cp -r ./images ./build/images && webpack --config webpack.production.config.js",
+    "build": "mkdir -p ./build && cp ./src/index.html ./build/ && cp -r ./assets ./build/assets && webpack --config webpack.production.config.js",
     "start": "PORT=8082 node dev-server.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/anvaka/pm.git"
+    "url": "https://github.com/hsimonfroy/hollved"
   },
   "keywords": [
-    "ngraph",
+    "cosmology",
     "visualization",
-    "package",
-    "managers",
-    "npm",
-    "bower",
-    "cpan",
-    "composer",
-    "go"
+    "universe"
   ],
-  "author": "Andrei Kashcha",
+  "author": "Hugo Simon",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/anvaka/pm/issues"
+    "url": "https://github.com/hsimonfroy/hollved/issues"
   },
-  "homepage": "https://github.com/anvaka/pm",
+  "homepage": "https://github.com/hsimonfroy/hollved",
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.24.0",

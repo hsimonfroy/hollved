@@ -9,7 +9,7 @@
  * ----------------------------------------------------
  * Both modes share keyboard controls (W/A/S/D, Q/E, Space/Ctrl, arrows).
  * The mode only changes mouse behaviour:
- *   Turntable — left-drag orbit, scroll zoom, right-drag pan
+ *   Satellite — left-drag orbit, scroll zoom, right-drag pan
  *   Spaceship — hold left button to look (pitch/yaw, absolute screen-centre)
  */
 import unrender from '../../unrender';
@@ -22,14 +22,14 @@ import config from '../../config.js';
 import sceneStore from '../store/scene.js';
 import createBaseControl     from './baseControl.js';
 import createSpaceshipControl from './spaceshipControl.js';
-import createTurntableControl from './turntableControl.js';
+import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
 
 export default sceneRenderer;
 
 
 function sceneRenderer(container) {
-  var renderer, positions, mobileControl, turntableControl, spaceshipControl, baseControl;
+  var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
   var milkyWayCircle = null;
   var cmbSphere = null;
   var cmbVisible = true;
@@ -71,37 +71,37 @@ function sceneRenderer(container) {
   function updateQuery() {
     if (!renderer) return;
     var camera = renderer.camera();
-    var pos  = (currentMode === 'turntable' && turntableControl) ? turntableControl.getPivot() : camera.position;
-    var zoom = turntableControl ? turntableControl.getRadius() : appConfig.getZoom();
+    var pos  = (currentMode === 'satellite' && satelliteControl) ? satelliteControl.getPivot() : camera.position;
+    var zoom = satelliteControl ? satelliteControl.getRadius() : appConfig.getZoom();
     appConfig.setCameraConfig(pos, camera.quaternion, zoom);
   }
 
   function toggleControlMode() {
     if (!renderer) return;
 
-    if (currentMode === 'turntable') {
-      // Back to spaceship: teleport to pivot, orient flat in the turntable plane
+    if (currentMode === 'satellite') {
+      // Back to spaceship: teleport to pivot, orient flat in the satellite plane
       var cam = renderer.camera();
-      var flatFwd = turntableControl.getFlatForward();
-      cam.position.copy(turntableControl.getPivot());
-      cam.up.copy(turntableControl.getUpAxis());
+      var flatFwd = satelliteControl.getFlatForward();
+      cam.position.copy(satelliteControl.getPivot());
+      cam.up.copy(satelliteControl.getUpAxis());
       cam.lookAt(new THREE.Vector3(
         cam.position.x + flatFwd.x,
         cam.position.y + flatFwd.y,
         cam.position.z + flatFwd.z
       ));
       currentMode = 'spaceship';
-      turntableControl.setEnabled(false);
+      satelliteControl.setEnabled(false);
       spaceshipControl.setEnabled(true);
       if (milkyWayCircle) milkyWayCircle.visible = false;
     } else {
-      currentMode = 'turntable';
+      currentMode = 'satellite';
       spaceshipControl.setEnabled(false);
-      turntableControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
+      satelliteControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
       if (milkyWayCircle) {
         milkyWayCircle.visible = true;
-        milkyWayCircle.position.copy(turntableControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+        milkyWayCircle.position.copy(satelliteControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
       }
     }
 
@@ -135,7 +135,7 @@ function sceneRenderer(container) {
 
       var cam = renderer.camera();
       baseControl      = createBaseControl(renderer.markDirty);
-      turntableControl = createTurntableControl(cam, container, renderer.markDirty, baseControl.keyState);
+      satelliteControl = createSatelliteControl(cam, container, renderer.markDirty, baseControl.keyState);
       spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty,
         function(v) { appEvents.accelerateNavigation.fire(v); });
 
@@ -144,29 +144,29 @@ function sceneRenderer(container) {
       // (camera may not have moved yet on the very first key-down frame).
       renderer.input().update = function(delta) {
         spaceshipControl.update(delta);
-        turntableControl.update(delta);
+        satelliteControl.update(delta);
         if (baseControl.isActive()) renderer.markDirty();
         if (milkyWayCircle && milkyWayCircle.visible) {
-          milkyWayCircle.position.copy(turntableControl.getPivot());
-          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+          milkyWayCircle.position.copy(satelliteControl.getPivot());
+          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
         }
       };
 
-      if (currentMode === 'turntable') {
+      if (currentMode === 'satellite') {
         spaceshipControl.setEnabled(false);
-        turntableControl.setEnabled(true);  // just set enabled flag, no initFromCamera
+        satelliteControl.setEnabled(true);  // just set enabled flag, no initFromCamera
         moveCameraInternal();               // restoreFromURL with URL state
       } else {
-        turntableControl.setEnabled(false);
+        satelliteControl.setEnabled(false);
         spaceshipControl.setEnabled(true);
       }
 
       _zUp = new THREE.Vector3(0, 0, 1);
       milkyWayCircle = createMilkyWayCircle(renderer.scene());
-      milkyWayCircle.visible = (currentMode === 'turntable');
+      milkyWayCircle.visible = (currentMode === 'satellite');
       if (milkyWayCircle.visible) {
-        milkyWayCircle.position.copy(turntableControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+        milkyWayCircle.position.copy(satelliteControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
       }
 
       var configVisible = appConfig.getVisibleTracers();
@@ -174,7 +174,7 @@ function sceneRenderer(container) {
       cmbSphere = createCMBSphere(renderer.scene());
       cmbSphere.visible = cmbVisible;
 
-      mobileControl = createMobileControl(renderer, turntableControl, spaceshipControl);
+      mobileControl = createMobileControl(renderer, satelliteControl, spaceshipControl);
       mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode); // sync UI button on load
     }
@@ -293,20 +293,20 @@ function sceneRenderer(container) {
     var zoom    = appConfig.getZoom();
     var newMode = appConfig.getControlMode();
 
-    if (newMode !== currentMode && turntableControl && spaceshipControl) {
+    if (newMode !== currentMode && satelliteControl && spaceshipControl) {
       // Mode changed via URL — perform full mode switch
       currentMode = newMode;
-      if (newMode === 'turntable') {
+      if (newMode === 'satellite') {
         spaceshipControl.setEnabled(false);
-        turntableControl.restoreFromURL(pos, zoom, lookAt);
-        turntableControl.setEnabled(true);
+        satelliteControl.restoreFromURL(pos, zoom, lookAt);
+        satelliteControl.setEnabled(true);
         if (milkyWayCircle) {
           milkyWayCircle.visible = true;
-          milkyWayCircle.position.copy(turntableControl.getPivot());
-          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+          milkyWayCircle.position.copy(satelliteControl.getPivot());
+          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
         }
       } else {
-        turntableControl.setEnabled(false);
+        satelliteControl.setEnabled(false);
         camera.position.set(pos.x, pos.y, pos.z);
         camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
         spaceshipControl.setEnabled(true);
@@ -315,11 +315,11 @@ function sceneRenderer(container) {
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
-    } else if (newMode === 'turntable' && turntableControl) {
-      turntableControl.restoreFromURL(pos, zoom, lookAt);
+    } else if (newMode === 'satellite' && satelliteControl) {
+      satelliteControl.restoreFromURL(pos, zoom, lookAt);
       if (milkyWayCircle && milkyWayCircle.visible) {
-        milkyWayCircle.position.copy(turntableControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, turntableControl.getUpAxis());
+        milkyWayCircle.position.copy(satelliteControl.getPivot());
+        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
       }
     } else {
       if (pos) camera.position.set(pos.x, pos.y, pos.z);
@@ -383,7 +383,7 @@ function sceneRenderer(container) {
     }
     if (baseControl)      { baseControl.destroy();      baseControl      = null; }
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
-    if (turntableControl) { turntableControl.destroy(); turntableControl = null; }
+    if (satelliteControl) { satelliteControl.destroy(); satelliteControl = null; }
     if (mobileControl)    { mobileControl.destroy();    mobileControl    = null; }
     renderer.destroy();
     appEvents.positionsDownloaded.off(setPositions);

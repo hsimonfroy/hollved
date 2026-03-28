@@ -27,13 +27,13 @@ export default eventMirror([
   'downloadGraphRequested',
 
   /**
-   * Fired when user wants to toggle between turntable and spaceship control modes.
+   * Fired when user wants to toggle between satellite and spaceship control modes.
    * Fired by F key (desktop) or the on-screen mode button.
    */
   'toggleControlMode',
 
   /**
-   * Fired after a control mode switch with the new mode string ('spaceship' | 'turntable').
+   * Fired after a control mode switch with the new mode string ('spaceship' | 'satellite').
    * Consumed by the UI button to update its icon.
    */
   'controlModeChanged',

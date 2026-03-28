@@ -1,8 +1,8 @@
 /**
  * On-screen button that shows the current control mode and toggles between
- * turntable and spaceship on click/tap.
+ * satellite and spaceship on click/tap.
  *
- * Turntable icon (🛰️) — orbit / look-around mode (default)
+ * Satellite icon (🛰️) — orbit / look-around mode (default)
  * Spaceship icon (🚀) — free-fly mode
  */
 import { useState, useEffect } from 'react';
@@ -18,11 +18,11 @@ export default function ControlModeButton() {
     return function() { appEvents.controlModeChanged.off(onModeChanged); };
   }, []);
 
-  var isTurntable = (mode === 'turntable');
-  var icon  = isTurntable ? '🛰️' : '🚀';
-  var title = isTurntable
-    ? 'Turntable mode - click or press F to switch to Spaceship mode'
-    : 'Spaceship mode - click or press F to switch to Turntable mode';
+  var isSatellite = (mode === 'satellite');
+  var icon  = isSatellite ? '🛰️' : '🚀';
+  var title = isSatellite
+    ? 'Satellite mode - click or press F to switch to Spaceship mode'
+    : 'Spaceship mode - click or press F to switch to Satellite mode';
 
   return (
     <div

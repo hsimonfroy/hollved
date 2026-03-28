@@ -114,7 +114,7 @@ export default function Help() {
   return (
     <div className='help-panel'>
       <div className='help-mode-badge'>
-        {mode === 'turntable' ? '🛰️ Turntable' : '🚀 Spaceship'}
+        {mode === 'satellite' ? '🛰️ Satellite' : '🚀 Spaceship'}
       </div>
 
       {!isMobile && mode === 'spaceship' && <>
@@ -128,11 +128,11 @@ export default function Help() {
         <HelpRow keys={['↑↓←→']} label='Look around' />
         <HelpRow keys={['Q', 'E']} label='Roll' />
         <div className='help-section'>Options</div>
-        <HelpRow keys={['F']} label='Switch to Turntable' />
+        <HelpRow keys={['F']} label='Switch to Satellite' />
         <HelpRow keys={['I']} label='Show Info' />
       </>}
 
-      {!isMobile && mode === 'turntable' && <>
+      {!isMobile && mode === 'satellite' && <>
         <div className='help-section'>Move pivot</div>
         <HelpRow keys={['W', 'S']} label='Forward / Backward' />
         <HelpRow keys={['A', 'D']} label='Left / Right' />
@@ -151,10 +151,10 @@ export default function Help() {
       {isMobile && mode === 'spaceship' && <>
         <HelpRow keys={['Left stick']} label='Move' />
         <HelpRow keys={['Right stick']} label='Look around' />
-        {/* <HelpRow keys={['Tap 🚀']} label='Turntable mode' /> */}
+        {/* <HelpRow keys={['Tap 🚀']} label='Satellite mode' /> */}
       </>}
 
-      {isMobile && mode === 'turntable' && <>
+      {isMobile && mode === 'satellite' && <>
         <HelpRow keys={['1-finger drag']} label='Orbit' />
         <HelpRow keys={['Pinch']} label='Zoom' />
         <HelpRow keys={['2-finger drag']} label='Pan' />

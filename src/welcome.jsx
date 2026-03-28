@@ -35,9 +35,9 @@ export default function WelcomePage() {
       </div>
       <div className='welcome-description'>
         <ul>
-          <li>The observation that galaxies appear redder the further they are has led to the cosmological discovery that the Universe is expanding.</li>
-          <li>By measuring how redshifted a galaxy's light is, spectroscopic surveys can infer how much the Universe has expanded since that light was emitted, and therefore how far away the galaxy lies.</li>
-          <li>Current surveys catalogue millions of galaxies, charting the cosmic web across billions of light-years and revealing the history and fate of the Universe. So pick a survey, and dive into the deep!</li>
+          <li>The observation that galaxies appear redder the further they are has led to the cosmological discovery that <strong>the Universe is expanding</strong>.</li>
+          <li>By measuring how <strong>redshifted</strong> a galaxy's light is, spectroscopic surveys can infer how much the Universe has expanded since that light was emitted, and therefore how far away the galaxy lies.</li>
+          <li>Current surveys catalogue millions of galaxies, charting the cosmic web across billions of light-years and revealing the history and fate of the Universe. <strong>So pick a survey, and dive into the deep!</strong></li>
         </ul>
       </div>
       <div className='welcome-status'>
