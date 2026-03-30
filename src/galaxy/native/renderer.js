@@ -336,7 +336,7 @@ function sceneRenderer(container) {
     var mat = new THREE.MeshBasicMaterial({
       map: texture,
       side: THREE.BackSide,                    // inner surface only: full sky from inside, back hemisphere from outside
-      color: new THREE.Color(0.05, 0.05, 0.05)   // darken texture; tune to taste
+      color: new THREE.Color(0.1, 0.1, 0.1)   // darken texture; tune to taste
     });
     var sphere = new THREE.Mesh(geo, mat);
     sphere.renderOrder = -1;           // draw before particles, writes depth first

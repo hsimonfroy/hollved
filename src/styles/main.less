@@ -1,6 +1,20 @@
 // todo: remove duplication, refactor
-@import "~bootstrap/less/bootstrap";
 @import "./variables.less";
+
+// Minimal CSS reset (replaces Bootstrap's normalize)
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; }
+
+// Bootstrap variable replaced
+@screen-sm-min: 768px;
+
+// Simple page container (used by noWebgl.jsx)
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
 @import "./steering.less";
 @import "./nodeDetails.less";
 @import "./search.less";
@@ -98,6 +112,7 @@ h4 {
   padding: 10px;
   left: 10px;
   top: 10px;
+  font-family: monospace;
 }
 
 
@@ -215,7 +230,7 @@ a.media {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.50);
+  color: rgba(255, 255, 255, 0.70);
   background: rgba(255, 255, 255, 0.08);
   border-radius: 99px;
   padding: 2px 8px;
@@ -240,7 +255,7 @@ a.media {
   > span:first-child { display: flex; gap: 3px; flex-shrink: 0; }
   > span:last-child {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.70);
     text-align: right;
     flex: 1;
     white-space: nowrap;
@@ -265,7 +280,7 @@ a.media {
   margin-top: 12px;
   text-align: center;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.30);
+  color: rgba(255, 255, 255, 0.40);
 }
 
 // ── Virtual joysticks (mobile only, shown in spaceship mode) ────────────────
@@ -410,12 +425,12 @@ a.media {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.70);
   text-decoration: none;
   margin-bottom: 14px;
 
   &:hover {
-    color: rgba(255, 255, 255, 0.80);
+    color: rgba(255, 255, 255, 0.99);
     text-decoration: none;
   }
 }
@@ -433,7 +448,7 @@ a.media {
 
 .info-text {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.60);
+  color: rgba(255, 255, 255, 0.70);
   line-height: 1.5;
 
   ul {
@@ -473,7 +488,9 @@ a.media {
 }
 
 .welcome-title {
+  font-family: 'Abril Fatface', cursive;
   font-size: 4.0rem;
+//   font-size: 3.0rem;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.99);
   margin: 0 0 10px;
@@ -482,7 +499,7 @@ a.media {
 }
 
 .welcome-subtitle {
-  font-size: 2.0rem;
+  font-size: 1.5rem;
   color: rgba(255, 255, 255, 0.70);
   margin: 0 0 50px;
   text-align: center;
@@ -510,10 +527,11 @@ a.media {
   padding: 20px;
 
   img {
-    max-width: 150px;
-    max-height: 110px;
+    max-width: 170px;
+    max-height: 120px;
     object-fit: contain;
-    margin-bottom: 12px;
+    flex: 1;
+    min-height: 0;
   }
 
   &:hover {
@@ -524,9 +542,11 @@ a.media {
 }
 
 .survey-card-name {
-  font-size: 16px;
+  font-size: 15px;
   color: rgba(255, 255, 255, 0.70);
   letter-spacing: 0.04em;
+  margin-top: 12px;
+  flex-shrink: 0;
 }
 
 .welcome-description {
@@ -536,6 +556,11 @@ a.media {
   font-size: 16px;
   line-height: 1.7;
   text-align: left;
+
+  strong {
+    color: rgba(255, 255, 255, 0.99);
+    font-weight: 600;
+  }
 
   ul {
     padding-left: 20px;
@@ -553,7 +578,7 @@ a.media {
   border-radius: 12px;
   padding: 16px 20px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.50);
+  color: rgba(255, 255, 255, 0.70);
   line-height: 1.6;
 
   p { margin: 0; }
@@ -575,7 +600,7 @@ a.media {
 .welcome-footer {
   margin-top: 60px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.50);
+  color: rgba(255, 255, 255, 0.70);
   text-align: center;
 
   a {

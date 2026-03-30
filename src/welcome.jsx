@@ -27,7 +27,7 @@ export default function WelcomePage() {
   return (
     <div className='welcome-page'>
       <h1 className='welcome-title'>Lost in expansion</h1>
-      <p className='welcome-subtitle'>Explore the largest 3D maps of the (observable) Universe!</p>
+      <p className='welcome-subtitle'>Explore the largest 3D maps of the (observable) Universe</p>
       <div className='survey-grid'>
         {surveys.map(function(s) {
           return <SurveyCard key={s.id} id={s.id} name={s.name} />;
@@ -36,8 +36,8 @@ export default function WelcomePage() {
       <div className='welcome-description'>
         <ul>
           <li>The observation that galaxies appear redder the further they are has led to the cosmological discovery that <strong>the Universe is expanding</strong>.</li>
-          <li>By measuring how <strong>redshifted</strong> a galaxy's light is, spectroscopic surveys can infer how much the Universe has expanded since that light was emitted, and therefore how far away the galaxy lies.</li>
-          <li>Current surveys catalogue millions of galaxies, charting the cosmic web across billions of light-years and revealing the history and fate of the Universe. <strong>So pick a survey, and dive into the deep!</strong></li>
+          <li>By measuring how <strong>redshifted</strong> a galaxy's light is, <strong>spectroscopic surveys</strong> can infer how much the Universe has expanded since that light was emitted, and therefore how far away the galaxy lies.</li>
+          <li><strong>Current surveys catalogue millions of galaxies</strong>, charting the cosmic web across billions of light-years and revealing the history and fate of the Universe. <strong>So pick a survey, and dive into the deep!</strong></li>
         </ul>
       </div>
       <div className='welcome-status'>
