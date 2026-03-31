@@ -21,7 +21,7 @@ module.exports = {
       test: /\.less$/,
       use: [MiniCssExtractPlugin.loader, 'css-loader', 'less-loader']
     }, {
-      test: /\.(woff2?|eot|ttf|svg)$/,
+      test: /\.(woff2?|eot|ttf|otf|svg)$/,
       type: 'asset/resource'
     }]
   },

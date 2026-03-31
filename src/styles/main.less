@@ -1,6 +1,14 @@
 // todo: remove duplication, refactor
 @import "./variables.less";
 
+@font-face {
+  font-family: 'Z003';
+  src: url('./fonts/Z003-MediumItalic.otf') format('opentype');
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+}
+
 // Minimal CSS reset (replaces Bootstrap's normalize)
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; }
@@ -488,10 +496,10 @@ a.media {
 }
 
 .welcome-title {
-  font-family: 'Abril Fatface', cursive;
+  font-family: 'Z003', cursive;
+  font-style: italic;
   font-size: 4.0rem;
-//   font-size: 3.0rem;
-  font-weight: 700;
+  font-weight:700;
   color: rgba(255, 255, 255, 0.99);
   margin: 0 0 10px;
   letter-spacing: 0.02em;
