@@ -56,7 +56,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   // Zoom constants
   var MIN_RADIUS    = 1;          // minimum orbit radius
   var SWITCH_RADIUS = 100;        // orbit radius when entering satellite from spaceship
-  var SWITCH_ANGLE  = Math.PI / 4; // elevation above equatorial plane on satellite entry (rad)
+  var SWITCH_ANGLE  = Math.PI / 16; // elevation above equatorial plane on satellite entry (rad)
   var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel
   // Keyboard-driven rates (per second)
   var MOVE_SPEED  = 200; // pivot translate speed
@@ -112,7 +112,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
 
     // Arrow keys → orbit (same as left-drag)
     var dTheta = (keyState.yawLeft  - keyState.yawRight ) * ORBIT_SPEED * delta;
-    var dPhi   = (keyState.pitchDown - keyState.pitchUp  ) * ORBIT_SPEED * delta;
+    var dPhi   = (keyState.pitchUp - keyState.pitchDown) * ORBIT_SPEED * delta;
     if (dTheta || dPhi) {
       theta += dTheta;
       phi    = Math.max(0.01, Math.min(Math.PI - 0.01, phi + dPhi));

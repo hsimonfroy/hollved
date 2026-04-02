@@ -15,6 +15,7 @@ function unrender(container, options) {
   var api = {
     destroy: destroy,
     scene: getScene,
+    postScene: getPostScene,
     camera: getCamera,
     input: getInput,
     renderer: getRenderer,
@@ -49,6 +50,7 @@ function unrender(container, options) {
   }
 
   var scene = createScene();
+  var postScene = new THREE.Scene(); // labels rendered here, after tone-mapping
   var camera = createCamera();
   var renderer = createRenderer();
   var hdrTarget = createHdrTarget();
@@ -89,7 +91,9 @@ function unrender(container, options) {
       renderer.clear();
       renderer.render(scene, camera);
       renderer.setRenderTarget(null);
-      renderer.render(tmScene, tmCamera);
+      renderer.clear();                          // clear screen before tone-map
+      renderer.render(tmScene, tmCamera);        // tone-map HDR → screen
+      renderer.render(postScene, camera);        // labels on top, normal alpha blending
       _needsRender = false;
     }
 
@@ -138,6 +142,10 @@ function unrender(container, options) {
     return scene;
   }
 
+  function getPostScene() {
+    return postScene;
+  }
+
   function createCamera() {
     var camera = new THREE.PerspectiveCamera(CAMERA_FOV, container.clientWidth / container.clientHeight, CAMERA_NEAR, CAMERA_FAR);
     scene.add(camera);
@@ -168,6 +176,7 @@ function unrender(container, options) {
       antialias: false
     });
 
+    renderer.autoClear = false; // all clears are explicit so postScene can add on top
     renderer.setClearColor(options.clearColor, 1);
     renderer.setSize(container.clientWidth, container.clientHeight);
 

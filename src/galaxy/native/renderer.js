@@ -24,16 +24,30 @@ import createBaseControl     from './baseControl.js';
 import createSpaceshipControl from './spaceshipControl.js';
 import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
+import { Text } from 'troika-three-text';
 
 export default sceneRenderer;
 
+var RULER_DEFS = [
+  { name: 'BAO',               radius: 100  },
+  { name: 'Hubble radius',     radius: 866  },
+  { name: 'Event horizon',     radius: 3333 },
+  { name: 'Particle horizon',  radius: 9394 },
+];
+
+function getRulerDefs() {
+  return RULER_DEFS;
+}
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
   var milkyWayCircle = null;
   var cmbSphere = null;
   var cmbVisible = true;
-  var DEFAULT_HIDDEN_TRACERS = ['mw', 'cmb'];
+  var rulersEnabled = false;
+  var rulerObjects  = [];   // [{ ring, label, radius }, ...]
+  var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
+  var DEFAULT_HIDDEN_TRACERS = ['mw', 'cmb', 'rulers'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
@@ -94,6 +108,7 @@ function sceneRenderer(container) {
       satelliteControl.setEnabled(false);
       spaceshipControl.setEnabled(true);
       if (milkyWayCircle) milkyWayCircle.visible = false;
+      updateRulersVisibility();
     } else {
       currentMode = 'satellite';
       spaceshipControl.setEnabled(false);
@@ -103,6 +118,7 @@ function sceneRenderer(container) {
         milkyWayCircle.position.copy(satelliteControl.getPivot());
         milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
       }
+      updateRulersVisibility();
     }
 
     renderer.markDirty();
@@ -129,6 +145,7 @@ function sceneRenderer(container) {
 
     if (!renderer) {
       renderer = unrender(container);
+      labelScene = renderer.postScene();
       var camera = renderer.camera();
       camera.updateProjectionMatrix();
       moveCameraInternal();
@@ -149,6 +166,24 @@ function sceneRenderer(container) {
         if (milkyWayCircle && milkyWayCircle.visible) {
           milkyWayCircle.position.copy(satelliteControl.getPivot());
           milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
+        }
+        if (rulersEnabled && currentMode === 'satellite' && rulerObjects.length) {
+          var upAxis = satelliteControl.getUpAxis();
+          var cam    = renderer.camera();
+          // Project camera position onto the equatorial plane to find the label direction
+          var camDir = cam.position.clone();
+          camDir.addScaledVector(upAxis, -camDir.dot(upAxis));
+          var hasCamDir = camDir.length() > 0.0001;
+          if (hasCamDir) camDir.normalize();
+          rulerObjects.forEach(function(r) {
+            // Rings stay fixed at origin; only orientation tracks upAxis (roll)
+            r.ring.quaternion.setFromUnitVectors(_zUp, upAxis);
+            // Label sits at the ring edge closest to the camera in the equatorial plane
+            if (hasCamDir) {
+              r.label.position.copy(camDir).multiplyScalar(r.radius * 1.05);
+            }
+            r.label.quaternion.copy(cam.quaternion); // billboard: face camera
+          });
         }
       };
 
@@ -173,6 +208,10 @@ function sceneRenderer(container) {
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere = createCMBSphere(renderer.scene());
       cmbSphere.visible = cmbVisible;
+
+      rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
+      rulerObjects = createRulers(renderer.scene(), labelScene);
+      updateRulersVisibility();
 
       mobileControl = createMobileControl(renderer, satelliteControl, spaceshipControl);
       mobileControl.setMode(currentMode);
@@ -220,6 +259,11 @@ function sceneRenderer(container) {
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
+    if (tracerId === 'rulers') {
+      rulersEnabled = visible;
+      updateRulersVisibility();
+      return;
+    }
     if (tracerId === 'cmb') {
       cmbVisible = visible;
       if (cmbSphere) { cmbSphere.visible = visible; renderer.markDirty(); }
@@ -270,6 +314,9 @@ function sceneRenderer(container) {
       cmbSphere.visible = cmbVisible;
     }
 
+    rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
+    updateRulersVisibility();
+
     renderer.markDirty();
   }
 
@@ -305,12 +352,14 @@ function sceneRenderer(container) {
           milkyWayCircle.position.copy(satelliteControl.getPivot());
           milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
         }
+        updateRulersVisibility();
       } else {
         satelliteControl.setEnabled(false);
         camera.position.set(pos.x, pos.y, pos.z);
         camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
         spaceshipControl.setEnabled(true);
         if (milkyWayCircle) milkyWayCircle.visible = false;
+        updateRulersVisibility();
       }
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
@@ -326,6 +375,86 @@ function sceneRenderer(container) {
       if (lookAt) camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
     }
     renderer.markDirty();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cosmological distance rulers
+  // ---------------------------------------------------------------------------
+
+  function createRulerRing(radius) {
+    var tubeR = radius * 0.005;   // visual glow half-width
+    // facing = |dot(N, V)| → 0 at silhouette, 1 at surface facing camera
+    var geo = new THREE.TorusGeometry(radius, tubeR, 16, 256);
+    var mat = new THREE.ShaderMaterial({
+      vertexShader: [
+        'varying vec3 vViewPosition;',
+        'varying vec3 vViewNormal;',
+        'void main() {',
+        '  vec4 mvPos   = modelViewMatrix * vec4(position, 1.0);',
+        '  vViewPosition = mvPos.xyz;',
+        '  vViewNormal   = normalize(normalMatrix * normal);',
+        '  gl_Position   = projectionMatrix * mvPos;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vViewPosition;',
+        'varying vec3 vViewNormal;',
+        'void main() {',
+        '  vec3  viewDir = normalize(-vViewPosition);',
+        '  float facing  = abs(dot(vViewNormal, viewDir));',
+        // pow(2): Gaussian-like radial falloff, 0 at silhouette → no aliasing
+        '  float alpha   = pow(facing, 2.0) * 1.5;',
+        '  gl_FragColor  = vec4(2.0, 2.0, 2.0, min(alpha, 1.0));',
+        '}'
+      ].join('\n'),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    return new THREE.Mesh(geo, mat);
+  }
+
+  function makeRulerLabel(text, radius) {
+    var label = new Text();
+    label.text         = text;
+    label.fontSize     = radius * 0.04;
+    // Labels render post-tone-map (in postScene) so plain white is truly white.
+    label.color        = 0xffffff;
+    label.outlineWidth = '10%';        // proportional black stroke
+    label.outlineColor = '#000000';
+    label.anchorX      = 'center';
+    label.anchorY      = 'middle';
+    label.depthTest    = false;
+    label.renderOrder  = 999;
+    label.sync(function() {
+      // Text geometry is ready — wake the RAF loop so the label appears immediately.
+      if (renderer) renderer.markDirty();
+    });
+    return label;
+  }
+
+  function createRulers(scene, ls) {
+    var objs = getRulerDefs().map(function(def) {
+      var distStr = def.radius < 1000
+        ? def.radius + ' Mpc'
+        : (def.radius / 1000).toFixed(1) + ' Gpc';
+      var ring  = createRulerRing(def.radius);
+      var label = makeRulerLabel(def.name + ' \u00b7 ' + distStr, def.radius);
+      scene.add(ring); ls.add(label);
+      return { ring: ring, label: label, radius: def.radius };
+    });
+    return objs;
+  }
+
+  function updateRulersVisibility() {
+    var show = rulersEnabled && currentMode === 'satellite';
+    rulerObjects.forEach(function(r) {
+      r.ring.visible  = show;
+      r.label.visible = show;
+    });
+    if (renderer) renderer.markDirty();
   }
 
   function createCMBSphere(scene) {
@@ -381,6 +510,17 @@ function sceneRenderer(container) {
       milkyWayCircle.material.dispose();
       milkyWayCircle = null;
     }
+    if (renderer && rulerObjects.length) {
+      var sc = renderer.scene();
+      rulerObjects.forEach(function(r) {
+        sc.remove(r.ring);
+        r.ring.geometry.dispose();
+        r.ring.material.dispose();
+        if (labelScene) labelScene.remove(r.label);
+        r.label.dispose();
+      });
+    }
+    rulerObjects = [];
     if (baseControl)      { baseControl.destroy();      baseControl      = null; }
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (satelliteControl) { satelliteControl.destroy(); satelliteControl = null; }

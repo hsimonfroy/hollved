@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
-var DEFAULT_HIDDEN = ['mw', 'cmb'];
+var DEFAULT_HIDDEN = ['mw', 'cmb', 'rulers'];
 
 export default function TracerSelector() {
   var [tracers, setTracers] = useState([]);
@@ -27,8 +27,15 @@ export default function TracerSelector() {
       mapped.push({
         id: 'cmb',
         name: 'CMB',
-        color: 0x888888ff,
+        color: 0x111111ff,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
+      });
+      // Append synthetic Rulers tracer — rendered as distance rings by renderer.js
+      mapped.push({
+        id: 'rulers',
+        name: 'Rulers',
+        color: 0xaaaaaaff,
+        visible: configVisible ? configVisible.indexOf('rulers') >= 0 : false
       });
       setTracers(mapped);
     }
@@ -133,3 +140,4 @@ var rowStyle = {
   cursor: 'pointer',
   margin: 0
 };
+
