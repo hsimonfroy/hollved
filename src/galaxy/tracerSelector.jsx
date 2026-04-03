@@ -27,14 +27,14 @@ export default function TracerSelector() {
       mapped.push({
         id: 'cmb',
         name: 'CMB',
-        color: 0x111111ff,
+        color: 0x222222ff,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
       // Append synthetic Rulers tracer — rendered as distance rings by renderer.js
       mapped.push({
         id: 'rulers',
         name: 'Rulers',
-        color: 0xaaaaaaff,
+        color: 0xbbbbbbff,
         visible: configVisible ? configVisible.indexOf('rulers') >= 0 : false
       });
       setTracers(mapped);

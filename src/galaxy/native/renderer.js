@@ -41,7 +41,6 @@ function getRulerDefs() {
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
-  var milkyWayCircle = null;
   var cmbSphere = null;
   var cmbVisible = true;
   var rulersEnabled = false;
@@ -107,17 +106,11 @@ function sceneRenderer(container) {
       currentMode = 'spaceship';
       satelliteControl.setEnabled(false);
       spaceshipControl.setEnabled(true);
-      if (milkyWayCircle) milkyWayCircle.visible = false;
       updateRulersVisibility();
     } else {
       currentMode = 'satellite';
       spaceshipControl.setEnabled(false);
       satelliteControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
-      if (milkyWayCircle) {
-        milkyWayCircle.visible = true;
-        milkyWayCircle.position.copy(satelliteControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
-      }
       updateRulersVisibility();
     }
 
@@ -163,10 +156,6 @@ function sceneRenderer(container) {
         spaceshipControl.update(delta);
         satelliteControl.update(delta);
         if (baseControl.isActive()) renderer.markDirty();
-        if (milkyWayCircle && milkyWayCircle.visible) {
-          milkyWayCircle.position.copy(satelliteControl.getPivot());
-          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
-        }
         if (rulersEnabled && currentMode === 'satellite' && rulerObjects.length) {
           var upAxis = satelliteControl.getUpAxis();
           var cam    = renderer.camera();
@@ -197,12 +186,6 @@ function sceneRenderer(container) {
       }
 
       _zUp = new THREE.Vector3(0, 0, 1);
-      milkyWayCircle = createMilkyWayCircle(renderer.scene());
-      milkyWayCircle.visible = (currentMode === 'satellite');
-      if (milkyWayCircle.visible) {
-        milkyWayCircle.position.copy(satelliteControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
-      }
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
@@ -347,18 +330,12 @@ function sceneRenderer(container) {
         spaceshipControl.setEnabled(false);
         satelliteControl.restoreFromURL(pos, zoom, lookAt);
         satelliteControl.setEnabled(true);
-        if (milkyWayCircle) {
-          milkyWayCircle.visible = true;
-          milkyWayCircle.position.copy(satelliteControl.getPivot());
-          milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
-        }
         updateRulersVisibility();
       } else {
         satelliteControl.setEnabled(false);
         camera.position.set(pos.x, pos.y, pos.z);
         camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
         spaceshipControl.setEnabled(true);
-        if (milkyWayCircle) milkyWayCircle.visible = false;
         updateRulersVisibility();
       }
       if (mobileControl) mobileControl.setMode(currentMode);
@@ -366,10 +343,6 @@ function sceneRenderer(container) {
       appConfig.setControlMode(currentMode);
     } else if (newMode === 'satellite' && satelliteControl) {
       satelliteControl.restoreFromURL(pos, zoom, lookAt);
-      if (milkyWayCircle && milkyWayCircle.visible) {
-        milkyWayCircle.position.copy(satelliteControl.getPivot());
-        milkyWayCircle.quaternion.setFromUnitVectors(_zUp, satelliteControl.getUpAxis());
-      }
     } else {
       if (pos) camera.position.set(pos.x, pos.y, pos.z);
       if (lookAt) camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
@@ -403,7 +376,7 @@ function sceneRenderer(container) {
         '  vec3  viewDir = normalize(-vViewPosition);',
         '  float facing  = abs(dot(vViewNormal, viewDir));',
         // pow(2): Gaussian-like radial falloff, 0 at silhouette → no aliasing
-        '  float alpha   = pow(facing, 2.0) * 1.5;',
+        '  float alpha   = pow(facing, 2.0) * 0.5;',
         '  gl_FragColor  = vec4(2.0, 2.0, 2.0, min(alpha, 1.0));',
         '}'
       ].join('\n'),
@@ -475,27 +448,6 @@ function sceneRenderer(container) {
     return sphere;
   }
 
-  function createMilkyWayCircle(scene) {
-    var SEGMENTS = 64, R = 0.1;
-    var positions = new Float32Array((SEGMENTS + 1) * 3);
-    for (var i = 0; i <= SEGMENTS; i++) {
-      var a = (i / SEGMENTS) * Math.PI * 2;
-      positions[i * 3 + 0] = Math.cos(a) * R;
-      positions[i * 3 + 1] = Math.sin(a) * R;
-      positions[i * 3 + 2] = 0;
-    }
-    var geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    var mat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      depthTest: false,
-      depthWrite: false
-    });
-    var circle = new THREE.Line(geo, mat);
-    scene.add(circle);
-    return circle;
-  }
-
   function destroy() {
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
@@ -503,12 +455,6 @@ function sceneRenderer(container) {
       if (cmbSphere.material.map) cmbSphere.material.map.dispose();
       cmbSphere.material.dispose();
       cmbSphere = null;
-    }
-    if (milkyWayCircle) {
-      renderer.scene().remove(milkyWayCircle);
-      milkyWayCircle.geometry.dispose();
-      milkyWayCircle.material.dispose();
-      milkyWayCircle = null;
     }
     if (renderer && rulerObjects.length) {
       var sc = renderer.scene();
