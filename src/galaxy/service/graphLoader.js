@@ -1,11 +1,11 @@
 /**
  * Loads a multi-tracer graph from the data server. Each graph has:
  *   <name>/manifest.json  — { "all": ["tracer1", "tracer2", ...] }
- *   <name>/<tracerId>/positions.bin  — int32 triplets (x,y,z per node)
- *   <name>/<tracerId>/meta.json      — optional, contains tracer.id/name/color
+ *   <name>/<tracerId>/positions.bin  — float16 LE triplets (x,y,z per node, in Mpc)
+ *   <name>/<tracerId>/meta.json      — optional, flat { id, name, count, color }
  *
  * Fires on the global event bus:
- *   appEvents.positionsDownloaded — merged Float32Array of all positions
+ *   appEvents.positionsDownloaded — merged Uint16Array of all positions (raw float16 bits)
  *   appEvents.tracerRangesReady   — array of { id, name, color, startNode, nodeCount }
  */
 
@@ -36,13 +36,12 @@ async function loadTracerData(endpoint, tracerId, graphName, progress) {
     responseType: 'arraybuffer',
     progress: reportProgress(graphName + '/' + tracerId, 'positions', progress)
   });
-  var positions = new Float32Array(new Int32Array(buffer));
+  var positions = new Uint16Array(buffer);  // raw float16 bits
 
-  var tracer = meta.tracer || {};
   return {
-    id:        tracer.id    || tracerId,
-    name:      tracer.name  || tracerId,
-    color:     parseColor(tracer.color || '0xffffffff'),
+    id:        meta.id    || tracerId,
+    name:      meta.name  || tracerId,
+    color:     parseColor(meta.color || '0xffffffff'),
     positions: positions
   };
 }
@@ -52,7 +51,7 @@ function mergeTracers(tracerDataArray) {
     return sum + (t.positions.length / 3);
   }, 0);
 
-  var allPositions = new Float32Array(totalNodes * 3);
+  var allPositions = new Uint16Array(totalNodes * 3);
   var tracerRanges = [];
   var nodeOffset = 0;
   var posOffset = 0;
