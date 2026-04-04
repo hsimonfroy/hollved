@@ -437,28 +437,53 @@ function sceneRenderer(container) {
   }
 
   function createCMBSphere(scene, radius) {
-    var geo = new THREE.SphereGeometry(radius, 128, 64);
-    var texture = new THREE.TextureLoader().load(
-      config.dataUrl + 'aux/cmb/planck_100ghz.jpg'
-    );
-    var mat = new THREE.MeshBasicMaterial({
-      map: texture,
-      side: THREE.BackSide,                    // inner surface only: full sky from inside, back hemisphere from outside
-      color: new THREE.Color(0.1, 0.1, 0.1)   // darken texture; tune to taste
+    var base = config.dataUrl + 'aux/cmb/planck_100ghz_';
+    var cubeTexture = new THREE.CubeTextureLoader().load([
+      base + 'px.jpg', base + 'nx.jpg',
+      base + 'py.jpg', base + 'ny.jpg',
+      base + 'pz.jpg', base + 'nz.jpg'
+    ], function() { if (renderer) renderer.markDirty(); });
+    cubeTexture.colorSpace = THREE.LinearSRGBColorSpace;
+
+    var mat = new THREE.ShaderMaterial({
+      uniforms: {
+        tCube:  { value: cubeTexture },
+        uColor: { value: new THREE.Vector3(0.1, 0.1, 0.1) }
+      },
+      vertexShader: [
+        'varying vec3 vWorldPos;',
+        'void main() {',
+        '  vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform samplerCube tCube;',
+        'uniform vec3 uColor;',
+        'varying vec3 vWorldPos;',
+        'void main() {',
+        '  gl_FragColor = textureCube(tCube, normalize(vWorldPos)) * vec4(uColor, 1.0);',
+        '}'
+      ].join('\n'),
+      side: THREE.BackSide,
+      depthWrite: false
     });
-    var sphere = new THREE.Mesh(geo, mat);
-    sphere.renderOrder = -1;           // draw before particles, writes depth first
-    sphere.rotation.x = Math.PI / 2;  // SphereGeometry Y-up → Z-up (celestial north = +Z)
-    sphere.rotation.y = Math.PI;      // align RA=0° with +X axis (Rx(π/2)·Ry(π) = DESI frame)
-    scene.add(sphere);
-    return sphere;
+
+    var geo  = new THREE.IcosahedronGeometry(radius, 10);
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = -1;
+    // No rotation needed: cube faces are generated in ICRS Z-up scene coordinates,
+    // and the lookup uses world-space position directly as the direction vector.
+    scene.add(mesh);
+    return mesh;
   }
 
   function destroy() {
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
       cmbSphere.geometry.dispose();
-      if (cmbSphere.material.map) cmbSphere.material.map.dispose();
+      if (cmbSphere.material.uniforms && cmbSphere.material.uniforms.tCube)
+        cmbSphere.material.uniforms.tCube.value.dispose();
       cmbSphere.material.dispose();
       cmbSphere = null;
     }
