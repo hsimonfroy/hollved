@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
-var DEFAULT_HIDDEN = ['mw', 'cmb', 'rulers'];
+var DEFAULT_HIDDEN = ['cmb', 'rulers'];
 
 export default function TracerSelector() {
   var [tracers, setTracers] = useState([]);
@@ -15,7 +15,7 @@ export default function TracerSelector() {
   useEffect(function() {
     function handleTracerRanges(ranges) {
       var configVisible = appConfig.getVisibleTracers();
-      var mapped = ranges.map(function(r) {
+      var mapped = ranges.filter(function(r) { return r.id !== 'mw'; }).map(function(r) {
         return {
           id: r.id,
           name: r.name,

@@ -16,14 +16,26 @@ import appEvents from './appEvents.js';
 export default loadGraph;
 
 async function loadGraph(name, progress) {
-  var manifest = await request(
-    config.dataUrl + name + '/manifest.json?nocache=' + (+new Date()),
-    { responseType: 'json' }
-  );
+  var [manifest] = await Promise.all([
+    // request(config.dataUrl + name + '/manifest.json?nocache=' + (+new Date()), { responseType: 'json' }),
+    request(config.dataUrl + name + '/manifest.json', { responseType: 'json' }),
+    fetchRulers()
+  ]);
   var tracers = await Promise.all(manifest.all.map(function(tracerId) {
     return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
   }));
   mergeTracers(tracers);
+}
+
+async function fetchRulers() {
+  try {
+    // var data = await request(config.dataUrl + 'rulers.json?nocache=' + (+new Date()), { responseType: 'json' });
+    var data = await request(config.dataUrl + 'aux/rulers.json', { responseType: 'json' });
+    appEvents.rulersReady.fire(data);
+  } catch (_) {
+    // rulers.json not found or network error — degrade gracefully (no ruler rings)
+    appEvents.rulersReady.fire({ ring: [], sphere: [], hud: null });
+  }
 }
 
 async function loadTracerData(endpoint, tracerId, graphName, progress) {

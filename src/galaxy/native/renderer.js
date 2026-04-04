@@ -19,7 +19,6 @@ import eventify from 'ngraph.events';
 import appEvents from '../service/appEvents.js';
 import appConfig from './appConfig.js';
 import config from '../../config.js';
-import sceneStore from '../store/scene.js';
 import createBaseControl     from './baseControl.js';
 import createSpaceshipControl from './spaceshipControl.js';
 import createSatelliteControl from './satelliteControl.js';
@@ -28,17 +27,6 @@ import { Text } from 'troika-three-text';
 
 export default sceneRenderer;
 
-var RULER_DEFS = [
-  { name: 'BAO',               radius: 100  },
-  { name: 'Hubble radius',     radius: 866  },
-  { name: 'Event horizon',     radius: 3333 },
-  { name: 'Particle horizon',  radius: 9394 },
-];
-
-function getRulerDefs() {
-  return RULER_DEFS;
-}
-
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
   var cmbSphere = null;
@@ -46,10 +34,12 @@ function sceneRenderer(container) {
   var rulersEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
-  var DEFAULT_HIDDEN_TRACERS = ['mw', 'cmb', 'rulers'];
+  var DEFAULT_HIDDEN_TRACERS = ['cmb', 'rulers', 'mw'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
+  var rulerDefs = [];
+  var cmbRadius = 14000;   // fallback; overwritten by rulersReady before setPositions
 
   // Tracer state
   var tracerRanges = null;   // [{ id, name, color, startNode, nodeCount }]
@@ -62,6 +52,7 @@ function sceneRenderer(container) {
   appEvents.toggleControlMode.on(toggleControlMode);
   appEvents.accelerateNavigation.on(accelarate);
   appEvents.focusScene.on(focusScene);
+  appEvents.rulersReady.on(onRulersReady);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -124,6 +115,11 @@ function sceneRenderer(container) {
     setTimeout(function() {
       container.focus();
     }, 30);
+  }
+
+  function onRulersReady(data) {
+    rulerDefs = (data && Array.isArray(data.ring)) ? data.ring : [];
+    cmbRadius = (data && data.sphere && data.sphere[0]) ? data.sphere[0].radius : 14000;
   }
 
   function setPositions(_positions) {
@@ -189,7 +185,7 @@ function sceneRenderer(container) {
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
-      cmbSphere = createCMBSphere(renderer.scene());
+      cmbSphere = createCMBSphere(renderer.scene(), cmbRadius);
       cmbSphere.visible = cmbVisible;
 
       rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
@@ -209,12 +205,17 @@ function sceneRenderer(container) {
     if (!renderer) return;
     tracerRanges = ranges;
 
-    // Initialize visibility from URL config (null = use defaults: hide mw and cmb)
+    // Initialize visibility from URL config (null = use defaults)
+    // 'mw' is tied to rulers, not independently configurable
     var configVisible = appConfig.getVisibleTracers();
     ranges.forEach(function(tracer) {
-      tracerVisibility[tracer.id] = configVisible
-        ? configVisible.indexOf(tracer.id) >= 0
-        : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
+      if (tracer.id === 'mw') {
+        tracerVisibility['mw'] = rulersEnabled;
+      } else {
+        tracerVisibility[tracer.id] = configVisible
+          ? configVisible.indexOf(tracer.id) >= 0
+          : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
+      }
     });
 
     var view = renderer.getParticleView();
@@ -245,6 +246,7 @@ function sceneRenderer(container) {
     if (tracerId === 'rulers') {
       rulersEnabled = visible;
       updateRulersVisibility();
+      handleSetTracerVisibility('mw', visible);
       return;
     }
     if (tracerId === 'cmb') {
@@ -282,8 +284,13 @@ function sceneRenderer(container) {
   function handleTracersChangedFromURL() {
     if (!tracerRanges || !renderer) return;
     var configVisible = appConfig.getVisibleTracers();
+    rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
     tracerRanges.forEach(function(tracer) {
-      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
+      if (tracer.id === 'mw') {
+        tracerVisibility['mw'] = rulersEnabled;
+      } else {
+        tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
+      }
     });
     var view = renderer.getParticleView();
     var colors = view.colors();
@@ -297,7 +304,6 @@ function sceneRenderer(container) {
       cmbSphere.visible = cmbVisible;
     }
 
-    rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
     updateRulersVisibility();
 
     renderer.markDirty();
@@ -409,9 +415,9 @@ function sceneRenderer(container) {
   }
 
   function createRulers(scene, ls) {
-    var objs = getRulerDefs().map(function(def) {
+    var objs = (rulerDefs || []).map(function(def) {
       var distStr = def.radius < 1000
-        ? def.radius + ' Mpc'
+        ? def.radius.toFixed(0) + ' Mpc'
         : (def.radius / 1000).toFixed(1) + ' Gpc';
       var ring  = createRulerRing(def.radius);
       var label = makeRulerLabel(def.name + ' \u00b7 ' + distStr, def.radius);
@@ -430,10 +436,10 @@ function sceneRenderer(container) {
     if (renderer) renderer.markDirty();
   }
 
-  function createCMBSphere(scene) {
-    var geo = new THREE.SphereGeometry(9390, 128, 64);
+  function createCMBSphere(scene, radius) {
+    var geo = new THREE.SphereGeometry(radius, 128, 64);
     var texture = new THREE.TextureLoader().load(
-      config.dataUrl + sceneStore.getGraphName() + '/cmb/planck_100ghz.jpg'
+      config.dataUrl + 'aux/cmb/planck_100ghz.jpg'
     );
     var mat = new THREE.MeshBasicMaterial({
       map: texture,
@@ -478,6 +484,7 @@ function sceneRenderer(container) {
     appEvents.toggleControlMode.off(toggleControlMode);
     appEvents.accelerateNavigation.off(accelarate);
     appEvents.focusScene.off(focusScene);
+    appEvents.rulersReady.off(onRulersReady);
     renderer = null;
 
     clearInterval(queryUpdateId);

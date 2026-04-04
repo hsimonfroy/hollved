@@ -63,5 +63,12 @@ export default eventMirror([
    * Fired to toggle visibility of a single tracer.
    * Arguments: (tracerId: string, visible: boolean)
    */
-  'setTracerVisibility'
+  'setTracerVisibility',
+
+  /**
+   * Fired when rulers.json has been fetched from the data server.
+   * Carries { rulers: [{name, radius}, ...], hud: {chi_Mpc, z, lookback_Myr} }
+   * rulers is an empty array on fetch failure.
+   */
+  'rulersReady'
 ], appEvents);
