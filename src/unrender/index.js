@@ -27,7 +27,9 @@ function unrender(container, options) {
     getContainer: getContainer,
     markDirty: markDirty,
     setExposure: setExposure,
-    setPower: setPower
+    setPower: setPower,
+    getExposure: getExposure,
+    getPower: getPower
   };
 
   options = combineOptions(options);
@@ -240,8 +242,8 @@ function unrender(container, options) {
       new THREE.ShaderMaterial({
         uniforms: {
           tDiffuse: { value: hdrTarget.texture },
-          exposure: { value: 10.0 },
-          power:    { value: 0.5 }
+          exposure: { value: 40.0 },
+          power:    { value: 0.4 }
         //   exposure: { type: 'f', value: 2.0 },
         //   power:    { type: 'f', value: 1.0 }
         },
@@ -287,6 +289,14 @@ function unrender(container, options) {
   function setPower(v) {
     tmMesh.material.uniforms.power.value = v;
     markDirty();
+  }
+
+  function getExposure() {
+    return tmMesh.material.uniforms.exposure.value;
+  }
+
+  function getPower() {
+    return tmMesh.material.uniforms.power.value;
   }
 
 }

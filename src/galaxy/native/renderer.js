@@ -136,6 +136,18 @@ function sceneRenderer(container) {
     if (!renderer) {
       renderer = unrender(container);
       labelScene = renderer.postScene();
+
+      // Intercept setExposure/setPower so CMB sphere stays compensated
+      var _setExposure = renderer.setExposure;
+      renderer.setExposure = function(v) {
+        _setExposure(v);
+        if (cmbSphere) cmbSphere.material.uniforms.uExposure.value = v;
+      };
+      var _setPower = renderer.setPower;
+      renderer.setPower = function(v) {
+        _setPower(v);
+        if (cmbSphere) cmbSphere.material.uniforms.uPower.value = v;
+      };
       var camera = renderer.camera();
       camera.updateProjectionMatrix();
       moveCameraInternal();
@@ -186,7 +198,7 @@ function sceneRenderer(container) {
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
-      cmbSphere = createCMBSphere(renderer.scene(), cmbRadius);
+      cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
       rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
@@ -437,7 +449,7 @@ function sceneRenderer(container) {
     if (renderer) renderer.markDirty();
   }
 
-  function createCMBSphere(scene, radius) {
+  function createCMBSphere(scene, radius, exposure, power) {
     var base = config.dataUrl + 'aux/cmb/planck_100ghz_';
     var cubeTexture = new THREE.CubeTextureLoader().load([
       base + 'px.jpg', base + 'nx.jpg',
@@ -448,8 +460,10 @@ function sceneRenderer(container) {
 
     var mat = new THREE.ShaderMaterial({
       uniforms: {
-        tCube:  { value: cubeTexture },
-        uColor: { value: new THREE.Vector3(0.1, 0.1, 0.1) }
+        tCube:    { value: cubeTexture },
+        uColor:   { value: new THREE.Vector3(0.2, 0.2, 0.2) },
+        uExposure: { value: exposure },
+        uPower:   { value: power }
       },
       vertexShader: [
         'varying vec3 vWorldPos;',
@@ -461,9 +475,20 @@ function sceneRenderer(container) {
       fragmentShader: [
         'uniform samplerCube tCube;',
         'uniform vec3 uColor;',
+        'uniform float uExposure;',
+        'uniform float uPower;',
         'varying vec3 vWorldPos;',
         'void main() {',
-        '  gl_FragColor = textureCube(tCube, normalize(vWorldPos)) * vec4(uColor, 1.0);',
+        // Desired LDR output after tone-mapping
+        '  vec3 target = textureCube(tCube, normalize(vWorldPos)).rgb * uColor;',
+        '  float Lout = dot(target, vec3(0.2126, 0.7152, 0.0722));',
+        // Inverse Generalized Reinhard: find HDR luminance Lin such that tone_map(Lin) = Lout
+        // Lin = Lout / pow(1 - pow(Lout, p), 1/p)
+        '  float Lout_p = pow(clamp(Lout, 0.0, 0.9999), uPower);',
+        '  float Lin = Lout / pow(1.0 - Lout_p, 1.0 / uPower);',
+        // Pre-divide by exposure so the tone-mapper multiplies back to Lin
+        '  float scale = Lin / max(Lout * uExposure, 0.0001);',
+        '  gl_FragColor = vec4(target * scale, 1.0);',
         '}'
       ].join('\n'),
       side: THREE.BackSide,
