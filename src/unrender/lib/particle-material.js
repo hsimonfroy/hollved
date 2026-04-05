@@ -9,7 +9,7 @@ function createParticleMaterial() {
   var uniforms = {
     color:   { value: new THREE.Color(0xffffff) },
     pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
-    uSize:   { value: 1.0 }
+    uSize:   { value: 0.1 }
   };
 
   var material = new THREE.ShaderMaterial({

@@ -54,7 +54,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   // Pan sensitivity factor (world units per pixel, relative to radius)
   var PAN_SPEED = 0.001;
   // Zoom constants
-  var MIN_RADIUS    = 1;          // minimum orbit radius
+  var MIN_RADIUS    = 0.03;          // minimum orbit radius
   var SWITCH_RADIUS = 100;        // orbit radius when entering satellite from spaceship
   var SWITCH_ANGLE  = Math.PI / 16; // elevation above equatorial plane on satellite entry (rad)
   var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel

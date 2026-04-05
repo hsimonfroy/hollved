@@ -29,7 +29,7 @@ module.exports = [
 '  vPointSize = uSize * ( focalLength / length( mvPosition.xyz ) );',
 '',
 '  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
-'  if (vPointSize < 0.01) {',
+'  if (vPointSize < 0.001) {',
 '    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
 '    gl_PointSize = 0.0;',
 '    return;',

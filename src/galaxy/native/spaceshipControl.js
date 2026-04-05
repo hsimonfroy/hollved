@@ -36,7 +36,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
   var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center  → yaw left
   var mousePitchDown = 0;  // -1..1: positive = cursor below center    → pitch down
 
-  var MOVE_SPEED = 100; // translate speed
+  var MOVE_SPEED = 10; // translate speed
   var ROT_SPEED = 0.1; // Q/E upAxis tilt speed (rad/s)
 
   var tmpQ = new THREE.Quaternion();
