@@ -4,6 +4,7 @@ import NoWebGL from './noWebgl.jsx';
 import Help from './help.jsx';
 import About from './about.jsx';
 import TracerSelector from './tracerSelector.jsx';
+import CameraHUD from './cameraHUD.jsx';
 import createNativeRenderer from './native/renderer.js';
 
 var webglEnabled = require('webgl-enabled')();
@@ -26,6 +27,7 @@ export default function Scene() {
   return (
     <div>
       <div ref={containerRef} className='graph-full-size' />
+      <CameraHUD />
       <TracerSelector />
       <ControlModeButton />
       <Help />

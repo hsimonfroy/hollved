@@ -78,6 +78,7 @@ function sceneRenderer(container) {
     var pos  = (currentMode === 'satellite' && satelliteControl) ? satelliteControl.getPivot() : camera.position;
     var zoom = satelliteControl ? satelliteControl.getRadius() : appConfig.getZoom();
     appConfig.setCameraConfig(pos, camera.quaternion, zoom);
+    appEvents.cameraHUDUpdate.fire({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
   }
 
   function toggleControlMode() {

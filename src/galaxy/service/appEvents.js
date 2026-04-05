@@ -67,8 +67,13 @@ export default eventMirror([
 
   /**
    * Fired when rulers.json has been fetched from the data server.
-   * Carries { rulers: [{name, radius}, ...], hud: {chi_Mpc, z, lookback_Myr} }
-   * rulers is an empty array on fetch failure.
+   * Carries { ring: [{name, radius}, ...], sphere: [{radius}], hud: {chi_Mpc, z, lookback_Myr} }
    */
-  'rulersReady'
+  'rulersReady',
+
+  /**
+   * Fired every ~200ms with the current spaceship/pivot position.
+   * Carries { x, y, z } in Mpc.
+   */
+  'cameraHUDUpdate'
 ], appEvents);
