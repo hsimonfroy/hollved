@@ -67,7 +67,7 @@ function sceneRenderer(container) {
 
   function accelarate(isPrecise) {
     if (!spaceshipControl) return;
-    var factor = isPrecise ? 5 : 0.2;
+    var factor = isPrecise ? 10 : 0.1;
     spaceshipControl.movementSpeed *= factor;
     spaceshipControl.rollSpeed     *= factor;
   }
@@ -461,7 +461,7 @@ function sceneRenderer(container) {
     var mat = new THREE.ShaderMaterial({
       uniforms: {
         tCube:    { value: cubeTexture },
-        uColor:   { value: new THREE.Vector3(0.2, 0.2, 0.2) },
+        uColor:   { value: new THREE.Vector3(0.25, 0.25, 0.25) },
         uExposure: { value: exposure },
         uPower:   { value: power }
       },
