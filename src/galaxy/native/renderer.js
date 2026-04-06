@@ -31,10 +31,11 @@ function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
   var cmbSphere = null;
   var cmbVisible = true;
+  var mwPoints = null;
   var rulersEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
-  var DEFAULT_HIDDEN_TRACERS = ['cmb', 'rulers', 'mw'];
+  var DEFAULT_HIDDEN_TRACERS = ['cmb', 'rulers'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
@@ -201,6 +202,8 @@ function sceneRenderer(container) {
       cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
+      createMWParticles(renderer.scene());
+
       rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
       rulerObjects = createRulers(renderer.scene(), labelScene);
       updateRulersVisibility();
@@ -218,17 +221,11 @@ function sceneRenderer(container) {
     if (!renderer) return;
     tracerRanges = ranges;
 
-    // Initialize visibility from URL config (null = use defaults)
-    // 'mw' is tied to rulers, not independently configurable
     var configVisible = appConfig.getVisibleTracers();
     ranges.forEach(function(tracer) {
-      if (tracer.id === 'mw') {
-        tracerVisibility['mw'] = rulersEnabled;
-      } else {
-        tracerVisibility[tracer.id] = configVisible
-          ? configVisible.indexOf(tracer.id) >= 0
-          : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
-      }
+      tracerVisibility[tracer.id] = configVisible
+        ? configVisible.indexOf(tracer.id) >= 0
+        : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });
 
     var view = renderer.getParticleView();
@@ -259,7 +256,6 @@ function sceneRenderer(container) {
     if (tracerId === 'rulers') {
       rulersEnabled = visible;
       updateRulersVisibility();
-      handleSetTracerVisibility('mw', visible);
       return;
     }
     if (tracerId === 'cmb') {
@@ -299,11 +295,7 @@ function sceneRenderer(container) {
     var configVisible = appConfig.getVisibleTracers();
     rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
     tracerRanges.forEach(function(tracer) {
-      if (tracer.id === 'mw') {
-        tracerVisibility['mw'] = rulersEnabled;
-      } else {
-        tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
-      }
+      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });
     var view = renderer.getParticleView();
     var colors = view.colors();
@@ -449,6 +441,131 @@ function sceneRenderer(container) {
     if (renderer) renderer.markDirty();
   }
 
+  function createMWParticles(scene) {
+    var MW_RADIUS    = 0.02;   // Mpc half-extent
+    var MW_THICKNESS = 0.002; // Mpc half-thickness (max Z displacement)
+    var ALPHA_THRESH = 5;     // PNG alpha threshold (0–255)
+    var RES          = 150;    // downsample resolution
+    var N_SAMPLES    = 2;      // particles sampled per qualifying pixel
+    // var ALPHA_POWER  = 1.1;   // >1 makes low-alpha particles fade faster
+
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      if (!renderer) return;
+
+      var canvas = document.createElement('canvas');
+      canvas.width = RES; canvas.height = RES;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, RES, RES);
+      var pixels = ctx.getImageData(0, 0, RES, RES).data;
+
+      // First pass: count qualifying pixels
+      var count = 0;
+      for (var k = 0; k < RES * RES; k++) {
+        if (pixels[k * 4 + 3] >= ALPHA_THRESH) count++;
+      }
+
+      var total     = count * N_SAMPLES;
+      var positions = new Float32Array(total * 3);
+      var colors    = new Uint8Array(total * 4);
+      var pix = 0;
+
+      var SUN_U = 0.5; // Sun horizontal position in image (0=left, 1=right)
+      var SUN_V = 0.3; // Sun vertical position in image (0=top, 1=bottom)
+
+      for (var j = 0; j < RES; j++) {
+        for (var i = 0; i < RES; i++) {
+          var idx   = (j * RES + i) * 4;
+          var alpha = pixels[idx + 3];
+          var r = pixels[idx];
+          var g = pixels[idx + 1];
+          var b = pixels[idx + 2];
+          if (alpha < ALPHA_THRESH) continue;
+        
+          // Jitter sample position to break up regular grid effect.
+          var u = (i + Math.random() - 0.5) / (RES - 1);
+          var v = (j + Math.random() - 0.5) / (RES - 1); // no Y-flip: larger j (lower in image) → +Y in world
+          var x = (u - SUN_U) * 2.0 * MW_RADIUS;
+          var y = (v - SUN_V) * 2.0 * MW_RADIUS;
+
+          // Gaussian centered on image center for uniform corner fading (independent of Sun offset)
+          var du = u - 0.5, dv = v - 0.5;
+          var gauss = Math.exp(-4.0 * (du * du + dv * dv));
+          var a = Math.round((alpha / N_SAMPLES) * gauss);
+
+          var zScale = (alpha / 255) * MW_THICKNESS;
+
+          for (var si = 0; si < N_SAMPLES; si++) {
+            var z = (Math.random() * 2.0 - 1.0) * zScale;
+            positions[pix * 3]     = x;
+            positions[pix * 3 + 1] = y;
+            positions[pix * 3 + 2] = z;
+            colors[pix * 4]     = r;
+            colors[pix * 4 + 1] = g;
+            colors[pix * 4 + 2] = b;
+            colors[pix * 4 + 3] = a;
+            // colors[pix * 4 + 3] = Math.round(255 * Math.pow(a / 255, ALPHA_POWER));
+            pix++;
+          }
+        }
+      }
+
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, pix * 3), 3));
+      geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, pix * 4), 4, true));
+
+      // uSize: world-space pixel diameter × perspective scale constant (same as galaxy shader)
+      var pixelSize = 13.0 * MW_RADIUS / RES;
+      var mat = new THREE.ShaderMaterial({
+        uniforms: { uSize: { value: pixelSize * 351.0 } },
+        vertexShader: [
+          'uniform float uSize;',
+          'attribute vec4 color;',
+          'varying vec4 vColor;',
+          'varying float vPointSize;',
+          'void main() {',
+          '  vColor = color;',
+          '  vec4 mvPos = modelViewMatrix * vec4(position, 1.0);',
+          '  if (vColor.a < 0.004 || mvPos.z > 0.0) {',
+          '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
+          '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
+          '  }',
+          '  vPointSize = uSize / -mvPos.z;',
+          ' // Cull sub-pixel points',
+          '  if (vPointSize < 0.01) {',
+          '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
+          '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
+          '  }',
+          '  gl_PointSize = vPointSize;',
+          '  gl_Position  = projectionMatrix * mvPos;',
+          '}'
+        ].join('\n'),
+        fragmentShader: [
+          'varying vec4 vColor;',
+          'varying float vPointSize;',
+          'void main() {',
+          '  vec2  xy = gl_PointCoord - 0.5;',
+          '  float r2 = dot(xy, xy);',
+          '  if (r2 > 0.25) discard;',
+          '  float soft  = 1.0 - smoothstep(0.15, 0.25, r2);',
+          '  float alpha = vColor.a * min(vPointSize, 1.0) * soft;',
+          '  gl_FragColor = vec4(vColor.rgb * alpha, alpha);',
+          '}'
+        ].join('\n'),
+        blending:    THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite:  false,
+        depthTest:   false
+      });
+
+      mwPoints = new THREE.Points(geo, mat);
+      scene.add(mwPoints);
+      renderer.markDirty();
+    };
+    img.src = config.dataUrl + 'aux/mw/milky_way2.png';
+  }
+
   function createCMBSphere(scene, radius, exposure, power) {
     var base = config.dataUrl + 'aux/cmb/planck_100ghz_';
     var cubeTexture = new THREE.CubeTextureLoader().load([
@@ -505,6 +622,12 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
+    if (mwPoints) {
+      renderer.scene().remove(mwPoints);
+      mwPoints.geometry.dispose();
+      mwPoints.material.dispose();
+      mwPoints = null;
+    }
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
       cmbSphere.geometry.dispose();

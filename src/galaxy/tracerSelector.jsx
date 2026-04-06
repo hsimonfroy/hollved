@@ -15,7 +15,7 @@ export default function TracerSelector() {
   useEffect(function() {
     function handleTracerRanges(ranges) {
       var configVisible = appConfig.getVisibleTracers();
-      var mapped = ranges.filter(function(r) { return r.id !== 'mw'; }).map(function(r) {
+      var mapped = ranges.map(function(r) {
         return {
           id: r.id,
           name: r.name,
