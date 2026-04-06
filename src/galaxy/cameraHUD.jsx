@@ -5,11 +5,11 @@
  * Row 1:  RA  xxx.xx°   DEC  xx.xx°   Z  x.xxxx
  * Row 2:  DISTANCE xxx.x Mpc   AGE  x.xx Gyr ago
  *
- * Visibility is tied to the Rulers tracer toggle (same as ruler rings).
+ * Visibility is tied to the Radar tracer toggle (same as ruler rings).
  * Position arrives via appEvents.cameraHUDUpdate (every ~200ms) and always
  * reflects the actual camera/viewpoint position.
  * HUD lookup table (chi_Mpc -> z, lookback_Myr) arrives via
- * appEvents.rulersReady once at load time.
+ * appEvents.radarReady once at load time.
  */
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
@@ -22,32 +22,32 @@ export default function CameraHUD() {
 
   // Match the default-hidden logic in renderer.js
   var configVisible = appConfig.getVisibleTracers();
-  var [rulersVisible, setRulersVisible] = useState(
-    configVisible ? configVisible.indexOf('rulers') >= 0 : false
+  var [radarVisible, setRadarVisible] = useState(
+    configVisible ? configVisible.indexOf('radar') >= 0 : false
   );
   var [pos, setPos] = useState(null);
 
   useEffect(function() {
-    function onRulersReady(data) {
+    function onRadarReady(data) {
       if (data && data.hud) hudRef.current = data.hud;
     }
     function onCameraUpdate(p) {
       setPos({ x: p.x, y: p.y, z: p.z });
     }
     function onSetTracerVisibility(tracerId, visible) {
-      if (tracerId === 'rulers') setRulersVisible(visible);
+      if (tracerId === 'radar') setRadarVisible(visible);
     }
-    appEvents.rulersReady.on(onRulersReady);
+    appEvents.radarReady.on(onRadarReady);
     appEvents.cameraHUDUpdate.on(onCameraUpdate);
     appEvents.setTracerVisibility.on(onSetTracerVisibility);
     return function() {
-      appEvents.rulersReady.off(onRulersReady);
+      appEvents.radarReady.off(onRadarReady);
       appEvents.cameraHUDUpdate.off(onCameraUpdate);
       appEvents.setTracerVisibility.off(onSetTracerVisibility);
     };
   }, []);
 
-  if (!rulersVisible || !pos) return null;
+  if (!radarVisible || !pos) return null;
 
   var hud = hudRef.current;
   var x = pos.x, y = pos.y, z = pos.z;

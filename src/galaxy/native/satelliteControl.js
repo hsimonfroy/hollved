@@ -60,8 +60,8 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel
   // Keyboard-driven rates (per second)
   var MOVE_SPEED  = 100; // pivot translate speed
-  var ORBIT_SPEED = 0.1; // arrow-key orbit speed (rad/s)
-  var ROLL_SPEED  = 0.1; // Q/E upAxis tilt speed (rad/s)
+  var ORBIT_SPEED = 0.2; // arrow-key orbit speed (rad/s)
+  var ROLL_SPEED  = 0.2; // Q/E upAxis tilt speed (rad/s)
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });

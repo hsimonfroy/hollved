@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
-var DEFAULT_HIDDEN = ['cmb', 'rulers'];
+var DEFAULT_HIDDEN = ['cmb', 'radar'];
 
 export default function TracerSelector() {
   var [tracers, setTracers] = useState([]);
@@ -30,12 +30,12 @@ export default function TracerSelector() {
         color: 0x222222ff,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
-      // Append synthetic Rulers tracer — rendered as distance rings by renderer.js
+      // Append synthetic Radar tracer — rendered as distance rings by renderer.js
       mapped.push({
-        id: 'rulers',
-        name: 'Rulers',
+        id: 'radar',
+        name: 'Radar',
         color: 0xbbbbbbff,
-        visible: configVisible ? configVisible.indexOf('rulers') >= 0 : false
+        visible: configVisible ? configVisible.indexOf('radar') >= 0 : false
       });
       setTracers(mapped);
     }

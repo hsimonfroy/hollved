@@ -32,15 +32,15 @@ function sceneRenderer(container) {
   var cmbSphere = null;
   var cmbVisible = true;
   var mwPoints = null;
-  var rulersEnabled = false;
+  var radarEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
-  var DEFAULT_HIDDEN_TRACERS = ['cmb', 'rulers'];
+  var DEFAULT_HIDDEN_TRACERS = ['cmb', 'radar'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
-  var cmbRadius = 14000;   // fallback; overwritten by rulersReady before setPositions
+  var cmbRadius = 14000;   // fallback; overwritten by radarReady before setPositions
 
   // Tracer state
   var tracerRanges = null;   // [{ id, name, color, startNode, nodeCount }]
@@ -53,7 +53,7 @@ function sceneRenderer(container) {
   appEvents.toggleControlMode.on(toggleControlMode);
   appEvents.accelerateNavigation.on(accelarate);
   appEvents.focusScene.on(focusScene);
-  appEvents.rulersReady.on(onRulersReady);
+  appEvents.radarReady.on(onRadarReady);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -99,12 +99,12 @@ function sceneRenderer(container) {
       currentMode = 'spaceship';
       satelliteControl.setEnabled(false);
       spaceshipControl.setEnabled(true);
-      updateRulersVisibility();
+      updateRadarVisibility();
     } else {
       currentMode = 'satellite';
       spaceshipControl.setEnabled(false);
       satelliteControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
-      updateRulersVisibility();
+      updateRadarVisibility();
     }
 
     renderer.markDirty();
@@ -119,7 +119,7 @@ function sceneRenderer(container) {
     }, 30);
   }
 
-  function onRulersReady(data) {
+  function onRadarReady(data) {
     rulerDefs = (data && Array.isArray(data.ring)) ? data.ring : [];
     cmbRadius = (data && data.sphere && data.sphere[0]) ? data.sphere[0].radius : 14000;
   }
@@ -166,7 +166,7 @@ function sceneRenderer(container) {
         spaceshipControl.update(delta);
         satelliteControl.update(delta);
         if (baseControl.isActive()) renderer.markDirty();
-        if (rulersEnabled && currentMode === 'satellite' && rulerObjects.length) {
+        if (radarEnabled && currentMode === 'satellite' && rulerObjects.length) {
           var upAxis = satelliteControl.getUpAxis();
           var cam    = renderer.camera();
           // Project camera position onto the equatorial plane to find the label direction
@@ -204,9 +204,9 @@ function sceneRenderer(container) {
 
       createMWParticles(renderer.scene());
 
-      rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
-      rulerObjects = createRulers(renderer.scene(), labelScene);
-      updateRulersVisibility();
+      radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
+      rulerObjects = createRadar(renderer.scene(), labelScene);
+      updateRadarVisibility();
 
       mobileControl = createMobileControl(renderer, satelliteControl, spaceshipControl);
       mobileControl.setMode(currentMode);
@@ -253,9 +253,9 @@ function sceneRenderer(container) {
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
-    if (tracerId === 'rulers') {
-      rulersEnabled = visible;
-      updateRulersVisibility();
+    if (tracerId === 'radar') {
+      radarEnabled = visible;
+      updateRadarVisibility();
       return;
     }
     if (tracerId === 'cmb') {
@@ -293,7 +293,7 @@ function sceneRenderer(container) {
   function handleTracersChangedFromURL() {
     if (!tracerRanges || !renderer) return;
     var configVisible = appConfig.getVisibleTracers();
-    rulersEnabled = configVisible ? configVisible.indexOf('rulers') >= 0 : false;
+    radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
     tracerRanges.forEach(function(tracer) {
       tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });
@@ -309,7 +309,7 @@ function sceneRenderer(container) {
       cmbSphere.visible = cmbVisible;
     }
 
-    updateRulersVisibility();
+    updateRadarVisibility();
 
     renderer.markDirty();
   }
@@ -341,13 +341,13 @@ function sceneRenderer(container) {
         spaceshipControl.setEnabled(false);
         satelliteControl.restoreFromURL(pos, zoom, lookAt);
         satelliteControl.setEnabled(true);
-        updateRulersVisibility();
+        updateRadarVisibility();
       } else {
         satelliteControl.setEnabled(false);
         camera.position.set(pos.x, pos.y, pos.z);
         camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
         spaceshipControl.setEnabled(true);
-        updateRulersVisibility();
+        updateRadarVisibility();
       }
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
@@ -362,7 +362,7 @@ function sceneRenderer(container) {
   }
 
   // ---------------------------------------------------------------------------
-  // Cosmological distance rulers
+  // Cosmological distance radar
   // ---------------------------------------------------------------------------
 
   function createRulerRing(radius) {
@@ -419,7 +419,7 @@ function sceneRenderer(container) {
     return label;
   }
 
-  function createRulers(scene, ls) {
+  function createRadar(scene, ls) {
     var objs = (rulerDefs || []).map(function(def) {
       var distStr = def.radius < 1000
         ? def.radius.toFixed(0) + ' Mpc'
@@ -432,8 +432,8 @@ function sceneRenderer(container) {
     return objs;
   }
 
-  function updateRulersVisibility() {
-    var show = rulersEnabled && currentMode === 'satellite';
+  function updateRadarVisibility() {
+    var show = radarEnabled && currentMode === 'satellite';
     rulerObjects.forEach(function(r) {
       r.ring.visible  = show;
       r.label.visible = show;
@@ -472,7 +472,7 @@ function sceneRenderer(container) {
       var pix = 0;
 
       var SUN_U = 0.5; // Sun horizontal position in image (0=left, 1=right)
-      var SUN_V = 0.3; // Sun vertical position in image (0=top, 1=bottom)
+      var SUN_V = 0.7; // Sun vertical position in image (0=top, 1=bottom)
 
       for (var j = 0; j < RES; j++) {
         for (var i = 0; i < RES; i++) {
@@ -491,7 +491,7 @@ function sceneRenderer(container) {
 
           // Gaussian centered on image center for uniform corner fading (independent of Sun offset)
           var du = u - 0.5, dv = v - 0.5;
-          var gauss = Math.exp(-4.0 * (du * du + dv * dv));
+          var gauss = Math.exp(-8.0 * (du * du + dv * dv));
           var a = Math.round((alpha / N_SAMPLES) * gauss);
 
           var zScale = (alpha / 255) * MW_THICKNESS;
@@ -560,6 +560,18 @@ function sceneRenderer(container) {
       });
 
       mwPoints = new THREE.Points(geo, mat);
+      // Rotate MW disk from galactic-disk local frame to ICRS equatorial world coords.
+      // Local frame: +X = image right, +Y = image down (away from GC), +Z = disk normal (toward NGP).
+      // Galactic X (toward GC, l=0°,b=0°) = local -Y → ICRS (-0.0549, -0.8734, -0.4838)
+      // Galactic Y (l=90°, b=0°)          = local +X → ICRS (+0.4941, -0.4448, +0.7470)
+      // Galactic Z (NGP, b=90°)            = local +Z → ICRS (-0.8677, -0.1981, +0.4560)
+      // Matrix = R_gal2icrs × R_gal2local^T  (each row = ICRS image of the corresponding local axis)
+      mwPoints.setRotationFromMatrix(new THREE.Matrix4().set(
+         0.4941,  0.0549, -0.8677, 0,
+        -0.4448,  0.8734, -0.1981, 0,
+         0.7470,  0.4838,  0.4560, 0,
+         0,       0,       0,      1
+      ));
       scene.add(mwPoints);
       renderer.markDirty();
     };
@@ -658,7 +670,7 @@ function sceneRenderer(container) {
     appEvents.toggleControlMode.off(toggleControlMode);
     appEvents.accelerateNavigation.off(accelarate);
     appEvents.focusScene.off(focusScene);
-    appEvents.rulersReady.off(onRulersReady);
+    appEvents.radarReady.off(onRadarReady);
     renderer = null;
 
     clearInterval(queryUpdateId);

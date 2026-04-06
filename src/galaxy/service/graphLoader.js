@@ -19,7 +19,7 @@ async function loadGraph(name, progress) {
   var [manifest] = await Promise.all([
     // request(config.dataUrl + name + '/manifest.json?nocache=' + (+new Date()), { responseType: 'json' }),
     request(config.dataUrl + name + '/manifest.json', { responseType: 'json' }),
-    fetchRulers()
+    fetchRadar()
   ]);
   var tracers = await Promise.all(manifest.all.map(function(tracerId) {
     return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
@@ -27,14 +27,14 @@ async function loadGraph(name, progress) {
   mergeTracers(tracers);
 }
 
-async function fetchRulers() {
+async function fetchRadar() {
   try {
-    // var data = await request(config.dataUrl + 'rulers.json?nocache=' + (+new Date()), { responseType: 'json' });
-    var data = await request(config.dataUrl + 'aux/rulers.json', { responseType: 'json' });
-    appEvents.rulersReady.fire(data);
+    // var data = await request(config.dataUrl + 'radar.json?nocache=' + (+new Date()), { responseType: 'json' });
+    var data = await request(config.dataUrl + 'aux/radar.json', { responseType: 'json' });
+    appEvents.radarReady.fire(data);
   } catch (_) {
-    // rulers.json not found or network error — degrade gracefully (no ruler rings)
-    appEvents.rulersReady.fire({ ring: [], sphere: [], hud: null });
+    // radar.json not found or network error — degrade gracefully (no ruler rings)
+    appEvents.radarReady.fire({ ring: [], sphere: [], hud: null });
   }
 }
 

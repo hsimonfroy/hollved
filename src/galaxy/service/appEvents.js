@@ -66,10 +66,10 @@ export default eventMirror([
   'setTracerVisibility',
 
   /**
-   * Fired when rulers.json has been fetched from the data server.
+   * Fired when radar.json has been fetched from the data server.
    * Carries { ring: [{name, radius}, ...], sphere: [{radius}], hud: {chi_Mpc, z, lookback_Myr} }
    */
-  'rulersReady',
+  'radarReady',
 
   /**
    * Fired every ~200ms with the current spaceship/pivot position.
