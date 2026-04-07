@@ -575,7 +575,7 @@ function sceneRenderer(container) {
       scene.add(mwPoints);
       renderer.markDirty();
     };
-    img.src = config.dataUrl + 'aux/mw/milky_way2.png';
+    img.src = config.dataUrl + 'aux/mw/milky_way.png';
   }
 
   function createCMBSphere(scene, radius, exposure, power) {

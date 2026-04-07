@@ -156,8 +156,8 @@ export default function Help() {
 
       {isMobile && mode === 'satellite' && <>
         <HelpRow keys={['1-finger drag']} label='Orbit' />
-        <HelpRow keys={['Pinch']} label='Zoom' />
-        <HelpRow keys={['2-finger drag']} label='Pan' />
+        <HelpRow keys={['2-finger pinch']} label='Zoom' />
+        <HelpRow keys={['3-finger drag']} label='Pan' />
         {/* <HelpRow keys={['Tap 🛰️']} label='Spaceship mode' /> */}
       </>}
 

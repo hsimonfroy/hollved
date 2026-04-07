@@ -192,8 +192,8 @@ function createMobileControl(renderer, satelliteControl, spaceshipControl) {
   // ── Satellite touch ───────────────────────────────────────────────────────
   //
   // 1 finger  → orbit (rotate theta/phi)
-  // 2 fingers → pinch-to-zoom (scale radius)
-  // 3 fingers → pan pivot
+  // 2 fingers → pinch-to-zoom only (scale radius)
+  // 3 fingers → pan pivot (centroid delta)
 
   function onSatelliteTouchStart(e) {
     for (var i = 0; i < e.changedTouches.length; ++i) {
@@ -229,20 +229,24 @@ function createMobileControl(renderer, satelliteControl, spaceshipControl) {
         satelliteControl.onTouchRotate(dx, dy);
       }
     } else if (n === 2) {
-      // Two fingers: pinch zoom + centroid pan simultaneously
+      // Two fingers: pinch zoom only
       var id1 = ids[0], id2 = ids[1];
       if (prev[id1] && prev[id2] && satelliteTouches[id1] && satelliteTouches[id2]) {
-        // Zoom: distance ratio
         var prevDist = dist(prev[id1], prev[id2]);
         var currDist = dist(satelliteTouches[id1], satelliteTouches[id2]);
         if (prevDist > 0) {
           satelliteControl.onTouchZoom(currDist / prevDist);
         }
-        // Pan: centroid delta
-        var prevCx = (prev[id1].x + prev[id2].x) / 2;
-        var prevCy = (prev[id1].y + prev[id2].y) / 2;
-        var currCx = (satelliteTouches[id1].x + satelliteTouches[id2].x) / 2;
-        var currCy = (satelliteTouches[id1].y + satelliteTouches[id2].y) / 2;
+      }
+    } else if (n === 3) {
+      // Three fingers: pan pivot (centroid delta)
+      var id1 = ids[0], id2 = ids[1], id3 = ids[2];
+      if (prev[id1] && prev[id2] && prev[id3] &&
+          satelliteTouches[id1] && satelliteTouches[id2] && satelliteTouches[id3]) {
+        var prevCx = (prev[id1].x + prev[id2].x + prev[id3].x) / 3;
+        var prevCy = (prev[id1].y + prev[id2].y + prev[id3].y) / 3;
+        var currCx = (satelliteTouches[id1].x + satelliteTouches[id2].x + satelliteTouches[id3].x) / 3;
+        var currCy = (satelliteTouches[id1].y + satelliteTouches[id2].y + satelliteTouches[id3].y) / 3;
         satelliteControl.onTouchPan(currCx - prevCx, currCy - prevCy);
       }
     }

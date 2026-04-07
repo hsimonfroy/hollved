@@ -410,6 +410,58 @@ a.media {
   }
 }
 
+// ── Tracer selector (top-left glass panel) ───────────────────────────────────
+
+.tracer-selector {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 15;
+  background: rgba(5, 8, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  user-select: none;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tracer-selector-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.5;
+}
+
+.tracer-selector-sep {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 3px 0;
+}
+
+.tracer-selector-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+  gap: 6px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .tracer-selector {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+}
+
 // ── Top-right icon buttons (control mode + info) ────────────────────────────
 
 // Shared button style

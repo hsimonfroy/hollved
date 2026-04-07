@@ -88,7 +88,7 @@ function appConfig() {
   }
 
   function setVisibleTracers(tracerIds) {
-    hashConfig.visibleTracers = tracerIds && tracerIds.length > 0 ? tracerIds : null;
+    hashConfig.visibleTracers = tracerIds !== undefined ? tracerIds : null;
     updateHash();
   }
 
@@ -116,7 +116,7 @@ function appConfig() {
       '&rot='  + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4) +
       '&zoom=' + Math.round(hashConfig.zoom);
 
-    if (hashConfig.visibleTracers) {
+    if (hashConfig.visibleTracers !== null) {
       hash += '&trace=' + hashConfig.visibleTracers.join(',');
     }
 
@@ -158,9 +158,10 @@ function appConfig() {
     var query = qs.parse(hash.split('?')[1]);
 
     var visibleTracers = defaultConfig.visibleTracers;
-    if (query.trace) {
-      var parsed = query.trace.split(',').filter(function(s) { return s.length > 0; });
-      visibleTracers = parsed.length > 0 ? parsed : null;
+    if ('trace' in query) {
+      visibleTracers = query.trace
+        ? query.trace.split(',').filter(function(s) { return s.length > 0; })
+        : [];
     }
 
     return {

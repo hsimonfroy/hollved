@@ -54,6 +54,7 @@ async function loadTracerData(endpoint, tracerId, graphName, progress) {
     id:        meta.id    || tracerId,
     name:      meta.name  || tracerId,
     color:     parseColor(meta.color || '0xffffffff'),
+    count:     meta.count || null,
     positions: positions
   };
 }
@@ -78,6 +79,7 @@ function mergeTracers(tracerDataArray) {
       id:        tracer.id,
       name:      tracer.name,
       color:     tracer.color,
+      count:     tracer.count,
       startNode: nodeOffset,
       nodeCount: nodeCount
     });

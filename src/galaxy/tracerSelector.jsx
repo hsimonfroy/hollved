@@ -2,12 +2,22 @@
  * TracerSelector renders a small overlay panel listing all tracers with
  * visibility toggles. It only appears when a multi-tracer graph is loaded
  * (i.e. when appEvents.tracerRangesReady has fired).
+ *
+ * Layout:
+ *   GALAXIES  1,234,567          ← sum of visible non-synthetic tracer counts
+ *   ─────────────────────
+ *   ☑ ■ LRG                     ← tracer rows
+ *   ☑ ■ ELG
+ *   ...
+ *   ☐ ■ CMB
+ *   ☐ ■ Radar
  */
 import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
 var DEFAULT_HIDDEN = ['cmb', 'radar'];
+var SYNTHETIC_IDS  = ['cmb', 'radar'];
 
 export default function TracerSelector() {
   var [tracers, setTracers] = useState([]);
@@ -17,24 +27,21 @@ export default function TracerSelector() {
       var configVisible = appConfig.getVisibleTracers();
       var mapped = ranges.map(function(r) {
         return {
-          id: r.id,
-          name: r.name,
-          color: r.color,
+          id:      r.id,
+          name:    r.name,
+          color:   r.color,
+          count:   r.count || null,
           visible: configVisible ? configVisible.indexOf(r.id) >= 0 : DEFAULT_HIDDEN.indexOf(r.id) < 0
         };
       });
-      // Append synthetic CMB tracer — rendered as a sphere by renderer.js, not as particles
+      // Append synthetic CMB tracer
       mapped.push({
-        id: 'cmb',
-        name: 'CMB',
-        color: 0x222222ff,
+        id: 'cmb', name: 'CMB', color: 0x222222ff, count: null,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
-      // Append synthetic Radar tracer — rendered as distance rings by renderer.js
+      // Append synthetic Radar tracer
       mapped.push({
-        id: 'radar',
-        name: 'Radar',
-        color: 0xbbbbbbff,
+        id: 'radar', name: 'Radar', color: 0xbbbbbbff, count: null,
         visible: configVisible ? configVisible.indexOf('radar') >= 0 : false
       });
       setTracers(mapped);
@@ -50,7 +57,7 @@ export default function TracerSelector() {
       setTracers(function(prev) {
         return prev.map(function(t) {
           return {
-            id: t.id, name: t.name, color: t.color,
+            id: t.id, name: t.name, color: t.color, count: t.count,
             visible: configVisible ? configVisible.indexOf(t.id) >= 0 : DEFAULT_HIDDEN.indexOf(t.id) < 0
           };
         });
@@ -62,7 +69,7 @@ export default function TracerSelector() {
 
   function toggleTracer(tracerId, visible) {
     var newTracers = tracers.map(function(t) {
-      return t.id === tracerId ? {id: t.id, name: t.name, color: t.color, visible: visible} : t;
+      return t.id === tracerId ? {id: t.id, name: t.name, color: t.color, count: t.count, visible: visible} : t;
     });
     setTracers(newTracers);
 
@@ -77,67 +84,62 @@ export default function TracerSelector() {
 
   if (tracers.length === 0) return null;
 
-  var rows = tracers.map(function(tracer) {
+  // Sum counts for visible non-synthetic tracers
+  var galaxyCount = null;
+  tracers.forEach(function(t) {
+    if (SYNTHETIC_IDS.indexOf(t.id) >= 0) return;
+    if (!t.visible) return;
+    if (t.count === null) return;
+    if (galaxyCount === null) galaxyCount = 0;
+    galaxyCount += t.count;
+  });
+
+  function makeRow(tracer) {
     var swatchStyle = {
       display: 'inline-block',
-      width: '14px',
-      height: '14px',
+      width: '10px',
+      height: '10px',
       backgroundColor: colorToCSS(tracer.color),
       border: '1px solid rgba(255,255,255,0.3)',
-      marginRight: '6px',
-      verticalAlign: 'middle',
       flexShrink: 0
     };
-
     return (
-      <label key={tracer.id} style={rowStyle}>
+      <label key={tracer.id} className="tracer-selector-item">
         <input
           type='checkbox'
           checked={tracer.visible}
           onChange={function(e) { toggleTracer(tracer.id, e.target.checked); }}
-          style={{marginRight: '6px', verticalAlign: 'middle'}}
         />
         <span style={swatchStyle}></span>
-        <span style={{verticalAlign: 'middle'}}>{tracer.name}</span>
+        <span>{tracer.name}</span>
       </label>
     );
-  });
+  }
+
+  var surveyRows    = tracers.filter(function(t) { return SYNTHETIC_IDS.indexOf(t.id) < 0; }).map(makeRow);
+  var syntheticRows = tracers.filter(function(t) { return SYNTHETIC_IDS.indexOf(t.id) >= 0; }).map(makeRow);
 
   return (
-    <div style={panelStyle}>
-      {rows}
+    <div className="tracer-selector">
+      {/* <div className="tracer-selector-row" style={{flexDirection:'column', gap:0}}>
+      </div> */}
+        <span className="camera-hud-value">{formatCount(galaxyCount)}</span>
+        <span className="camera-hud-label">Galaxies</span>
+      {surveyRows}
+      <hr className="tracer-selector-sep" />
+      {syntheticRows}
     </div>
   );
 }
 
 function colorToCSS(color32) {
-  // color32 is 0xRRGGBBAA
   var r = (color32 >>> 24) & 0xff;
   var g = (color32 >>> 16) & 0xff;
-  var b = (color32 >>> 8) & 0xff;
+  var b = (color32 >>> 8)  & 0xff;
   return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
 
-var panelStyle = {
-  position: 'absolute',
-  top: '10px',
-  left: '10px',
-  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  color: '#fff',
-  padding: '8px 12px',
-  borderRadius: '4px',
-  fontSize: '13px',
-  userSelect: 'none',
-  zIndex: 10,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px'
-};
-
-var rowStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  margin: 0
-};
-
+function formatCount(n) {
+  if (n === null || n === undefined) return '—';
+  return n.toLocaleString('en-US');
+}
