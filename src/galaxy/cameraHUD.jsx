@@ -1,11 +1,11 @@
 /**
- * Top-center overlay displaying the camera/spaceship position in
+ * Top-right overlay displaying the camera/spaceship position in
  * cosmological coordinates.
  *
  * Row 1:  RA  xxx.xx°   DEC  xx.xx°   Z  x.xxxx
  * Row 2:  DISTANCE xxx.x Mpc   AGE  x.xx Gyr ago
  *
- * Visibility is tied to the Radar tracer toggle (same as ruler rings).
+ * Always visible once a position is received.
  * Position arrives via appEvents.cameraHUDUpdate (every ~200ms) and always
  * reflects the actual camera/viewpoint position.
  * HUD lookup table (chi_Mpc -> z, lookback_Myr) arrives via
@@ -13,18 +13,11 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
-import appConfig from './native/appConfig.js';
 
 var RAD2DEG = 180 / Math.PI;
 
 export default function CameraHUD() {
   var hudRef = useRef(null);   // hud lookup arrays
-
-  // Match the default-hidden logic in renderer.js
-  var configVisible = appConfig.getVisibleTracers();
-  var [radarVisible, setRadarVisible] = useState(
-    configVisible ? configVisible.indexOf('radar') >= 0 : false
-  );
   var [pos, setPos] = useState(null);
 
   useEffect(function() {
@@ -34,20 +27,15 @@ export default function CameraHUD() {
     function onCameraUpdate(p) {
       setPos({ x: p.x, y: p.y, z: p.z });
     }
-    function onSetTracerVisibility(tracerId, visible) {
-      if (tracerId === 'radar') setRadarVisible(visible);
-    }
     appEvents.radarReady.on(onRadarReady);
     appEvents.cameraHUDUpdate.on(onCameraUpdate);
-    appEvents.setTracerVisibility.on(onSetTracerVisibility);
     return function() {
       appEvents.radarReady.off(onRadarReady);
       appEvents.cameraHUDUpdate.off(onCameraUpdate);
-      appEvents.setTracerVisibility.off(onSetTracerVisibility);
     };
   }, []);
 
-  if (!radarVisible || !pos) return null;
+  if (!pos) return null;
 
   var hud = hudRef.current;
   var x = pos.x, y = pos.y, z = pos.z;

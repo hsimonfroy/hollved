@@ -360,14 +360,29 @@ a.media {
   }
 }
 
-// ── Camera HUD (top-center position readout) ─────────────────────────────────
+// ── Top-right panel (HUD + buttons stacked vertically) ───────────────────────
 
-.camera-hud {
+.top-right-panel {
   position: fixed;
   top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 15;
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.top-right-buttons {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+// ── Camera HUD (top-right position readout) ───────────────────────────────────
+
+.camera-hud {
   background: rgba(5, 8, 20, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -464,12 +479,8 @@ a.media {
 
 // ── Top-right icon buttons (control mode + info) ────────────────────────────
 
-// Shared button style
 .control-mode-btn,
 .info-btn {
-  position: fixed;
-  top: 12px;
-  z-index: 20;
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -491,16 +502,6 @@ a.media {
     color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
   }
-}
-
-// Info button — rightmost (top-right corner)
-.info-btn {
-  right: 12px;
-}
-
-// Control mode button — just to the left of the info button (44px + 8px gap)
-.control-mode-btn {
-  right: 64px;
 }
 
 // ── Info panel ───────────────────────────────────────────────────────────────

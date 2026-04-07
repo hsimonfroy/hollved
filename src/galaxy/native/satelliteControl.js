@@ -309,7 +309,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   function onTouchZoom(scale) {
     if (!enabled) return;
     // scale = newDist / prevDist: > 1 means fingers spread (zoom in = smaller radius)
-    radius = Math.max(1, radius / scale);
+    radius = Math.max(MIN_RADIUS, radius / scale);
     updateCamera();
   }
 

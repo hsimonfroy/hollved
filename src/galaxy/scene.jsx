@@ -27,11 +27,15 @@ export default function Scene() {
   return (
     <div>
       <div ref={containerRef} className='graph-full-size' />
-      <CameraHUD />
       <TracerSelector />
-      <ControlModeButton />
+      <div className='top-right-panel'>
+        <CameraHUD />
+        <div className='top-right-buttons'>
+          <ControlModeButton />
+          <About />
+        </div>
+      </div>
       <Help />
-      <About />
     </div>
   );
 }
