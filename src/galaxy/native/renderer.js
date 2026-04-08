@@ -51,7 +51,7 @@ function sceneRenderer(container) {
   appEvents.tracerRangesReady.on(setTracerRanges);
   appEvents.setTracerVisibility.on(handleSetTracerVisibility);
   appEvents.toggleControlMode.on(toggleControlMode);
-  appEvents.accelerateNavigation.on(accelarate);
+
   appEvents.focusScene.on(focusScene);
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
@@ -66,13 +66,6 @@ function sceneRenderer(container) {
   eventify(api);
 
   return api;
-
-  function accelarate(isPrecise) {
-    if (!spaceshipControl) return;
-    var factor = isPrecise ? 10 : 0.1;
-    spaceshipControl.movementSpeed *= factor;
-    spaceshipControl.rollSpeed     *= factor;
-  }
 
   function onSetMovementSpeed(v) {
     if (spaceshipControl) spaceshipControl.movementSpeed = v;
@@ -161,8 +154,7 @@ function sceneRenderer(container) {
       var cam = renderer.camera();
       baseControl      = createBaseControl(renderer.markDirty);
       satelliteControl = createSatelliteControl(cam, container, renderer.markDirty, baseControl.keyState);
-      spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty,
-        function(v) { appEvents.accelerateNavigation.fire(v); });
+      spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty);
 
       // Wire both controls into the per-frame update slot exposed by unrender.
       // baseControl.isActive() keeps the loop alive while keys are held
@@ -676,7 +668,7 @@ function sceneRenderer(container) {
     appEvents.tracerRangesReady.off(setTracerRanges);
     appEvents.setTracerVisibility.off(handleSetTracerVisibility);
     appEvents.toggleControlMode.off(toggleControlMode);
-    appEvents.accelerateNavigation.off(accelarate);
+
     appEvents.focusScene.off(focusScene);
     appEvents.radarReady.off(onRadarReady);
     appEvents.setMovementSpeed.off(onSetMovementSpeed);

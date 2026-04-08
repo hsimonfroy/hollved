@@ -85,14 +85,10 @@ export default function TracerSelector() {
   if (tracers.length === 0) return null;
 
   // Sum counts for visible non-synthetic tracers
-  var galaxyCount = null;
-  tracers.forEach(function(t) {
-    if (SYNTHETIC_IDS.indexOf(t.id) >= 0) return;
-    if (!t.visible) return;
-    if (t.count === null) return;
-    if (galaxyCount === null) galaxyCount = 0;
-    galaxyCount += t.count;
-  });
+  var galaxyCount = tracers.reduce(function(sum, t) {
+    if (SYNTHETIC_IDS.indexOf(t.id) >= 0 || !t.visible || !t.count) return sum;
+    return sum + t.count;
+  }, 0);
 
   function makeRow(tracer) {
     var swatchStyle = {
@@ -140,6 +136,5 @@ function colorToCSS(color32) {
 }
 
 function formatCount(n) {
-  if (n === null || n === undefined) return '—';
   return n.toLocaleString('en-US');
 }

@@ -122,7 +122,7 @@ export default function Help() {
         <HelpRow keys={['W', 'S']} label='Forward / Backward' />
         <HelpRow keys={['A', 'D']} label='Left / Right' />
         <HelpRow keys={['Space', 'Shift']} label='Up / Down' />
-        <HelpRow keys={['Right hold']} label='Accelerate' />
+        <HelpRow keys={['Scroll']} label='Set max speed' />
         <div className='help-section'>Look</div>
         <HelpRow keys={['Left hold']} label='Look around' />
         <HelpRow keys={['↑↓←→']} label='Look around' />

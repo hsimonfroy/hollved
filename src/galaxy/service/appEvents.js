@@ -51,8 +51,6 @@ export default eventMirror([
   'focusScene',
   'queryChanged',
 
-  'accelerateNavigation',
-
   /**
    * Fired when tracer ranges are computed after multi-tracer positions are loaded.
    * Carries an array of { id, name, color, startNode, nodeCount }.

@@ -71,6 +71,7 @@ export default function CameraHUD() {
       if (!isDraggingRef.current && speedTextRef.current) speedTextRef.current.textContent = formatSpeed(speed);
       if (Math.abs(ms - maxSpeedRef.current) > 1e-9) {
         maxSpeedRef.current = ms;
+        cursorFracRef.current = (Math.log10(Math.max(0.0001, ms)) - LOG_MIN) / LOG_RANGE;
         setMaxSpeed(ms);
       }
       if (!rafRef.current) startFillAnimation();

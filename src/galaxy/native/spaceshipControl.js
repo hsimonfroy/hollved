@@ -1,44 +1,37 @@
 /**
  * Spaceship (free-fly) controls.
  *
- * Desktop mouse:
- *   Hold left button  → look (pitch / yaw) based on absolute cursor position
- *                       relative to screen center (tethered-while-held).
- *   Hold right button → accelerate (calls onAccelerate callback)
+ * Mouse: hold left → look (absolute pitch/yaw from screen center)
+ *        scroll    → set max speed (log scale, 0.01–1000 Mpc/s)
  *
  * Keyboard (via shared keyState from baseControl):
- *   W/S/A/D/Space/Shift → translate camera in local space
- *   Q/E                 → roll camera
- *   Arrow keys          → pitch / yaw (same action as mouse in this mode)
+ *   W/S/A/D/Space/Shift → translate; Q/E → roll; arrows → pitch/yaw
  *
- * Mobile (mobileControl writes into mobileState directly):
+ * Mobile (mobileControl writes mobileState):
  *   mobileState.forward/back/left/right → movement
- *   mobileState.yawLeft / pitchDown     → look (continuous, -1..1)
+ *   mobileState.yawLeft / pitchDown     → look
  *
  * update(delta) must be called every RAF frame (wired via renderer.js).
  */
 export default createSpaceshipControl;
 
-function createSpaceshipControl(camera, container, keyState, markDirty, onAccelerate) {
+function createSpaceshipControl(camera, container, keyState, markDirty) {
   var THREE = window.THREE;
   var enabled = false;
 
   // Mobile joystick state (written by mobileControl, read here in update)
   var mobileState = {
-    forward: 0, back: 0,
-    left: 0,    right: 0,
-    yawLeft: 0, pitchDown: 0
+    forward: 0, back: 0, left: 0, right: 0, yawLeft: 0, pitchDown: 0
   };
 
-  // Mouse look / accelerate state
   var isMouseLooking = false;
-  var isRightDown    = false;
-  var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center  → yaw left
-  var mousePitchDown = 0;  // -1..1: positive = cursor below center    → pitch down
+  var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center → yaw left
+  var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
-  var MAX_MOVE_SPEED = 10; // translate speed
-  var ROT_SPEED = 0.1; // Q/E upAxis tilt speed (rad/s)
-  var _currentSpeed = 0; // actual speed magnitude last frame (Mpc/s)
+  var MAX_MOVE_SPEED = 10;
+  var ROT_SPEED      = 0.1;  // Q/E roll speed (rad/s)
+  var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
+  var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
 
   var tmpQ = new THREE.Quaternion();
 
@@ -46,8 +39,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
 
   function readMouse(e) {
     var rect = container.getBoundingClientRect();
-    mouseYawLeft   = -((e.clientX - rect.left)  - rect.width  / 2) / (rect.width  / 2);
-    mousePitchDown =  ((e.clientY - rect.top)   - rect.height / 2) / (rect.height / 2);
+    mouseYawLeft   = -((e.clientX - rect.left) - rect.width  / 2) / (rect.width  / 2);
+    mousePitchDown =  ((e.clientY - rect.top)  - rect.height / 2) / (rect.height / 2);
   }
 
   function onMouseDown(e) {
@@ -56,11 +49,6 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
       isMouseLooking = true;
       readMouse(e);
       markDirty();
-      e.preventDefault();
-    }
-    if (e.button === 2 && onAccelerate) {
-      isRightDown = true;
-      onAccelerate(true);
       e.preventDefault();
     }
   }
@@ -76,14 +64,16 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
       isMouseLooking = false;
       mouseYawLeft = mousePitchDown = 0;
     }
-    if (e.button === 2 && isRightDown) {
-      isRightDown = false;
-      if (onAccelerate) onAccelerate(false);
-    }
   }
 
-  function onContextMenu(e) {
-    if (enabled) e.preventDefault();
+  // ── Wheel handler (scroll = set max speed) ─────────────────────────────────
+
+  function onWheel(e) {
+    if (!enabled) return;
+    e.preventDefault();
+    MAX_MOVE_SPEED = Math.max(0.01, Math.min(1000,
+      MAX_MOVE_SPEED * Math.exp(-e.deltaY * WHEEL_SPEED)));
+    markDirty();
   }
 
   // ── Per-frame update ───────────────────────────────────────────────────────
@@ -92,7 +82,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
     if (!enabled) return;
 
     var moveMult = delta * MAX_MOVE_SPEED;
-    var rotMult  = delta * ROT_SPEED / 2; // quaternion rotation is angle divided by 2
+    var rotMult  = delta * ROT_SPEED / 2; // quaternion rotation is angle/2
 
     // Translation in camera-local space
     var fwd   = (keyState.forward + mobileState.forward) - (keyState.back  + mobileState.back);
@@ -116,6 +106,10 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
       tmpQ.set(pitch * 2 * rotMult, yaw * 2 * rotMult, roll * rotMult, 1).normalize();
       camera.quaternion.multiply(tmpQ);
     }
+
+    // Keep RAF alive one extra frame after stopping so _currentSpeed is
+    // computed as 0 before the loop idles (otherwise stale value lingers in HUD)
+    if (_currentSpeed > 0) markDirty();
   }
 
   // ── Enable / disable ───────────────────────────────────────────────────────
@@ -125,17 +119,17 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
     if (!val) {
       isMouseLooking = false;
       mouseYawLeft = mousePitchDown = 0;
-      if (isRightDown && onAccelerate) { isRightDown = false; onAccelerate(false); }
+      _currentSpeed = 0;
       for (var k in mobileState) mobileState[k] = 0;
     }
   }
 
   // ── Event registration ─────────────────────────────────────────────────────
 
-  container.addEventListener('mousedown',   onMouseDown,   false);
-  container.addEventListener('mousemove',   onMouseMove,   false);
-  container.addEventListener('contextmenu', onContextMenu, false);
-  document.addEventListener ('mouseup',     onMouseUp,     false);
+  container.addEventListener('mousedown', onMouseDown, false);
+  container.addEventListener('mousemove', onMouseMove, false);
+  container.addEventListener('wheel',     onWheel,     { passive: false });
+  document.addEventListener ('mouseup',   onMouseUp,   false);
 
   return {
     update:      update,
@@ -150,10 +144,10 @@ function createSpaceshipControl(camera, container, keyState, markDirty, onAccele
 
     destroy: function() {
       setEnabled(false);
-      container.removeEventListener('mousedown',   onMouseDown,   false);
-      container.removeEventListener('mousemove',   onMouseMove,   false);
-      container.removeEventListener('contextmenu', onContextMenu, false);
-      document.removeEventListener ('mouseup',     onMouseUp,     false);
+      container.removeEventListener('mousedown', onMouseDown, false);
+      container.removeEventListener('mousemove', onMouseMove, false);
+      container.removeEventListener('wheel',     onWheel,     false);
+      document.removeEventListener ('mouseup',   onMouseUp,   false);
     }
   };
 }
