@@ -1,24 +1,51 @@
 /**
  * Top-right overlay displaying the camera/spaceship position in
- * cosmological coordinates.
+ * cosmological coordinates, plus a speed gauge in spaceship mode.
  *
- * Row 1:  RA  xxx.xx°   DEC  xx.xx°   Z  x.xxxx
- * Row 2:  DISTANCE xxx.x Mpc   AGE  x.xx Gyr ago
+ * Position rows (always):
+ *   RA  xxx.xx°   DEC  xx.xx°   Z  x.xxxx
+ *   DISTANCE xxx.x Mpc   AGE  x.xx Gyr ago
  *
- * Always visible once a position is received.
- * Position arrives via appEvents.cameraHUDUpdate (every ~200ms) and always
- * reflects the actual camera/viewpoint position.
- * HUD lookup table (chi_Mpc -> z, lookback_Myr) arrives via
- * appEvents.radarReady once at load time.
+ * Speed rows (spaceship mode only):
+ *   SPEED  xx.xx Mpc/s
+ *   [────────────────●──] logarithmic slider (10 kpc/s – 1000 Mpc/s)
+ *
+ * HUD lookup table arrives via appEvents.radarReady once at load time.
+ * Position arrives via appEvents.cameraHUDUpdate every ~200ms.
+ * Speed arrives via appEvents.cameraSpeedUpdate every RAF frame.
  */
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
+import appConfig from './native/appConfig.js';
 
 var RAD2DEG = 180 / Math.PI;
+var LOG_MIN   = -2;  // 10^LOG_MIN Mpc/s min speed
+var LOG_RANGE =  5;  // → 10^(LOG_MIN + LOG_RANGE) Mpc/s max speed
 
 export default function CameraHUD() {
   var hudRef = useRef(null);   // hud lookup arrays
-  var [pos, setPos] = useState(null);
+
+  var [pos, setPos]             = useState(null);
+  var [controlMode, setControlMode] = useState(appConfig.getControlMode());
+  var [maxSpeed, setMaxSpeed]   = useState(10);   // Mpc/s — drives cursor position
+  var [isDragging, setIsDragging] = useState(false);
+
+  // Refs readable inside RAF closure without stale captures
+  var maxSpeedRef      = useRef(10);
+  var cursorFracRef    = useRef((Math.log10(10) - LOG_MIN) / LOG_RANGE); // cursor pos 0..1
+  var isDraggingRef    = useRef(false);
+  var currentSpeedRef  = useRef(0);   // last actual speed, for restoring display on pointerup
+  var fillLevelRef     = useRef(0);
+  var fillTargetRef    = useRef(0);
+  var rafRef           = useRef(null);
+
+  // DOM refs for zero-rerender fill animation
+  var trackRef      = useRef(null);
+  var fillBarRef    = useRef(null);
+  var cursorDotRef  = useRef(null);
+  var speedTextRef  = useRef(null);
+
+  // ── Event subscriptions ─────────────────────────────────────────────────────
 
   useEffect(function() {
     function onRadarReady(data) {
@@ -27,13 +54,105 @@ export default function CameraHUD() {
     function onCameraUpdate(p) {
       setPos({ x: p.x, y: p.y, z: p.z });
     }
+    function onControlModeChanged(m) {
+      setControlMode(m);
+      if (m !== 'spaceship') {
+        if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        fillLevelRef.current  = 0;
+        fillTargetRef.current = 0;
+        if (fillBarRef.current)   fillBarRef.current.style.width = '0%';
+        if (cursorDotRef.current) cursorDotRef.current.style.background = 'rgba(255,255,255,0.85)';
+        if (speedTextRef.current) speedTextRef.current.textContent = '—';
+      }
+    }
+    function onSpeedUpdate(speed, ms) {
+      currentSpeedRef.current = speed;
+      fillTargetRef.current = Math.min(1, speed / Math.max(ms, 0.0001));
+      if (!isDraggingRef.current && speedTextRef.current) speedTextRef.current.textContent = formatSpeed(speed);
+      if (Math.abs(ms - maxSpeedRef.current) > 1e-9) {
+        maxSpeedRef.current = ms;
+        setMaxSpeed(ms);
+      }
+      if (!rafRef.current) startFillAnimation();
+    }
+
     appEvents.radarReady.on(onRadarReady);
     appEvents.cameraHUDUpdate.on(onCameraUpdate);
+    appEvents.controlModeChanged.on(onControlModeChanged);
+    appEvents.cameraSpeedUpdate.on(onSpeedUpdate);
     return function() {
       appEvents.radarReady.off(onRadarReady);
       appEvents.cameraHUDUpdate.off(onCameraUpdate);
+      appEvents.controlModeChanged.off(onControlModeChanged);
+      appEvents.cameraSpeedUpdate.off(onSpeedUpdate);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  // ── Fill animation (runs its own RAF, independent of renderer) ─────────────
+
+  function startFillAnimation() {
+    var prev = performance.now();
+    function tick(now) {
+      var dt      = Math.min((now - prev) / 1000, 0.05);
+      prev        = now;
+      var target  = fillTargetRef.current;
+      var current = fillLevelRef.current;
+      var diff    = target - current;
+      if (Math.abs(diff) < 0.005) {
+        fillLevelRef.current = target;
+        rafRef.current = null;
+        applyFillDOM(target);
+        return;
+      }
+      var rate = diff > 0 ? 10 : 6;  // faster accel, slower decel
+      fillLevelRef.current = current + diff * rate * dt;
+      applyFillDOM(fillLevelRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  function applyFillDOM(fraction) {
+    var pct = (Math.max(0, Math.min(1, fraction)) * cursorFracRef.current * 100).toFixed(1) + '%';
+    if (fillBarRef.current)  fillBarRef.current.style.width = pct;
+    if (cursorDotRef.current)
+      cursorDotRef.current.style.background = fraction >= 0.995
+        ? 'rgba(0,200,255,1)'
+        : 'rgba(255,255,255,0.85)';
+  }
+
+  // ── Slider interaction ──────────────────────────────────────────────────────
+
+  function fractionFromEvent(e) {
+    var rect = trackRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  }
+  function applySliderFraction(f) {
+    var ms = Math.pow(10, LOG_MIN + f * LOG_RANGE);
+    maxSpeedRef.current   = ms;
+    cursorFracRef.current = f;
+    setMaxSpeed(ms);
+    appEvents.setMovementSpeed.fire(ms);
+    if (speedTextRef.current) speedTextRef.current.textContent = formatSpeed(ms);
+  }
+  function onPointerDown(e) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    applySliderFraction(fractionFromEvent(e));
+  }
+  function onPointerMove(e) {
+    if (!e.buttons) return;
+    applySliderFraction(fractionFromEvent(e));
+  }
+  function onPointerUp() {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    if (speedTextRef.current) speedTextRef.current.textContent = formatSpeed(currentSpeedRef.current);
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (!pos) return null;
 
@@ -41,15 +160,15 @@ export default function CameraHUD() {
   var x = pos.x, y = pos.y, z = pos.z;
   var chi = Math.sqrt(x * x + y * y + z * z);
 
-  // Spherical coordinates
   var ra  = chi > 0 ? Math.atan2(y, x) * RAD2DEG : 0;
   if (ra < 0) ra += 360;
   var dec = chi > 0 ? Math.atan2(z, Math.sqrt(x * x + y * y)) * RAD2DEG : 0;
 
-  // Check if chi is within the HUD table range
-  var inRange = hud && chi <= hud.chi_Mpc[hud.chi_Mpc.length - 1];
+  var inRange     = hud && chi <= hud.chi_Mpc[hud.chi_Mpc.length - 1];
   var redshift    = inRange ? lerp(chi, hud.chi_Mpc, hud.z) : null;
   var lookbackMyr = inRange ? lerp(chi, hud.chi_Mpc, hud.lookback_Myr) : null;
+
+  var cursorPct = ((Math.log10(Math.max(0.0001, maxSpeed)) - LOG_MIN) / LOG_RANGE * 100).toFixed(1) + '%';
 
   return (
     <div className="camera-hud">
@@ -73,13 +192,31 @@ export default function CameraHUD() {
           {lookbackMyr !== null ? formatAge(lookbackMyr) : '?'}
         </span>
       </div>
+      {controlMode === 'spaceship' && (
+        <>
+          <div className="camera-hud-row">
+            <span className="camera-hud-label">{isDragging ? 'MAX SPEED' : 'SPEED'}</span>
+            <span ref={speedTextRef} className="camera-hud-value">—</span>
+          </div>
+          <div
+            ref={trackRef}
+            className="speed-slider-wrap"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+          >
+            <div className="speed-slider-passive" style={{ width: cursorPct }} />
+            <div ref={fillBarRef} className="speed-slider-fill" style={{ width: '0%' }} />
+            <div ref={cursorDotRef} className="speed-slider-cursor" style={{ left: cursorPct }} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Linear interpolation in a monotonically increasing xs array. */
 function lerp(x, xs, ys) {
   var n = xs.length;
   if (n === 0) return 0;
@@ -94,7 +231,6 @@ function lerp(x, xs, ys) {
   return ys[lo] + t * (ys[hi] - ys[lo]);
 }
 
-/** Format comoving distance in Mpc with adaptive SI prefix. */
 function formatSI(chi) {
   if (chi < 1e-3) return chi.toFixed(1) + ' pc';
   if (chi < 1)    return (chi * 1e3).toFixed(0) + ' kpc';
@@ -102,7 +238,6 @@ function formatSI(chi) {
   return (chi / 1e3).toFixed(2) + ' Gpc';
 }
 
-/** Format redshift: more decimals for small z, fewer for large. */
 function formatZ(z) {
   if (z < 0.01)  return z.toFixed(4);
   if (z < 1)     return z.toFixed(3);
@@ -110,10 +245,16 @@ function formatZ(z) {
   return z.toFixed(0);
 }
 
-/** Format lookback time in Myr as "X.XX Gyr ago" or "X.X Myr ago". */
 function formatAge(myr) {
   if (myr < 0.001) return '0 yr ago';
   if (myr < 1)     return (myr * 1e3).toFixed(0) + ' kyr ago';
   if (myr < 1e3)   return myr.toFixed(1) + ' Myr ago';
   return (myr / 1e3).toFixed(2) + ' Gyr ago';
+}
+
+function formatSpeed(mpcPerSec) {
+  if (mpcPerSec < 1e-3) return (mpcPerSec * 1e6).toFixed(0) + ' pc/s';
+  if (mpcPerSec < 1)    return (mpcPerSec * 1e3).toFixed(1) + ' kpc/s';
+  if (mpcPerSec < 1000) return mpcPerSec.toFixed(2) + ' Mpc/s';
+  return (mpcPerSec / 1e3).toFixed(2) + ' Gpc/s';
 }

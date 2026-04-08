@@ -75,5 +75,17 @@ export default eventMirror([
    * Fired every ~200ms with the current spaceship/pivot position.
    * Carries { x, y, z } in Mpc.
    */
-  'cameraHUDUpdate'
+  'cameraHUDUpdate',
+
+  /**
+   * Fired every RAF frame while in spaceship mode.
+   * Args: (currentSpeed: number, maxSpeed: number) — both in Mpc/s.
+   */
+  'cameraSpeedUpdate',
+
+  /**
+   * Fired by the HUD speed slider when the user changes max speed.
+   * Arg: (newMaxSpeed: number) — Mpc/s.
+   */
+  'setMovementSpeed'
 ], appEvents);
