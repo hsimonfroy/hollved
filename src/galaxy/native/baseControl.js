@@ -11,6 +11,7 @@
  *   Q/E        rollLeft / rollRight
  *   ↑↓←→       pitchUp/pitchDown/yawLeft/yawRight  (same as mouse in each mode)
  *   F          mode switch (spaceship ↔ satellite)
+ *   R          reset to origin
  */
 export default createBaseControl;
 
@@ -38,6 +39,8 @@ function createBaseControl(markDirty) {
   function onKeyDown(e) {
     // F (70) to switch control modes
     if (e.keyCode === 70) { appEvents.toggleControlMode.fire(); e.preventDefault(); return; }
+    // R (82) to reset to origin
+    if (e.keyCode === 82) { appEvents.resetToOrigin.fire(); e.preventDefault(); return; }
     var k = KEY[e.keyCode];
     if (k) { e.preventDefault(); keyState[k] = 1; markDirty(); }
   }

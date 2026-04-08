@@ -128,8 +128,9 @@ export default function Help() {
         <HelpRow keys={['↑↓←→']} label='Look around' />
         <HelpRow keys={['Q', 'E']} label='Roll' />
         <div className='help-section'>Options</div>
-        <HelpRow keys={['F']} label='Switch to Satellite' />
-        <HelpRow keys={['I']} label='Show Info' />
+        <HelpRow keys={['F']} label='Switch to satellite' />
+        <HelpRow keys={['R']} label='Reset to origin' />
+        <HelpRow keys={['I']} label='Show survey info' />
       </>}
 
       {!isMobile && mode === 'satellite' && <>
@@ -144,8 +145,9 @@ export default function Help() {
         <HelpRow keys={['Q', 'E']} label='Roll' />
         <HelpRow keys={['Scroll']} label='Zoom' />
         <div className='help-section'>Options</div>
-        <HelpRow keys={['F']} label='Switch to Spaceship' />
-        <HelpRow keys={['I']} label='Show Info' />
+        <HelpRow keys={['F']} label='Switch to spaceship' />
+        <HelpRow keys={['R']} label='Reset to origin' />
+        <HelpRow keys={['I']} label='Show survey info' />
       </>}
 
       {isMobile && mode === 'spaceship' && <>
