@@ -524,17 +524,18 @@ a.media {
   }
 }
 
-// ── Top-right icon buttons (control mode + info) ────────────────────────────
+// ── Top-right icon buttons (control mode + info + reset + exit) ─────────────
 
 .control-mode-btn,
-.info-btn {
-  width: 44px;
-  height: 44px;
+.info-btn,
+.hud-btn {
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(5, 8, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.20);
   color: rgba(255, 255, 255, 0.9);
-  font-size: 22px;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -544,8 +545,8 @@ a.media {
   text-decoration: none;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.70);
-    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(5, 8, 20, 0.85);
+    border-color: rgba(255, 255, 255, 0.45);
     color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
   }
@@ -576,21 +577,6 @@ a.media {
 @keyframes info-panel-in {
   from { opacity: 0; transform: translateY(-50%) translateX(10px); }
   to   { opacity: 1; transform: translateY(-50%) translateX(0); }
-}
-
-.info-back-link {
-  display: block;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.70);
-  text-decoration: none;
-  margin-bottom: 14px;
-
-  &:hover {
-    color: rgba(255, 255, 255, 0.99);
-    text-decoration: none;
-  }
 }
 
 .info-logo-wrap {

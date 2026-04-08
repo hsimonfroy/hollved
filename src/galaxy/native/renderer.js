@@ -55,6 +55,7 @@ function sceneRenderer(container) {
   appEvents.focusScene.on(focusScene);
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
+  appEvents.resetToOrigin.on(resetToOrigin);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -69,6 +70,16 @@ function sceneRenderer(container) {
 
   function onSetMovementSpeed(v) {
     if (spaceshipControl) spaceshipControl.movementSpeed = v;
+  }
+
+  function resetToOrigin() {
+    if (!renderer) return;
+    if (currentMode === 'satellite' && satelliteControl) {
+      satelliteControl.setPivot(0, 0, 0);
+    } else {
+      renderer.camera().position.set(0, 0, 0);
+      renderer.markDirty();
+    }
   }
 
   function updateQuery() {
@@ -672,6 +683,7 @@ function sceneRenderer(container) {
     appEvents.focusScene.off(focusScene);
     appEvents.radarReady.off(onRadarReady);
     appEvents.setMovementSpeed.off(onSetMovementSpeed);
+    appEvents.resetToOrigin.off(resetToOrigin);
     renderer = null;
 
     clearInterval(queryUpdateId);

@@ -73,6 +73,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     update:          update,
     setEnabled:      setEnabled,
     getPivot:        function() { return pivot; },
+    setPivot:        function(x, y, z) { pivot.set(x, y, z); updateCamera(); },
     getRadius:       function() { return radius; },
     getUpAxis:       function() { return upAxis; },
     restoreFromURL:  restoreFromURL,

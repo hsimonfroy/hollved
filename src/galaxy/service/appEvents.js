@@ -85,5 +85,10 @@ export default eventMirror([
    * Fired by the HUD speed slider when the user changes max speed.
    * Arg: (newMaxSpeed: number) — Mpc/s.
    */
-  'setMovementSpeed'
+  'setMovementSpeed',
+
+  /**
+   * Fired when the user wants to reset camera/pivot position to the origin (0,0,0).
+   */
+  'resetToOrigin'
 ], appEvents);
