@@ -29,6 +29,7 @@ export default sceneRenderer;
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
+  var modeAnim = null; // active mode-switch animation, or null
   var cmbSphere = null;
   var cmbVisible = true;
   var mwPoints = null;
@@ -91,35 +92,118 @@ function sceneRenderer(container) {
     appEvents.cameraHUDUpdate.fire({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
   }
 
+  function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  }
+
+  function animFrame(time) {
+    if (!modeAnim) return;
+    if (modeAnim.startTime === null) modeAnim.startTime = time;
+    var t  = Math.min((time - modeAnim.startTime) / 500, 1.0); // 500 ms
+    var te = easeInOutQuad(t);
+    var cam = renderer.camera();
+    cam.position.lerpVectors(modeAnim.startPos, modeAnim.endPos, te);
+    cam.quaternion.slerpQuaternions(modeAnim.startQuat, modeAnim.endQuat, te);
+    renderer.markDirty();
+    if (t >= 1.0) {
+      renderer.offFrame(animFrame);
+      modeAnim.onDone();
+      modeAnim = null;
+    }
+  }
+
   function toggleControlMode() {
     if (!renderer) return;
+    if (modeAnim) return; // ignore while animation is running
+
+    var cam = renderer.camera();
 
     if (currentMode === 'satellite') {
-      // Back to spaceship: teleport to pivot, orient flat in the satellite plane
-      var cam = renderer.camera();
-      var flatFwd = satelliteControl.getFlatForward();
-      cam.position.copy(satelliteControl.getPivot());
-      cam.up.copy(satelliteControl.getUpAxis());
-      cam.lookAt(new THREE.Vector3(
-        cam.position.x + flatFwd.x,
-        cam.position.y + flatFwd.y,
-        cam.position.z + flatFwd.z
-      ));
-      currentMode = 'spaceship';
-      satelliteControl.setEnabled(false);
-      spaceshipControl.setEnabled(true);
-      updateRadarVisibility();
-    } else {
-      currentMode = 'satellite';
-      spaceshipControl.setEnabled(false);
-      satelliteControl.setEnabled(true, renderer.camera(), appConfig.getZoom());
-      updateRadarVisibility();
-    }
+      // Satellite → Spaceship: zoom camera in from orbit to pivot
+      var startPos  = cam.position.clone();
+      var startQuat = cam.quaternion.clone();
 
-    renderer.markDirty();
-    if (mobileControl) mobileControl.setMode(currentMode);
-    appEvents.controlModeChanged.fire(currentMode);
-    appConfig.setControlMode(currentMode);
+      var pivot   = satelliteControl.getPivot().clone();
+      var flatFwd = satelliteControl.getFlatForward();
+      var upAxis  = satelliteControl.getUpAxis().clone();
+
+      // Compute the target orientation at the pivot (same logic as the old instant teleport).
+      // Must use a Camera (not Object3D): THREE.Camera.lookAt points -Z toward the target,
+      // while THREE.Object3D.lookAt points +Z toward it — opposite conventions.
+      var scratchCam = new THREE.PerspectiveCamera();
+      scratchCam.position.copy(pivot);
+      scratchCam.up.copy(upAxis);
+      scratchCam.lookAt(new THREE.Vector3(
+        pivot.x + flatFwd.x,
+        pivot.y + flatFwd.y,
+        pivot.z + flatFwd.z
+      ));
+      var endPos  = pivot;
+      var endQuat = scratchCam.quaternion.clone();
+
+      satelliteControl.setEnabled(false);
+      spaceshipControl.setEnabled(false); // disabled during animation
+
+      currentMode = 'spaceship';
+      updateRadarVisibility();
+      if (mobileControl) mobileControl.setMode(currentMode);
+      appEvents.controlModeChanged.fire(currentMode);
+      appConfig.setControlMode(currentMode);
+
+      modeAnim = {
+        startPos: startPos, endPos: endPos,
+        startQuat: startQuat, endQuat: endQuat,
+        startTime: null,
+        onDone: function() {
+          cam.position.copy(endPos);
+          cam.up.copy(upAxis);
+          cam.quaternion.copy(endQuat);
+          spaceshipControl.setEnabled(true);
+        }
+      };
+      renderer.onFrame(animFrame);
+      renderer.markDirty();
+
+    } else {
+      // Spaceship → Satellite: zoom camera out from spaceship to orbit
+      var startPos  = cam.position.clone();
+      var startQuat = cam.quaternion.clone();
+
+      // Initialize satellite state from current camera position/orientation.
+      // setEnabled(true, cam, zoom) calls initFromCamera which computes pivot/radius/upAxis/theta/phi
+      // and immediately moves the camera to the orbit position via updateCamera().
+      satelliteControl.setEnabled(true, cam, appConfig.getZoom());
+      var endPos  = cam.position.clone();
+      var endQuat = cam.quaternion.clone();
+
+      // Disable inputs during animation; internal state (pivot, radius, etc.) is preserved.
+      satelliteControl.setEnabled(false);
+
+      // Restore camera to spaceship start for animation
+      cam.position.copy(startPos);
+      cam.quaternion.copy(startQuat);
+
+      spaceshipControl.setEnabled(false); // disabled during animation
+
+      currentMode = 'satellite';
+      updateRadarVisibility();
+      if (mobileControl) mobileControl.setMode(currentMode);
+      appEvents.controlModeChanged.fire(currentMode);
+      appConfig.setControlMode(currentMode);
+
+      modeAnim = {
+        startPos: startPos, endPos: endPos,
+        startQuat: startQuat, endQuat: endQuat,
+        startTime: null,
+        onDone: function() {
+          cam.position.copy(endPos);
+          cam.quaternion.copy(endQuat);
+          satelliteControl.setEnabled(true); // no cam arg → preserves computed state
+        }
+      };
+      renderer.onFrame(animFrame);
+      renderer.markDirty();
+    }
   }
 
   function focusScene() {
