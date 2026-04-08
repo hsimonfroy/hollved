@@ -1,13 +1,12 @@
-var CONTROL_KEYS = new Set([
-  87, 83, 65, 68,       // W S A D
-  32, 16,               // Space Shift
-  81, 69,               // Q E
-  38, 40, 37, 39,       // ↑ ↓ ← →
-  70,                   // F
-  73                    // I
+var CONTROL_CODES = new Set([
+  'KeyW', 'KeyS', 'KeyA', 'KeyD',
+  'Space', 'ShiftLeft', 'ShiftRight',
+  'KeyQ', 'KeyE',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'KeyF', 'KeyR', 'KeyI'
 ]);
 
-export function isControlKey(e) { return CONTROL_KEYS.has(e.keyCode); }
+export function isControlKey(e) { return CONTROL_CODES.has(e.code); }
 
 export default {
   isModifier,

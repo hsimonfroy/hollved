@@ -14,10 +14,14 @@ function HelpRow({ keys, label }) {
   );
 }
 
+// QWERTY fallbacks for when getLayoutMap() is unavailable (Firefox, Safari)
+var QWERTY = { KeyW:'W', KeyS:'S', KeyA:'A', KeyD:'D', KeyQ:'Q', KeyE:'E', KeyF:'F', KeyR:'R', KeyI:'I' };
+
 export default function Help() {
   var [visible, setVisible] = useState(false);
   var [mode, setMode] = useState(appConfig.getControlMode());
   var [isMobile, setIsMobile] = useState(pointerCoarseQuery.matches);
+  var [keys, setKeys] = useState(QWERTY);
   var isMobileRef = useRef(pointerCoarseQuery.matches);
   var touchRef = useRef({ startTime: 0, startX: 0, startY: 0, startCount: 0, moved: false, multiSeen: false });
 
@@ -29,6 +33,20 @@ export default function Help() {
     function onChange(e) { isMobileRef.current = e.matches; setIsMobile(e.matches); }
     pointerCoarseQuery.addEventListener('change', onChange);
     return function() { pointerCoarseQuery.removeEventListener('change', onChange); };
+  }, []);
+
+  // Resolve physical-key → printed-character labels for the current keyboard layout.
+  // getLayoutMap() is Chromium-only; other browsers fall back to QWERTY labels.
+  useEffect(function() {
+    if (!navigator.keyboard || !navigator.keyboard.getLayoutMap) return;
+    navigator.keyboard.getLayoutMap().then(function(map) {
+      var resolved = {};
+      Object.keys(QWERTY).forEach(function(code) {
+        var ch = map.get(code);
+        resolved[code] = ch ? ch.toUpperCase() : QWERTY[code];
+      });
+      setKeys(resolved);
+    });
   }, []);
 
   // All input listeners registered once; each handler checks isMobileRef.current
@@ -119,35 +137,35 @@ export default function Help() {
 
       {!isMobile && mode === 'spaceship' && <>
         <div className='help-section'>Move</div>
-        <HelpRow keys={['W', 'S']} label='Forward / Backward' />
-        <HelpRow keys={['A', 'D']} label='Left / Right' />
+        <HelpRow keys={[keys.KeyW, keys.KeyS]} label='Forward / Backward' />
+        <HelpRow keys={[keys.KeyA, keys.KeyD]} label='Left / Right' />
         <HelpRow keys={['Space', 'Shift']} label='Up / Down' />
         <HelpRow keys={['Scroll']} label='Set max speed' />
         <div className='help-section'>Look</div>
         <HelpRow keys={['Left hold']} label='Look around' />
         <HelpRow keys={['↑↓←→']} label='Look around' />
-        <HelpRow keys={['Q', 'E']} label='Roll' />
+        <HelpRow keys={[keys.KeyQ, keys.KeyE]} label='Roll' />
         <div className='help-section'>Options</div>
-        <HelpRow keys={['F']} label='Switch to satellite' />
-        <HelpRow keys={['R']} label='Reset to origin' />
-        <HelpRow keys={['I']} label='Show survey info' />
+        <HelpRow keys={[keys.KeyF]} label='Switch to satellite' />
+        <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
+        <HelpRow keys={[keys.KeyI]} label='Show survey info' />
       </>}
 
       {!isMobile && mode === 'satellite' && <>
         <div className='help-section'>Move pivot</div>
-        <HelpRow keys={['W', 'S']} label='Forward / Backward' />
-        <HelpRow keys={['A', 'D']} label='Left / Right' />
+        <HelpRow keys={[keys.KeyW, keys.KeyS]} label='Forward / Backward' />
+        <HelpRow keys={[keys.KeyA, keys.KeyD]} label='Left / Right' />
         <HelpRow keys={['Space', 'Shift']} label='Up / Down' />
         <HelpRow keys={['Right drag']} label='Pan' />
         <div className='help-section'>Orbit</div>
         <HelpRow keys={['Left Drag']} label='Orbit' />
         <HelpRow keys={['↑↓←→']} label='Orbit' />
-        <HelpRow keys={['Q', 'E']} label='Roll' />
+        <HelpRow keys={[keys.KeyQ, keys.KeyE]} label='Roll' />
         <HelpRow keys={['Scroll']} label='Zoom' />
         <div className='help-section'>Options</div>
-        <HelpRow keys={['F']} label='Switch to spaceship' />
-        <HelpRow keys={['R']} label='Reset to origin' />
-        <HelpRow keys={['I']} label='Show survey info' />
+        <HelpRow keys={[keys.KeyF]} label='Switch to spaceship' />
+        <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
+        <HelpRow keys={[keys.KeyI]} label='Show survey info' />
       </>}
 
       {isMobile && mode === 'spaceship' && <>

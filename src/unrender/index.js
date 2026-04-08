@@ -247,8 +247,6 @@ function unrender(container, options) {
           tDiffuse: { value: hdrTarget.texture },
           exposure: { value: 400.0 },
           power:    { value: 0.4 }
-        //   exposure: { type: 'f', value: 2.0 },
-        //   power:    { type: 'f', value: 1.0 }
         },
         vertexShader: [
           'varying vec2 vUv;',

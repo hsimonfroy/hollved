@@ -48,7 +48,7 @@ export default function About() {
         .catch(function() {});
     }
     function onKeyDown(e) {
-      if (e.keyCode === 73 && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (e.code === 'KeyI' && !e.altKey && !e.ctrlKey && !e.metaKey) {
         setOpen(function(v) { return !v; });
       }
     }
