@@ -28,8 +28,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center → yaw left
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
-  var MAX_MOVE_SPEED = 10;
-  var ROT_SPEED      = 0.1;  // Q/E roll speed (rad/s)
+  var MAX_MOVE_SPEED = 60;
+  var ROT_SPEED      = 0.5;  // Q/E roll speed (rad/s)
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
 
@@ -67,6 +67,10 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   }
 
   // ── Wheel handler (scroll = set max speed) ─────────────────────────────────
+
+  function onContextMenu(e) {
+    if (enabled) e.preventDefault();
+  }
 
   function onWheel(e) {
     if (!enabled) return;
@@ -126,10 +130,11 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
 
   // ── Event registration ─────────────────────────────────────────────────────
 
-  container.addEventListener('mousedown', onMouseDown, false);
-  container.addEventListener('mousemove', onMouseMove, false);
-  container.addEventListener('wheel',     onWheel,     { passive: false });
-  document.addEventListener ('mouseup',   onMouseUp,   false);
+  container.addEventListener('mousedown',   onMouseDown,   false);
+  container.addEventListener('mousemove',   onMouseMove,   false);
+  container.addEventListener('contextmenu', onContextMenu, false);
+  container.addEventListener('wheel',       onWheel,       { passive: false });
+  document.addEventListener ('mouseup',     onMouseUp,     false);
 
   return {
     update:      update,
@@ -144,10 +149,11 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
 
     destroy: function() {
       setEnabled(false);
-      container.removeEventListener('mousedown', onMouseDown, false);
-      container.removeEventListener('mousemove', onMouseMove, false);
-      container.removeEventListener('wheel',     onWheel,     false);
-      document.removeEventListener ('mouseup',   onMouseUp,   false);
+      container.removeEventListener('mousedown',   onMouseDown,   false);
+      container.removeEventListener('mousemove',   onMouseMove,   false);
+      container.removeEventListener('contextmenu', onContextMenu, false);
+      container.removeEventListener('wheel',       onWheel,       false);
+      document.removeEventListener ('mouseup',     onMouseUp,     false);
     }
   };
 }

@@ -70,6 +70,7 @@ function unrender(container, options) {
       return !camera.position.equals(_lastCamPos) || !camera.quaternion.equals(_lastCamQuat);
     }
   };
+  var lastFrameTime = 0;
   startEventsListening();
 
   markDirty(); // trigger initial render
@@ -78,7 +79,9 @@ function unrender(container, options) {
 
   function frame(time) {
     // Update controls first (may move camera)
-    input.update(0.1);
+    var delta = lastFrameTime ? Math.min((time - lastFrameTime) / 1000, 0.1) : 0;
+    lastFrameTime = time;
+    input.update(delta);
 
     for (var i = 0; i < rafCallbacks.length; ++i) {
       rafCallbacks[i](time);

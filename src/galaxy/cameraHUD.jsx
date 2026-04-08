@@ -29,11 +29,14 @@ export default function CameraHUD() {
   var [controlMode, setControlMode] = useState(appConfig.getControlMode());
   var [maxSpeed, setMaxSpeed]   = useState(10);   // Mpc/s — drives cursor position
   var [isDragging, setIsDragging] = useState(false);
+  var [isWheeling, setIsWheeling] = useState(false);
 
   // Refs readable inside RAF closure without stale captures
   var maxSpeedRef      = useRef(10);
   var cursorFracRef    = useRef((Math.log10(10) - LOG_MIN) / LOG_RANGE); // cursor pos 0..1
   var isDraggingRef    = useRef(false);
+  var isWheelingRef    = useRef(false);
+  var wheelTimerRef    = useRef(null);
   var currentSpeedRef  = useRef(0);   // last actual speed, for restoring display on pointerup
   var fillLevelRef     = useRef(0);
   var fillTargetRef    = useRef(0);
@@ -68,11 +71,25 @@ export default function CameraHUD() {
     function onSpeedUpdate(speed, ms) {
       currentSpeedRef.current = speed;
       fillTargetRef.current = Math.min(1, speed / Math.max(ms, 0.0001));
-      if (!isDraggingRef.current && speedTextRef.current) speedTextRef.current.textContent = formatSpeed(speed);
+      // Show current speed only when neither dragging nor wheeling
+      if (!isDraggingRef.current && !isWheelingRef.current && speedTextRef.current)
+        speedTextRef.current.textContent = formatSpeed(speed);
       if (Math.abs(ms - maxSpeedRef.current) > 1e-9) {
         maxSpeedRef.current = ms;
         cursorFracRef.current = (Math.log10(Math.max(0.0001, ms)) - LOG_MIN) / LOG_RANGE;
         setMaxSpeed(ms);
+        // Wheel change: show max speed label temporarily
+        if (!isDraggingRef.current) {
+          isWheelingRef.current = true;
+          setIsWheeling(true);
+          if (speedTextRef.current) speedTextRef.current.textContent = formatSpeed(ms);
+          clearTimeout(wheelTimerRef.current);
+          wheelTimerRef.current = setTimeout(function() {
+            isWheelingRef.current = false;
+            setIsWheeling(false);
+            if (speedTextRef.current) speedTextRef.current.textContent = formatSpeed(currentSpeedRef.current);
+          }, 500);
+        }
       }
       if (!rafRef.current) startFillAnimation();
     }
@@ -87,6 +104,7 @@ export default function CameraHUD() {
       appEvents.controlModeChanged.off(onControlModeChanged);
       appEvents.cameraSpeedUpdate.off(onSpeedUpdate);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      clearTimeout(wheelTimerRef.current);
     };
   }, []);
 
@@ -139,6 +157,9 @@ export default function CameraHUD() {
   }
   function onPointerDown(e) {
     e.currentTarget.setPointerCapture(e.pointerId);
+    clearTimeout(wheelTimerRef.current);
+    isWheelingRef.current = false;
+    setIsWheeling(false);
     isDraggingRef.current = true;
     setIsDragging(true);
     applySliderFraction(fractionFromEvent(e));
@@ -196,7 +217,7 @@ export default function CameraHUD() {
       {controlMode === 'spaceship' && (
         <>
           <div className="camera-hud-row">
-            <span className="camera-hud-label">{isDragging ? 'MAX SPEED' : 'SPEED'}</span>
+            <span className="camera-hud-label">{isDragging || isWheeling ? 'MAX SPEED' : 'SPEED'}</span>
             <span ref={speedTextRef} className="camera-hud-value">—</span>
           </div>
           <div
