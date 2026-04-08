@@ -29,7 +29,7 @@ export default sceneRenderer;
 
 function sceneRenderer(container) {
   var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
-  var modeAnim = null; // active mode-switch animation, or null
+  var cameraAnim = null; // active camera animation, or null
   var cmbSphere = null;
   var cmbVisible = true;
   var mwPoints = null;
@@ -75,11 +75,55 @@ function sceneRenderer(container) {
 
   function resetToOrigin() {
     if (!renderer) return;
+    if (cameraAnim) return; // ignore while animation is running
+
+    var cam    = renderer.camera();
+    var origin = new THREE.Vector3(0, 0, 0);
+    var startPos  = cam.position.clone();
+    var startQuat = cam.quaternion.clone();
+
     if (currentMode === 'satellite' && satelliteControl) {
+      // Move pivot to origin; updateCamera() repositions and reorients camera automatically
       satelliteControl.setPivot(0, 0, 0);
+      var endPos  = cam.position.clone();
+      var endQuat = cam.quaternion.clone();
+
+      // Restore camera for animation start
+      cam.position.copy(startPos);
+      cam.quaternion.copy(startQuat);
+
+      // Disable input during animation; internal pivot/radius/theta/phi state is preserved
+      satelliteControl.setEnabled(false);
+
+      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+        cam.position.copy(endPos);
+        cam.quaternion.copy(endQuat);
+        satelliteControl.setEnabled(true); // no cam arg → state already correct
+      });
+
     } else {
-      renderer.camera().position.set(0, 0, 0);
-      renderer.markDirty();
+      // Spaceship: fly to origin, oriented toward origin from current position
+      if (startPos.lengthSq() < 1e-6) return; // already at origin
+
+      var endPos = origin.clone();
+
+      // End orientation: look toward origin, preserving roll.
+      // cam.up is stale; the real world-up is the camera's local Y axis rotated by its quaternion.
+      var dir = origin.clone().sub(startPos).normalize();
+      var worldUp = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+      // Project worldUp onto the plane perpendicular to dir to preserve roll
+      var projUp = worldUp.clone().sub(dir.clone().multiplyScalar(worldUp.dot(dir)));
+      if (projUp.lengthSq() < 1e-6) projUp.set(0, 1, 0); // fallback if looking straight at origin
+      projUp.normalize();
+      var scratchCam = new THREE.PerspectiveCamera();
+      scratchCam.up.copy(projUp);
+      scratchCam.lookAt(dir); // scratchCam is at world origin; lookAt(dir) = look toward dir
+      var endQuat = scratchCam.quaternion.clone();
+
+      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+        cam.position.copy(endPos);
+        cam.quaternion.copy(endQuat);
+      });
     }
   }
 
@@ -97,24 +141,36 @@ function sceneRenderer(container) {
   }
 
   function animFrame(time) {
-    if (!modeAnim) return;
-    if (modeAnim.startTime === null) modeAnim.startTime = time;
-    var t  = Math.min((time - modeAnim.startTime) / 500, 1.0); // 500 ms
+    if (!cameraAnim) return;
+    if (cameraAnim.startTime === null) cameraAnim.startTime = time;
+    var t  = Math.min((time - cameraAnim.startTime) / cameraAnim.duration, 1.0);
     var te = easeInOutQuad(t);
     var cam = renderer.camera();
-    cam.position.lerpVectors(modeAnim.startPos, modeAnim.endPos, te);
-    cam.quaternion.slerpQuaternions(modeAnim.startQuat, modeAnim.endQuat, te);
+    cam.position.lerpVectors(cameraAnim.startPos, cameraAnim.endPos, te);
+    cam.quaternion.slerpQuaternions(cameraAnim.startQuat, cameraAnim.endQuat, te);
     renderer.markDirty();
     if (t >= 1.0) {
       renderer.offFrame(animFrame);
-      modeAnim.onDone();
-      modeAnim = null;
+      cameraAnim.onDone();
+      cameraAnim = null;
     }
+  }
+
+  function startCameraAnim(startPos, endPos, startQuat, endQuat, duration, onDone) {
+    cameraAnim = {
+      startPos: startPos, endPos: endPos,
+      startQuat: startQuat, endQuat: endQuat,
+      duration: duration || 500,
+      startTime: null,
+      onDone: onDone
+    };
+    renderer.onFrame(animFrame);
+    renderer.markDirty();
   }
 
   function toggleControlMode() {
     if (!renderer) return;
-    if (modeAnim) return; // ignore while animation is running
+    if (cameraAnim) return; // ignore while animation is running
 
     var cam = renderer.camera();
 
@@ -150,19 +206,12 @@ function sceneRenderer(container) {
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
 
-      modeAnim = {
-        startPos: startPos, endPos: endPos,
-        startQuat: startQuat, endQuat: endQuat,
-        startTime: null,
-        onDone: function() {
-          cam.position.copy(endPos);
-          cam.up.copy(upAxis);
-          cam.quaternion.copy(endQuat);
-          spaceshipControl.setEnabled(true);
-        }
-      };
-      renderer.onFrame(animFrame);
-      renderer.markDirty();
+      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+        cam.position.copy(endPos);
+        cam.up.copy(upAxis);
+        cam.quaternion.copy(endQuat);
+        spaceshipControl.setEnabled(true);
+      });
 
     } else {
       // Spaceship → Satellite: zoom camera out from spaceship to orbit
@@ -191,18 +240,11 @@ function sceneRenderer(container) {
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
 
-      modeAnim = {
-        startPos: startPos, endPos: endPos,
-        startQuat: startQuat, endQuat: endQuat,
-        startTime: null,
-        onDone: function() {
-          cam.position.copy(endPos);
-          cam.quaternion.copy(endQuat);
-          satelliteControl.setEnabled(true); // no cam arg → preserves computed state
-        }
-      };
-      renderer.onFrame(animFrame);
-      renderer.markDirty();
+      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+        cam.position.copy(endPos);
+        cam.quaternion.copy(endQuat);
+        satelliteControl.setEnabled(true); // no cam arg → preserves computed state
+      });
     }
   }
 
