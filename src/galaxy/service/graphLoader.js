@@ -1,6 +1,6 @@
 /**
  * Loads a multi-tracer graph from the data server. Each graph has:
- *   <name>/manifest.json  — { "all": ["tracer1", "tracer2", ...] }
+ *   <name>/manifest.json  — { "tracers": ["tracer1", "tracer2", ...] }
  *   <name>/<tracerId>/positions.bin  — float16 LE triplets (x,y,z per node, in Mpc)
  *   <name>/<tracerId>/meta.json      — optional, flat { id, name, count, color }
  *
@@ -21,7 +21,7 @@ async function loadGraph(name, progress) {
     request(config.dataUrl + name + '/manifest.json', { responseType: 'json' }),
     fetchRadar()
   ]);
-  var tracers = await Promise.all(manifest.all.map(function(tracerId) {
+  var tracers = await Promise.all(manifest.tracers.map(function(tracerId) {
     return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
   }));
   mergeTracers(tracers);

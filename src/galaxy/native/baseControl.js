@@ -41,6 +41,7 @@ function createBaseControl(markDirty) {
   };
 
   function onKeyDown(e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.code === 'KeyF') { appEvents.toggleControlMode.fire(); e.preventDefault(); return; }
     if (e.code === 'KeyR') { appEvents.resetToOrigin.fire(); e.preventDefault(); return; }
     var k = KEY[e.code];
