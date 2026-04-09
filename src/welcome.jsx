@@ -5,6 +5,8 @@ var surveys = [
   { id: 'desi',  name: 'DESI' },
   { id: 'quaia', name: 'Quaia' },
   { id: 'sdss',  name: 'SDSS' },
+  { id: '2dfgrs',  name: '2dFGRS' },
+  { id: 'cfa',  name: 'CfA' },
 ];
 
 function SurveyCard({ id, name }) {

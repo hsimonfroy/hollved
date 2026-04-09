@@ -261,7 +261,7 @@ function formatSI(chi) {
 }
 
 function formatZ(z) {
-  if (z < 0.01)  return z.toFixed(4);
+  if (z < 0.01)  return z.toFixed(5);
   if (z < 1)     return z.toFixed(3);
   if (z < 100)   return z.toFixed(1);
   return z.toFixed(0);
