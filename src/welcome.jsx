@@ -10,10 +10,10 @@ var surveys = [
 ];
 
 var SURVEY_COLORS = {
-  cfa:      '#8899bb',
+  cfa:      '#7d92bc',
   '2dfgrs': '#bbaa88',
-  sdss:     '#78b4ff',
-  quaia:    '#ff9944',
+  sdss:     '#7164ba',
+  quaia:    '#f1666a',
   desi:     '#44ddaa',
 };
 
@@ -22,12 +22,12 @@ var BOX_WIDTH  = 750;
 var BOX_HEIGHT = 520;
 var CHART_LEFT   = 70;
 var CHART_RIGHT  = BOX_WIDTH - 10;
-var CHART_TOP    = 70;
+var CHART_TOP    = 40;
 var CHART_BOTTOM = BOX_HEIGHT - 30;
 var CHART_WIDTH  = CHART_RIGHT - CHART_LEFT;
 var CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 var X_MIN = 1975, X_MAX = 2031;
-var Y_LOG_MIN = 3.0, Y_LOG_MAX = 8.5;
+var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.0;
 
 // Logo dimensions (SVG units)
 var LOGO_W      = 150;
@@ -51,33 +51,17 @@ for (var yr = 1980; yr <= 2030; yr += 5) { X_TICKS.push(yr); }
 // Compute logo top-left position for a survey given its loaded programs
 function computeLogoPos(survey, progs) {
   if (!progs.length) return null;
-
   var sorted = progs.slice().sort(function(a, b) { return a.start - b.start; });
 
-  // Multi-program with a time gap: place logo in the gap, vertically between segments
-  var hasGap = sorted.length > 1 && sorted[0].end < sorted[1].start;
-  if (hasGap) {
-    var cx = xScale((sorted[0].end + sorted[1].start) / 2);
-    var yc = (yScale(sorted[0].count) + yScale(sorted[1].count)) / 2;
-    return { logoX: cx - LOGO_W / 2, logoY: yc - LOGO_H / 2 };
-  }
-
-  // Otherwise: above or below the highest-count segment
-  var starts = sorted.map(function(p) { return p.start; });
-  var ends   = sorted.map(function(p) { return p.end;   });
-  var cx = xScale((Math.min.apply(null, starts) + Math.max.apply(null, ends)) / 2);
-
-  var maxCountProg = sorted.reduce(function(best, p) {
-    return p.count > best.count ? p : best;
-  });
-  var segY = yScale(maxCountProg.count);
-
+  // Place logo above or below the first program segment
+  var cx = xScale((sorted[0].end + sorted[0].start) / 2);
+  var segY = yScale(sorted[0].count);
+    
   var logoY;
   if (survey.cardSide === 'above') {
     logoY = segY - LOGO_OFFSET - LOGO_H;
   } else {
-    var maxSegY = Math.max.apply(null, progs.map(function(p) { return yScale(p.count); }));
-    logoY = maxSegY + LOGO_OFFSET;
+    logoY = segY + LOGO_OFFSET;
   }
   return { logoX: cx - LOGO_W / 2, logoY: logoY };
 }
@@ -148,11 +132,11 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
           Galaxies
         </text>
 
-        {/* X-axis baseline */}
+        {/* X-axis baseline
         <line
           x1={CHART_LEFT} y1={CHART_BOTTOM} x2={CHART_RIGHT} y2={CHART_BOTTOM}
           stroke='rgba(255,255,255,0.20)' strokeWidth={1}
-        />
+        /> */}
 
         {/* X-axis ticks + year labels */}
         {X_TICKS.map(function(tickYear) {
