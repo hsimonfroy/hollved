@@ -652,14 +652,24 @@ a.media {
   margin-bottom: 8px;
 }
 
+.timeline-card-bg {
+  fill: rgba(5, 8, 20, 0.5);
+  stroke: rgba(255, 255, 255, 0.50);
+  stroke-width: 1;
+  transition: stroke 0.15s;
+}
+
 .timeline-card {
   cursor: pointer;
   text-decoration: none;
-  opacity: 0.9;
-  transition: opacity 0.15s;
+  transition: transform 0.15s;
 
   &:hover {
-    opacity: 1.0;
+    transform: translateY(-3px);
+
+    .timeline-card-bg {
+      stroke: rgba(255, 255, 255, 0.99);
+    }
   }
 }
 

@@ -32,12 +32,13 @@ var CHART_BOTTOM = BOX_HEIGHT - 30;
 var CHART_WIDTH  = CHART_RIGHT - CHART_LEFT;
 var CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 var X_MIN = 1975, X_MAX = 2031;
-var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.0;
+var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.5;
 
 // Logo dimensions (SVG units)
 var LOGO_W      = 150;
 var LOGO_H      = 100;
-var LOGO_OFFSET = 30;  // gap between logo edge and segment line
+var LOGO_OFFSET  = 30;  // gap between card outer edge and segment line
+var CARD_PADDING = 5;  // padding inside card around logo
 
 function xScale(year) {
   return CHART_LEFT + (year - X_MIN) / (X_MAX - X_MIN) * CHART_WIDTH;
@@ -63,14 +64,14 @@ function computeLogoPos(survey, progs) {
     
   var logoY;
   if (survey.cardSide === 'above') {
-    logoY = segY - LOGO_OFFSET - LOGO_H;
+    logoY = segY - LOGO_OFFSET - LOGO_H - CARD_PADDING;
   } else {
-    logoY = segY + LOGO_OFFSET;
+    logoY = segY + LOGO_OFFSET + CARD_PADDING;
   }
   return { logoX: cx - LOGO_W / 2, logoY: logoY, side: survey.cardSide };
 }
 
-function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
+function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError, logoSizes }) {
   // Build flat program list, carrying cardSide from the parent survey
   var programs = [];
   surveys.forEach(function(s) {
@@ -186,17 +187,44 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
           );
         })}
 
-        {/* Survey logos — bare clickable images, no card background */}
+        {/* Clickable logos with card background */}
         {logoData.map(function(ld) {
           if (!ld.pos || logoErrors[ld.survey.id]) return null;
           var s = ld.survey;
+        var pos = ld.pos;
+          var paR = pos.side === 'above' ? 'xMidYMax meet' : 'xMidYMin meet';
+
+          // Compute actual rendered size via meet scaling
+          var size = logoSizes[s.id];
+          var rw, rh;
+          if (size) {
+            var sc = Math.min(LOGO_W / size.w, LOGO_H / size.h);
+            rw = size.w * sc;
+            rh = size.h * sc;
+          } else {
+            rw = LOGO_W;
+            rh = LOGO_H;
+          }
+
+          // Card rect snug around the actual rendered image
+          var imgLeft = pos.logoX + (LOGO_W - rw) / 2;
+          var imgTop  = pos.side === 'above' ? pos.logoY + LOGO_H - rh : pos.logoY;
+
           return (
             <a key={s.id} href={'#/' + s.id} className='timeline-card'>
+              <rect
+                x={imgLeft - CARD_PADDING}
+                y={imgTop - CARD_PADDING}
+                width={rw + 2 * CARD_PADDING}
+                height={rh + 2 * CARD_PADDING}
+                rx={10}
+                className='timeline-card-bg'
+              />
               <image
                 href={config.dataUrl + s.id + '/logo.png'}
-                x={ld.pos.logoX} y={ld.pos.logoY}
+                x={pos.logoX} y={pos.logoY}
                 width={LOGO_W} height={LOGO_H}
-                preserveAspectRatio={ld.pos.side === 'above' ? 'xMidYMax meet' : 'xMidYMin meet'}
+                preserveAspectRatio={paR}
                 onError={function() { onLogoError(s.id); }}
               />
             </a>
@@ -210,6 +238,7 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
 export default function WelcomePage() {
   var [surveysData, setSurveysData] = useState({});
   var [logoErrors, setLogoErrors] = useState({});
+  var [logoSizes, setLogoSizes] = useState({});
 
   useEffect(function() {
     surveys.forEach(function(s) {
@@ -221,6 +250,14 @@ export default function WelcomePage() {
           });
         })
         .catch(function() {});
+
+      var img = new Image();
+      img.onload = function() {
+        setLogoSizes(function(prev) {
+          return Object.assign({}, prev, { [s.id]: { w: img.naturalWidth, h: img.naturalHeight } });
+        });
+      };
+      img.src = config.dataUrl + s.id + '/logo.png';
     });
   }, []);
 
@@ -239,6 +276,7 @@ export default function WelcomePage() {
         surveysData={surveysData}
         logoErrors={logoErrors}
         onLogoError={handleLogoError}
+        logoSizes={logoSizes}
       />
       <div className='welcome-description'>
         <ul>
