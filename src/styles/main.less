@@ -644,10 +644,11 @@ a.media {
 
 .survey-timeline-wrap {
   width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
   display: flex;
-  justify-content: center;
+//   justify-content: center;
+  justify-content: flex-start;
+  padding-left: ~"max(0px, calc(50% - 390px))";
   margin-bottom: 8px;
 }
 

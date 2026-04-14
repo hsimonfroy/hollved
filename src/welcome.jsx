@@ -10,17 +10,22 @@ var surveys = [
 ];
 
 var SURVEY_COLORS = {
-  cfa:      '#7d92bc',
+  cfa:      '#919fbb',
   '2dfgrs': '#bbaa88',
-  sdss:     '#7164ba',
-  quaia:    '#f1666a',
+  sdss:     '#867acc',
+  quaia:    '#f07d81',
   desi:     '#44ddaa',
+//     cfa:      '#ffffff',
+//   '2dfgrs': '#ffffff',
+//   sdss:     '#ffffff',
+//   quaia:    '#ffffff',
+//   desi:     '#ffffff',
 };
 
 // SVG layout constants (preserving user's values, fixing CHART_BOTTOM)
 var BOX_WIDTH  = 750;
 var BOX_HEIGHT = 520;
-var CHART_LEFT   = 70;
+var CHART_LEFT   = 65;
 var CHART_RIGHT  = BOX_WIDTH - 10;
 var CHART_TOP    = 40;
 var CHART_BOTTOM = BOX_HEIGHT - 30;
@@ -43,7 +48,6 @@ function yScale(count) {
 }
 
 var Y_DECADES      = [3, 4, 5, 6, 7, 8];
-var Y_SUPERSCRIPTS = ['\u00B3', '\u2074', '\u2075', '\u2076', '\u2077', '\u2078'];
 
 var X_TICKS = [];
 for (var yr = 1980; yr <= 2030; yr += 5) { X_TICKS.push(yr); }
@@ -63,7 +67,7 @@ function computeLogoPos(survey, progs) {
   } else {
     logoY = segY + LOGO_OFFSET;
   }
-  return { logoX: cx - LOGO_W / 2, logoY: logoY };
+  return { logoX: cx - LOGO_W / 2, logoY: logoY, side: survey.cardSide };
 }
 
 function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
@@ -98,11 +102,11 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
     <div className='survey-timeline-wrap'>
       <svg
         viewBox={'0 0 '+ BOX_WIDTH +' '+ BOX_HEIGHT}
-        style={{ width: 'min(100%, '+ BOX_WIDTH +'px)', minWidth: '256px', height: 'auto' }}
+        style={{ width: 'min(100%, '+ BOX_WIDTH +'px)', height: 'auto' }}
         aria-label='Survey timeline'
       >
         {/* Y-axis grid lines + decade labels */}
-        {Y_DECADES.map(function(exp, i) {
+        {Y_DECADES.map(function(exp) {
           var y = yScale(Math.pow(10, exp));
           return (
             <g key={exp}>
@@ -116,7 +120,7 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
                 fontSize={14} fill='rgba(255,255,255,0.70)'
                 fontFamily='Roboto, Consolas, monospace'
               >
-                {'10' + Y_SUPERSCRIPTS[i]}
+                10<tspan dy='-8' fontSize='11'>{exp}</tspan>
               </text>
             </g>
           );
@@ -168,7 +172,7 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
             <g key={p.surveyId + '-' + p.name}>
               <line
                 x1={x1} y1={sy} x2={x2} y2={sy}
-                stroke={p.color} strokeWidth={6} strokeLinecap='round'
+                stroke={p.color} strokeWidth={5} strokeLinecap='round'
               />
               <text
                 x={mx} y={labelY}
@@ -192,7 +196,7 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
                 href={config.dataUrl + s.id + '/logo.png'}
                 x={ld.pos.logoX} y={ld.pos.logoY}
                 width={LOGO_W} height={LOGO_H}
-                preserveAspectRatio='xMidYMid meet'
+                preserveAspectRatio={ld.pos.side === 'above' ? 'xMidYMax meet' : 'xMidYMin meet'}
                 onError={function() { onLogoError(s.id); }}
               />
             </a>
