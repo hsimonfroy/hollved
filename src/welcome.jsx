@@ -3,8 +3,9 @@ import config from './config.js';
 
 var surveys = [
   { id: 'cfa',    name: 'CfA',    year: 1977, cardSide: 'above' },
-  { id: '2dfgrs', name: '2dFGRS', year: 1997, cardSide: 'above' },
-  { id: 'sdss',   name: 'SDSS',   year: 2009, cardSide: 'above' },
+  { id: '2dfgrs', name: '2dFGRS', year: 1997, cardSide: 'below' },
+  { id: 'sdss2',  name: 'SDSS2',   year: 2000, cardSide: 'above' },
+  { id: 'sdss4',   name: 'SDSS',   year: 2009, cardSide: 'above' },
   { id: 'quaia',  name: 'Quaia',  year: 2014, cardSide: 'below' },
   { id: 'desi',   name: 'DESI',   year: 2021, cardSide: 'above' },
 ];
@@ -12,7 +13,8 @@ var surveys = [
 var SURVEY_COLORS = {
   cfa:      '#919fbb',
   '2dfgrs': '#bbaa88',
-  sdss:     '#867acc',
+  sdss2:     '#867acc',
+  sdss4:     '#867acc',
   quaia:    '#f07d81',
   desi:     '#44ddaa',
 //     cfa:      '#ffffff',
@@ -34,11 +36,10 @@ var CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 var X_MIN = 1975, X_MAX = 2031;
 var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.5;
 
-// Logo dimensions (SVG units)
-var LOGO_W      = 150;
-var LOGO_H      = 100;
-var LOGO_OFFSET  = 30;  // gap between card outer edge and segment line
-var CARD_PADDING = 5;  // padding inside card around logo
+// Card dimensions (SVG units)
+var CARD_SIZE    = 100;  // square card outer size
+var LOGO_OFFSET  = 30;   // gap between card outer edge and segment line
+var CARD_PADDING = 5;   // padding inside card around logo
 
 function xScale(year) {
   return CHART_LEFT + (year - X_MIN) / (X_MAX - X_MIN) * CHART_WIDTH;
@@ -64,14 +65,14 @@ function computeLogoPos(survey, progs) {
     
   var logoY;
   if (survey.cardSide === 'above') {
-    logoY = segY - LOGO_OFFSET - LOGO_H - CARD_PADDING;
+    logoY = segY - LOGO_OFFSET - CARD_SIZE;
   } else {
-    logoY = segY + LOGO_OFFSET + CARD_PADDING;
+    logoY = segY + LOGO_OFFSET;
   }
-  return { logoX: cx - LOGO_W / 2, logoY: logoY, side: survey.cardSide };
+  return { logoX: cx - CARD_SIZE / 2, logoY: logoY, side: survey.cardSide };
 }
 
-function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError, logoSizes }) {
+function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
   // Build flat program list, carrying cardSide from the parent survey
   var programs = [];
   surveys.forEach(function(s) {
@@ -191,40 +192,21 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError, logoSiz
         {logoData.map(function(ld) {
           if (!ld.pos || logoErrors[ld.survey.id]) return null;
           var s = ld.survey;
-        var pos = ld.pos;
-          var paR = pos.side === 'above' ? 'xMidYMax meet' : 'xMidYMin meet';
-
-          // Compute actual rendered size via meet scaling
-          var size = logoSizes[s.id];
-          var rw, rh;
-          if (size) {
-            var sc = Math.min(LOGO_W / size.w, LOGO_H / size.h);
-            rw = size.w * sc;
-            rh = size.h * sc;
-          } else {
-            rw = LOGO_W;
-            rh = LOGO_H;
-          }
-
-          // Card rect snug around the actual rendered image
-          var imgLeft = pos.logoX + (LOGO_W - rw) / 2;
-          var imgTop  = pos.side === 'above' ? pos.logoY + LOGO_H - rh : pos.logoY;
-
+          var pos = ld.pos;
+          var imgSize = CARD_SIZE - 2 * CARD_PADDING;
           return (
             <a key={s.id} href={'#/' + s.id} className='timeline-card'>
               <rect
-                x={imgLeft - CARD_PADDING}
-                y={imgTop - CARD_PADDING}
-                width={rw + 2 * CARD_PADDING}
-                height={rh + 2 * CARD_PADDING}
+                x={pos.logoX} y={pos.logoY}
+                width={CARD_SIZE} height={CARD_SIZE}
                 rx={10}
                 className='timeline-card-bg'
               />
               <image
                 href={config.dataUrl + s.id + '/logo.png'}
-                x={pos.logoX} y={pos.logoY}
-                width={LOGO_W} height={LOGO_H}
-                preserveAspectRatio={paR}
+                x={pos.logoX + CARD_PADDING} y={pos.logoY + CARD_PADDING}
+                width={imgSize} height={imgSize}
+                preserveAspectRatio='xMidYMid meet'
                 onError={function() { onLogoError(s.id); }}
               />
             </a>
@@ -238,7 +220,6 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError, logoSiz
 export default function WelcomePage() {
   var [surveysData, setSurveysData] = useState({});
   var [logoErrors, setLogoErrors] = useState({});
-  var [logoSizes, setLogoSizes] = useState({});
 
   useEffect(function() {
     surveys.forEach(function(s) {
@@ -250,14 +231,6 @@ export default function WelcomePage() {
           });
         })
         .catch(function() {});
-
-      var img = new Image();
-      img.onload = function() {
-        setLogoSizes(function(prev) {
-          return Object.assign({}, prev, { [s.id]: { w: img.naturalWidth, h: img.naturalHeight } });
-        });
-      };
-      img.src = config.dataUrl + s.id + '/logo.png';
     });
   }, []);
 
@@ -276,7 +249,6 @@ export default function WelcomePage() {
         surveysData={surveysData}
         logoErrors={logoErrors}
         onLogoError={handleLogoError}
-        logoSizes={logoSizes}
       />
       <div className='welcome-description'>
         <ul>
