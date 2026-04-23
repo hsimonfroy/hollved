@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import config from './config.js';
 
+var SPECTROSCOPY_COLORS = {
+  'single-slit':         '#b6aea2',
+  'manual multi-fiber':  '#afa6e1',
+  'slitless':            '#f07d81',
+  'robotic multi-fiber': '#44ddaa',
+};
+
 var SURVEYS = [
-  { id: 'cfa',    cardSide: 'top',    nameSide: 'top',    color: '#919fbb' },
-  { id: '2dfgrs', cardSide: 'bottom', nameSide: 'bottom', color: '#bbaa88' },
-  { id: 'sdss2',  cardSide: 'top',    nameSide: 'top',    color: '#867acc' },
-  { id: 'sdss4',  cardSide: 'top',    nameSide: 'top',    color: '#867acc' },
-  { id: 'quaia',  cardSide: 'bottom', nameSide: 'bottom', color: '#f07d81' },
-  { id: 'euclid',  cardSide: 'bottom', nameSide: 'bottom', color: '#f07d81' },
-  { id: 'desi',   cardSide: 'top',    nameSide: 'top',    color: '#44ddaa' },
+  { id: 'cfa',    cardSide: 'top',    nameSide: 'top'    },
+  { id: '2dfgrs', cardSide: 'bottom', nameSide: 'bottom' },
+  { id: 'sdss2',  cardSide: 'top',    nameSide: 'top'    },
+  { id: 'sdss4',  cardSide: 'top',    nameSide: 'top'    },
+  { id: 'quaia',  cardSide: 'bottom', nameSide: 'bottom' },
+  { id: 'euclid', cardSide: 'bottom', nameSide: 'bottom' },
+  { id: 'desi',   cardSide: 'top',    nameSide: 'top'    },
 ];
 
 // SVG layout constants (preserving user's values, fixing CHART_BOTTOM)
@@ -16,12 +23,12 @@ var BOX_WIDTH  = 750;
 var BOX_HEIGHT = 520;
 var CHART_LEFT   = 65;
 var CHART_RIGHT  = BOX_WIDTH - 10;
-var CHART_TOP    = 40;
+var CHART_TOP    = 0;
 var CHART_BOTTOM = BOX_HEIGHT - 30;
 var CHART_WIDTH  = CHART_RIGHT - CHART_LEFT;
 var CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 var X_MIN = 1975, X_MAX = 2031;
-var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.5;
+var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.4;
 
 // Card dimensions (SVG units)
 var CARD_SIZE    = 90;  // square card outer size
@@ -80,9 +87,24 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
         start: p.start,
         end: p.end,
         count: p.count,
-        color: s.color,
+        spectroscopy: p.spectroscopy || '',
+        color: SPECTROSCOPY_COLORS[p.spectroscopy] || '#888888',
       });
     });
+  });
+
+  // Legend: unique spectroscopy types present in loaded data, in canonical order
+  var TYPE_ORDER = ['single-slit', 'manual multi-fiber', 'slitless', 'robotic multi-fiber'];
+  var seenSpec = {};
+  var legendEntries = [];
+  programs.forEach(function(p) {
+    if (p.spectroscopy && !seenSpec[p.spectroscopy]) {
+      seenSpec[p.spectroscopy] = true;
+      legendEntries.push({ type: p.spectroscopy, color: p.color });
+    }
+  });
+  legendEntries.sort(function(a, b) {
+    return TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type);
   });
 
   // Compute logo positions per survey
@@ -206,6 +228,45 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
             </a>
           );
         })}
+        {/* Spectroscopy legend */}
+        {legendEntries.length > 0 && (function() {
+          var LW = 145, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
+          var LH = TITLE_H + legendEntries.length * ROW_H + PAD_B;
+          var LX = CHART_LEFT + 5;
+          var LY = CHART_TOP + 120;
+        //   var LX = CHART_RIGHT - LW - 5;
+        //   var LY = CHART_BOTTOM - LH - 2;
+          return (
+            <g>
+              <rect
+                x={LX} y={LY} width={LW} height={LH}
+                fill='rgba(5,8,20,0.55)' stroke='rgba(255,255,255,0.22)'
+                strokeWidth={1} rx={6}
+              />
+              <text
+                x={LX + 12} y={LY + 16}
+                fontSize={10} fill='rgba(255,255,255,0.45)'
+                fontFamily='Roboto, sans-serif' fontWeight='bold' letterSpacing={1}
+              >SPECTROSCOPY</text>
+              {legendEntries.map(function(entry, i) {
+                var rowY = LY + TITLE_H + i * ROW_H + ROW_H / 2;
+                return (
+                  <g key={entry.type}>
+                    <line
+                      x1={LX + 10} y1={rowY} x2={LX + 30} y2={rowY}
+                      stroke={entry.color} strokeWidth={4} strokeLinecap='round'
+                    />
+                    <text
+                      x={LX + 40} y={rowY + 4}
+                      fontSize={12} fill='rgba(255,255,255,0.75)'
+                      fontFamily='Roboto, sans-serif'
+                    >{entry.type}</text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
