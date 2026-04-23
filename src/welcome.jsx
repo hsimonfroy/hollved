@@ -1,28 +1,15 @@
 import { useState, useEffect } from 'react';
 import config from './config.js';
 
-var surveys = [
-  { id: 'cfa',    name: 'CfA',    year: 1977, cardSide: 'above' },
-  { id: '2dfgrs', name: '2dFGRS', year: 1997, cardSide: 'below' },
-  { id: 'sdss2',  name: 'SDSS2',   year: 2000, cardSide: 'above' },
-  { id: 'sdss4',   name: 'SDSS',   year: 2009, cardSide: 'above' },
-  { id: 'quaia',  name: 'Quaia',  year: 2014, cardSide: 'below' },
-  { id: 'desi',   name: 'DESI',   year: 2021, cardSide: 'above' },
+var SURVEYS = [
+  { id: 'cfa',    cardSide: 'top',    nameSide: 'top',    color: '#919fbb' },
+  { id: '2dfgrs', cardSide: 'bottom', nameSide: 'bottom', color: '#bbaa88' },
+  { id: 'sdss2',  cardSide: 'top',    nameSide: 'top',    color: '#867acc' },
+  { id: 'sdss4',  cardSide: 'top',    nameSide: 'top',    color: '#867acc' },
+  { id: 'quaia',  cardSide: 'bottom', nameSide: 'bottom', color: '#f07d81' },
+  { id: 'euclid',  cardSide: 'bottom', nameSide: 'bottom', color: '#f07d81' },
+  { id: 'desi',   cardSide: 'top',    nameSide: 'top',    color: '#44ddaa' },
 ];
-
-var SURVEY_COLORS = {
-  cfa:      '#919fbb',
-  '2dfgrs': '#bbaa88',
-  sdss2:     '#867acc',
-  sdss4:     '#867acc',
-  quaia:    '#f07d81',
-  desi:     '#44ddaa',
-//     cfa:      '#ffffff',
-//   '2dfgrs': '#ffffff',
-//   sdss:     '#ffffff',
-//   quaia:    '#ffffff',
-//   desi:     '#ffffff',
-};
 
 // SVG layout constants (preserving user's values, fixing CHART_BOTTOM)
 var BOX_WIDTH  = 750;
@@ -37,8 +24,9 @@ var X_MIN = 1975, X_MAX = 2031;
 var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.5;
 
 // Card dimensions (SVG units)
-var CARD_SIZE    = 100;  // square card outer size
-var LOGO_OFFSET  = 30;   // gap between card outer edge and segment line
+var CARD_SIZE    = 90;  // square card outer size
+var LOGO_X_OFFSET  = 10;   // gap between card outer edge and segment line
+var LOGO_Y_OFFSET  = 30;   // gap between card outer edge and segment line
 var CARD_PADDING = 5;   // padding inside card around logo
 
 function xScale(year) {
@@ -58,41 +46,47 @@ for (var yr = 1980; yr <= 2030; yr += 5) { X_TICKS.push(yr); }
 function computeLogoPos(survey, progs) {
   if (!progs.length) return null;
   var sorted = progs.slice().sort(function(a, b) { return a.start - b.start; });
-
-  // Place logo above or below the first program segment
-  var cx = xScale((sorted[0].end + sorted[0].start) / 2);
   var segY = yScale(sorted[0].count);
-    
-  var logoY;
-  if (survey.cardSide === 'above') {
-    logoY = segY - LOGO_OFFSET - CARD_SIZE;
-  } else {
-    logoY = segY + LOGO_OFFSET;
+  var cx   = xScale((sorted[0].start + sorted[0].end) / 2);
+  var logoX, logoY;
+
+  if (survey.cardSide === 'top') {
+    logoX = cx - CARD_SIZE / 2;
+    logoY = segY - LOGO_Y_OFFSET - CARD_SIZE;
+  } else if (survey.cardSide === 'bottom') {
+    logoX = cx - CARD_SIZE / 2;
+    logoY = segY + LOGO_Y_OFFSET;
+  } else if (survey.cardSide === 'left') {
+    logoX = xScale(sorted[0].start) - LOGO_X_OFFSET - CARD_SIZE;
+    logoY = segY - CARD_SIZE / 2;
+  } else { // 'right'
+    logoX = xScale(sorted[sorted.length - 1].end) + LOGO_X_OFFSET;
+    logoY = segY - CARD_SIZE / 2;
   }
-  return { logoX: cx - CARD_SIZE / 2, logoY: logoY, side: survey.cardSide };
+  return { logoX: logoX, logoY: logoY, side: survey.cardSide };
 }
 
-function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
+function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
   // Build flat program list, carrying cardSide from the parent survey
   var programs = [];
-  surveys.forEach(function(s) {
+  SURVEYS.forEach(function(s) {
     var manifest = surveysData[s.id];
     if (!manifest || !manifest.programs) return;
     manifest.programs.forEach(function(p) {
       programs.push({
         surveyId: s.id,
-        cardSide: s.cardSide,
+        nameSide: s.nameSide,
         name: p.name,
         start: p.start,
         end: p.end,
         count: p.count,
-        color: SURVEY_COLORS[s.id],
+        color: s.color,
       });
     });
   });
 
   // Compute logo positions per survey
-  var logoData = surveys.map(function(s) {
+  var logoData = SURVEYS.map(function(s) {
     var manifest = surveysData[s.id];
     var progs = (manifest && manifest.programs) ? manifest.programs : [];
     return { survey: s, pos: computeLogoPos(s, progs) };
@@ -169,7 +163,7 @@ function SurveyTimeline({ surveys, surveysData, logoErrors, onLogoError }) {
           var x1 = xScale(p.start), x2 = xScale(p.end);
           var sy = yScale(p.count);
           var mx = (x1 + x2) / 2;
-          var labelY = p.cardSide === 'below' ? sy + 20 : sy - 9;
+          var labelY = p.nameSide === 'bottom' ? sy + 20 : sy - 9;
           return (
             <g key={p.surveyId + '-' + p.name}>
               <line
@@ -222,7 +216,7 @@ export default function WelcomePage() {
   var [logoErrors, setLogoErrors] = useState({});
 
   useEffect(function() {
-    surveys.forEach(function(s) {
+    SURVEYS.forEach(function(s) {
       fetch(config.dataUrl + s.id + '/manifest.json')
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -245,7 +239,7 @@ export default function WelcomePage() {
       <h1 className='welcome-title'>Lost in expansion</h1>
       <p className='welcome-subtitle'>Explore the largest 3D maps of the (observable) Universe</p>
       <SurveyTimeline
-        surveys={surveys}
+        SURVEYS={SURVEYS}
         surveysData={surveysData}
         logoErrors={logoErrors}
         onLogoError={handleLogoError}
