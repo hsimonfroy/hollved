@@ -24,7 +24,7 @@ async function loadGraph(name, progress) {
   var tracers = await Promise.all(manifest.tracers.map(function(tracerId) {
     return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
   }));
-  mergeTracers(tracers);
+  mergeTracers(tracers, manifest.densities || null, manifest.footprint || null);
 }
 
 async function fetchRadar() {
@@ -59,7 +59,7 @@ async function loadTracerData(endpoint, tracerId, graphName, progress) {
   };
 }
 
-function mergeTracers(tracerDataArray) {
+function mergeTracers(tracerDataArray, densities, footprint) {
   var totalNodes = tracerDataArray.reduce(function(sum, t) {
     return sum + (t.positions.length / 3);
   }, 0);
@@ -89,6 +89,7 @@ function mergeTracers(tracerDataArray) {
 
   appEvents.positionsDownloaded.fire(allPositions);
   appEvents.tracerRangesReady.fire(tracerRanges);
+  if (densities) appEvents.densitiesReady.fire(Object.assign({}, densities, { footprint: footprint || [] }));
 }
 
 function parseColor(colorStr) {

@@ -58,6 +58,12 @@ export default eventMirror([
   'tracerRangesReady',
 
   /**
+   * Fired after manifest densities are loaded.
+   * Carries the densities object: { chi_Mpc, dndchi, z, dndz, footprint }.
+   */
+  'densitiesReady',
+
+  /**
    * Fired to toggle visibility of a single tracer.
    * Arguments: (tracerId: string, visible: boolean)
    */

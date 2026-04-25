@@ -44,7 +44,7 @@ function yScale(count) {
   return CHART_BOTTOM - (Math.log10(count) - Y_LOG_MIN) / (Y_LOG_MAX - Y_LOG_MIN) * CHART_HEIGHT;
 }
 
-var Y_DECADES      = [3, 4, 5, 6, 7, 8];
+var Y_DECADES = [3, 4, 5, 6, 7, 8];
 
 var X_TICKS = [];
 for (var yr = 1980; yr <= 2030; yr += 5) { X_TICKS.push(yr); }

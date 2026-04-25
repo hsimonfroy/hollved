@@ -3,6 +3,10 @@
  * visibility toggles. It only appears when a multi-tracer graph is loaded
  * (i.e. when appEvents.tracerRangesReady has fired).
  *
+ * When manifest.densities is present a ▾ button expands the panel to show
+ * a DensityChart below the tracer list. The tracer rows act as an interactive
+ * legend — toggling a tracer hides/shows its density curve too.
+ *
  * Layout:
  *   GALAXIES  1,234,567          ← sum of visible non-synthetic tracer counts
  *   ─────────────────────
@@ -11,19 +15,31 @@
  *   ...
  *   ☐ ■ CMB
  *   ☐ ■ Radar
+ *   ─────────────────────
+ *   ▾                            ← expand/collapse chart (only when densities present)
+ *   [DensityChart]               ← collapsible
  */
 import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
+import DensityChart from './densityChart.jsx';
 
 var DEFAULT_HIDDEN = ['cmb', 'radar'];
 var SYNTHETIC_IDS  = ['cmb', 'radar'];
 
 export default function TracerSelector() {
-  var [tracers, setTracers] = useState([]);
+  var [tracers, setTracers]       = useState([]);
+  var [densities, setDensities]   = useState(null);
+  var [chartOpen, setChartOpen]   = useState(false);
+  var [xMode, setXMode]           = useState('chi');
+  var [yMode, setYMode]           = useState('volume');
 
   useEffect(function() {
     function handleTracerRanges(ranges) {
+      // Reset density chart state for new graph
+      setDensities(null);
+      setChartOpen(false);
+
       var configVisible = appConfig.getVisibleTracers();
       var mapped = ranges.map(function(r) {
         return {
@@ -65,6 +81,12 @@ export default function TracerSelector() {
     }
     appConfig.on('tracersChanged', onExternalTracerChange);
     return function() { appConfig.off('tracersChanged', onExternalTracerChange); };
+  }, []);
+
+  useEffect(function() {
+    function handleDensities(data) { setDensities(data); }
+    appEvents.densitiesReady.on(handleDensities);
+    return function() { appEvents.densitiesReady.off(handleDensities); };
   }, []);
 
   function toggleTracer(tracerId, visible) {
@@ -116,14 +138,38 @@ export default function TracerSelector() {
   var syntheticRows = tracers.filter(function(t) { return SYNTHETIC_IDS.indexOf(t.id) >= 0; }).map(makeRow);
 
   return (
-    <div className="tracer-selector">
-      {/* <div className="tracer-selector-row" style={{flexDirection:'column', gap:0}}>
-      </div> */}
+    <div className={'tracer-selector' + (chartOpen ? ' tracer-selector--expanded' : '')}>
+      <div className="tracer-selector-list">
         <span className="camera-hud-value">{formatCount(galaxyCount)}</span>
         <span className="camera-hud-label">Galaxies</span>
-      {surveyRows}
-      <hr className="tracer-selector-sep" />
-      {syntheticRows}
+        {surveyRows}
+        <hr className="tracer-selector-sep" />
+        {syntheticRows}
+        {densities && (
+          <div>
+            <hr className="tracer-selector-sep" />
+            <button
+              className="density-chart-toggle"
+              onClick={function() { setChartOpen(function(v) { return !v; }); }}
+              title={chartOpen ? 'Hide density chart' : 'Show density chart'}
+            >
+              <span className={'density-chart-toggle-arrow' + (chartOpen ? ' open' : '')}>›</span>
+            </button>
+          </div>
+        )}
+      </div>
+      {chartOpen && densities && (
+        <div className="tracer-selector-chart-panel">
+          <DensityChart
+            tracers={tracers}
+            densities={densities}
+            xMode={xMode}
+            yMode={yMode}
+            onXMode={setXMode}
+            onYMode={setYMode}
+          />
+        </div>
+      )}
     </div>
   );
 }
