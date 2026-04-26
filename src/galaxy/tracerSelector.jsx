@@ -149,11 +149,12 @@ export default function TracerSelector() {
           <div>
             <hr className="tracer-selector-sep" />
             <button
-              className="density-chart-toggle"
+              className={'density-chart-toggle' + (chartOpen ? ' open' : '')}
               onClick={function() { setChartOpen(function(v) { return !v; }); }}
               title={chartOpen ? 'Hide density chart' : 'Show density chart'}
             >
-              <span className={'density-chart-toggle-arrow' + (chartOpen ? ' open' : '')}>›</span>
+              <span className="camera-hud-label">Densities</span>
+              <span className="density-chart-toggle-arrow">›</span>
             </button>
           </div>
         )}

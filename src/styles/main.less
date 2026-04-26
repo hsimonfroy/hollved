@@ -529,7 +529,9 @@ a.media {
 .tracer-selector--expanded {
   flex-direction: row;
   align-items: flex-start;
-  gap: 0;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  z-index: 35;
 }
 
 .tracer-selector-list {
@@ -540,9 +542,10 @@ a.media {
 }
 
 .tracer-selector-chart-panel {
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  margin-left: 8px;
-  padding-left: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: 12px;
+  overflow: hidden;
 }
 
 // ── Density chart toggle button ───────────────────────────────────────────────
@@ -550,31 +553,55 @@ a.media {
 .density-chart-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 20px;
+  gap: 6px;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 20px;
-  line-height: 1;
+  align-self: flex-end;
 
   @media (hover: hover) {
-    &:hover { color: rgba(255, 255, 255, 0.85); }
+    &:hover .camera-hud-label,
+    &:hover .density-chart-toggle-arrow { color: rgba(255, 255, 255, 0.85); }
   }
+}
+
+// scoped to the toggle so other .camera-hud-label elements are unaffected
+.density-chart-toggle .camera-hud-label {
+  line-height: 1;
+  transition: translate 0.2s ease;
 }
 
 .density-chart-toggle-arrow {
   display: inline-block;
-  transition: transform 0.2s ease;
-  &.open { transform: rotate(180deg); }
+  width: 1px;
+  height: 14px;
+  line-height: 14px;    // line box = font-size → glyph centered, rotation stable
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, translate 0.2s ease;
+  transform-origin: center;
 }
+
+// arrow-travel ≈ label-width + gap; label-travel ≈ arrow-width + gap — tune if font differs
+.density-chart-toggle.open .density-chart-toggle-arrow {
+  translate: -45px 0;
+  transform: rotate(180deg);
+}
+
+.density-chart-toggle.open .camera-hud-label { translate: 20px 0; }
 
 // ── Density chart SVG ─────────────────────────────────────────────────────────
 
-.density-chart-svg { display: block; }
+.density-chart-svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 24px);
+}
 
 .density-grid-line {
   stroke: rgba(255, 255, 255, 0.10);
@@ -588,7 +615,7 @@ a.media {
 }
 
 .density-tick-label {
-  fill: rgba(255, 255, 255, 0.5);
+  fill: rgba(255, 255, 255, 0.6);
   font-family: 'Roboto Mono', 'Consolas', monospace;
   font-size: 12px;
 }
@@ -598,9 +625,9 @@ a.media {
 }
 
 .density-axis-btn-bg {
-  fill: rgba(5, 8, 20, 0.55);
-  stroke: rgba(255, 255, 255, 0.20);
-  stroke-width: 1;
+  fill: rgba(5, 8, 20, 0.01);
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 0.5;
 }
 
 .density-axis-btn-text {
@@ -625,9 +652,6 @@ a.media {
   font-size: 11px;
 }
 
-@media (max-width: 640px) {
-  .density-chart-toggle { display: none; }
-}
 
 // ── Top-right icon buttons (control mode + info + reset + exit) ─────────────
 

@@ -1,30 +1,32 @@
-// SVG layout constants
+// SVG layout constants — adjust these to resize the chart
 var SVG_W  = 400;
 var SVG_H  = 300;
-var LEFT   = 60;
-var RIGHT  = 5;
+var LEFT   = 65;
+var RIGHT  = 0;
 var TOP    = 10;
 var BOTTOM = 46;
 var W = SVG_W - LEFT - RIGHT;
 var H = SVG_H - TOP - BOTTOM;
 
+// Axis button dimensions — centered on their axis, adjust freely
+var XBTN_W = 130;  var XBTN_H = 22;
+var YBTN_W = 170;  var YBTN_H = 25;
+
 export default function DensityChart({ tracers, densities, xMode, yMode, onXMode, onYMode }) {
   var nDensityTracers = densities.chi_Mpc.length;
 
-  // Survey tracers that are visible AND have density data
   var visibleIndices = [];
   tracers.forEach(function(t, i) {
     if (i < nDensityTracers && t.visible) visibleIndices.push(i);
   });
 
-  // Fall back to first tracer for axis range when nothing is checked
   var rangeIndices = visibleIndices.length > 0 ? visibleIndices : (nDensityTracers > 0 ? [0] : []);
 
   var scales = computeScales(densities, rangeIndices, xMode, yMode);
 
   if (!scales) {
     return (
-      <svg width={SVG_W} height={SVG_H} className="density-chart-svg">
+      <svg viewBox={'0 0 ' + SVG_W + ' ' + SVG_H} className="density-chart-svg">
         <text x={SVG_W / 2} y={SVG_H / 2} textAnchor="middle" className="density-chart-empty">
           No data
         </text>
@@ -46,8 +48,14 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
   var xLabel = xAxisLabel(xMode);
   var yLabel = yAxisLabel(yMode, xMode);
 
+  // X axis button center
+  var xBtnY = TOP + H + 30;
+  // Y axis button center (in rotated local coords, centered on the chart)
+  var yBtnCx = 15;
+  var yBtnCy = TOP + H / 2;
+
   return (
-    <svg width={SVG_W} height={SVG_H} className="density-chart-svg">
+    <svg viewBox={'0 0 ' + SVG_W + ' ' + SVG_H} width={SVG_W} height={SVG_H} className="density-chart-svg">
       <defs>
         <clipPath id="density-chart-clip">
           <rect x={LEFT} y={TOP} width={W} height={H} />
@@ -62,7 +70,7 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
           <g key={v}>
             <line x1={LEFT} y1={sy} x2={LEFT + W} y2={sy} className="density-grid-line" />
             <text x={LEFT - 4} y={sy + 3.5} textAnchor="end" className="density-tick-label">
-              {formatYTick(v)}
+              10<tspan dy={-6} fontSize={10}>{Math.round(Math.log10(v))}</tspan>
             </text>
           </g>
         );
@@ -107,35 +115,36 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
         })}
       </g>
 
-      {/* Y axis button — rotated */}
+      {/* Y axis button — rotated; rect and text both centered at local origin */}
       <g className="density-axis-btn"
-         transform={'translate(11,' + (TOP + H / 2) + ') rotate(-90)'}
+         transform={'translate(' + yBtnCx + ',' + yBtnCy + ') rotate(-90)'}
          onClick={function() { onYMode(yMode === 'radial' ? 'volume' : 'radial'); }}>
-        <rect x={-65} y={-9} width={130} height={16} rx={3} className="density-axis-btn-bg" />
-        <text x={0} y={4} textAnchor="middle" className="density-axis-btn-text">{yLabel}</text>
+        <rect x={-YBTN_W/2} y={-YBTN_H/2} width={YBTN_W} height={YBTN_H} rx={3} className="density-axis-btn-bg" />
+        <text x={0} y={0} textAnchor="middle" dominantBaseline="middle"
+              className="density-axis-btn-text">{yLabel}</text>
       </g>
 
-      {/* X axis button */}
+      {/* X axis button — centered at (LEFT+W/2, xBtnY) */}
       <g className="density-axis-btn"
+         transform={'translate(' + (LEFT + W / 2) + ',' + xBtnY + ')'}
          onClick={function() { onXMode(xMode === 'chi' ? 'z' : 'chi'); }}>
-        <rect x={LEFT + W / 2 - 55} y={TOP + H + 22} width={110} height={16} rx={3}
-              className="density-axis-btn-bg" />
-        <text x={LEFT + W / 2} y={TOP + H + 33} textAnchor="middle"
+        <rect x={-XBTN_W/2} y={-XBTN_H/2} width={XBTN_W} height={XBTN_H} rx={3} className="density-axis-btn-bg" />
+        <text x={0} y={0} textAnchor="middle" dominantBaseline="middle"
               className="density-axis-btn-text">{xLabel}</text>
       </g>
     </svg>
   );
 }
 
-// ── Axis label text ───────────────────────────────────────────────────────────
+// ── Axis label content ────────────────────────────────────────────────────────
 
 function xAxisLabel(xMode) {
   return xMode === 'chi' ? 'Distance [Mpc]' : 'Redshift z';
 }
 
 function yAxisLabel(yMode, xMode) {
-  if (yMode === 'volume') return 'Volume density [Mpc]⁻³';
-  if (xMode === 'chi')    return 'Radial density [Mpc]⁻¹';
+  if (yMode === 'volume') return <>Volume density [Mpc<tspan dy={-6} fontSize={10}>-3</tspan><tspan dy={8}>]</tspan></>;
+  if (xMode === 'chi')    return <>Radial density [Mpc<tspan dy={-6} fontSize={10}>-1</tspan><tspan dy={8}>]</tspan></>;
   return 'Radial density';
 }
 
@@ -202,18 +211,7 @@ function computeScales(densities, indices, xMode, yMode) {
   return { xMin, xMax, logMin, logMax, xTicks, yTicks };
 }
 
-// ── Tick / label helpers ──────────────────────────────────────────────────────
-
-var SUP_DIGITS = ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹'];
-
-function toSuperscript(n) {
-  var s = n < 0 ? '⁻' : '';
-  return s + String(Math.abs(n)).split('').map(function(d) { return SUP_DIGITS[+d]; }).join('');
-}
-
-function formatYTick(v) {
-  return '10' + toSuperscript(Math.round(Math.log10(v)));
-}
+// ── Tick helpers ──────────────────────────────────────────────────────────────
 
 function niceLinearTicks(min, max, count) {
   var range = max - min;
