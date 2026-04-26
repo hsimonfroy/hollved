@@ -558,7 +558,10 @@ a.media {
   border: none;
   padding: 0;
   cursor: pointer;
-  align-self: flex-end;
+  font: inherit;
+//   font-family: 'Roboto Mono', 'Consolas', monospace;
+//   font-size: 8px;
+  align-self: flex-start;
 
   @media (hover: hover) {
     &:hover .camera-hud-label,
@@ -574,9 +577,8 @@ a.media {
 
 .density-chart-toggle-arrow {
   display: inline-block;
-  width: 1px;
-  height: 14px;
-  line-height: 14px;    // line box = font-size → glyph centered, rotation stable
+  height: 18px;
+  line-height: 1;
   text-align: center;
   color: rgba(255, 255, 255, 0.5);
   font-size: 16px;
@@ -585,13 +587,13 @@ a.media {
   transform-origin: center;
 }
 
-// arrow-travel ≈ label-width + gap; label-travel ≈ arrow-width + gap — tune if font differs
+// arrow-travel = labelWidth(≈58px) + gap(6px); label-travel = arrowWidth(≈10px) + gap(6px)
 .density-chart-toggle.open .density-chart-toggle-arrow {
-  translate: -45px 0;
+  translate: -64px 0;
   transform: rotate(180deg);
 }
 
-.density-chart-toggle.open .camera-hud-label { translate: 20px 0; }
+.density-chart-toggle.open .camera-hud-label { translate: 16px 0; }
 
 // ── Density chart SVG ─────────────────────────────────────────────────────────
 
