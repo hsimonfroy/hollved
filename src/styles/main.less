@@ -56,130 +56,6 @@ h4 {
   font-family: 'PT Sans', sans-serif;
 }
 
-.window-container {
-  background-color: rgba(0,0,0, 0.8);
-  color: #7F7F7F;
-  position: absolute;
-}
-
-.window-list-content {
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: 200px;
-}
-
-.node-focus {
-  cursor: pointer;
-}
-
-.search-results-window {
-  left: 16px;
-  top: 47px;
-  padding: 10px;
-  width: 395px;
-}
-
-.degree-results-window {
-  left: 16px;
-  bottom: 87px;
-  padding: 10px;
-  width: 395px;
-}
-
-.no-overflow {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@media (max-width: @screen-sm-min) {
-  .degree-results-window {
-    display: none;
-  }
-}
-
-.window-title {
-  strong {
-    color: @foreground;
-    font-weight: normal;
-    font-size: 1.2em;
-  }
-  .node-name {
-    color: @foreground;
-  }
-}
-
-.label {
-  color: @foreground;
-  background: @background;
-  position: absolute;
-  z-index: 1;
-}
-
-.loading {
-  padding: 10px;
-  left: 10px;
-  top: 10px;
-  font-family: monospace;
-}
-
-
-.node-hover-tooltip {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  color: @foreground;
-  padding: 4px 10px;;
-  pointer-events: none;
-  min-width: 200px;
-  border: 1px solid @border-color;
-
-  span {
-    margin: 0 5px;
-  }
-}
-
-.in-degree {
-  color: #90EE90;
-  cursor: pointer;
-}
-
-.window-indegree {
-  color: #90EE90;
-}
-
-.window-outdegree {
-  color: #F08080;
-}
-
-.out-degree {
-  color: #F08080;
-  cursor: pointer;
-}
-
-.node-hover-list {
-  position: absolute;
-  background: @background;
-  right: -20px;
-  bottom: 10px;
-  height: 150px;
-  color: @foreground;
-  padding: 4px;
-  pointer-events: none;
-  width: 220px;
-  overflow-y: scroll;
-  ul {
-    padding: 0;
-  }
-  li {
-    list-style-type: none;
-  }
-}
-
-.vcenter {
-    display: inline-block;
-    vertical-align: middle;
-    float: none;
-}
 
 a.reset-color,
 a.reset-color:hover,
@@ -495,12 +371,6 @@ a.media {
   gap: 3px;
 }
 
-.tracer-selector-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  line-height: 1.5;
-}
 
 .tracer-selector-sep {
   border: none;
@@ -529,8 +399,8 @@ a.media {
 .tracer-selector--expanded {
   flex-direction: row;
   align-items: flex-start;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
+  max-width: calc(100dvw - 24px);
+  max-height: calc(100dvh - 24px);
   z-index: 35;
 }
 
@@ -602,7 +472,7 @@ a.media {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: calc(100vh - 35px);
+  max-height: calc(100dvh - 35px);
 }
 
 .density-grid-line {
@@ -623,7 +493,7 @@ a.media {
 }
 
 .density-axis-label {
-  fill: rgba(255, 255, 255, 0.55);
+  fill: rgba(255, 255, 255, 0.6);
   font-family: 'Roboto Mono', 'Consolas', monospace;
   font-size: 12px;
   cursor: pointer;
@@ -688,14 +558,14 @@ a.media {
   top: 50%;
   transform: translateY(-50%);
   width: 320px;
-  max-height: 70vh;
+  max-height: 80dvh;
   overflow-y: auto;
   background: rgba(5, 8, 20, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.20);
   border-radius: 14px;
-  padding: 14px 16px 16px;
+  padding: 14px 14px 0px;
   pointer-events: auto;
   z-index: 30;
   font-family: 'Roboto', sans-serif;
@@ -792,7 +662,7 @@ a.media {
 // ── Welcome / menu page ───────────────────────────────────────────────────────
 
 .welcome-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -819,49 +689,6 @@ a.media {
   text-align: center;
 }
 
-.survey-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  justify-content: center;
-}
-
-.survey-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 210px;
-  height: 210px;
-  background: rgba(5, 8, 20, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.20);
-  border-radius: 14px;
-  text-decoration: none;
-  transition: border-color 0.15s, transform 0.15s;
-  padding: 20px;
-
-  img {
-    max-width: 170px;
-    max-height: 120px;
-    object-fit: contain;
-    flex: 1;
-    min-height: 0;
-  }
-
-  &:hover {
-    border-color: rgba(255, 255, 255, 0.50);
-    transform: translateY(-3px);
-    text-decoration: none;
-  }
-}
-
-.survey-card-name {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.70);
-  letter-spacing: 0.04em;
-  margin-top: 12px;
-  flex-shrink: 0;
-}
 
 .welcome-description {
   max-width: 700px;
