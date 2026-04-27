@@ -135,10 +135,10 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
               <text
                 x={CHART_LEFT - 10} y={y}
                 textAnchor='end' dominantBaseline='middle'
-                fontSize={14} fill='rgba(255,255,255,0.70)'
+                fontSize={15} fill='rgba(255,255,255,0.70)'
                 fontFamily='Roboto, Consolas, monospace'
               >
-                10<tspan dy='-8' fontSize='11'>{exp}</tspan>
+                10<tspan dy='-8' fontSize='12'>{exp}</tspan>
               </text>
             </g>
           );
@@ -147,7 +147,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
         {/* Rotated Y-axis label */}
         <text
           x={CHART_LEFT-50} y={midY}
-          textAnchor='middle' fontSize={16} fill='rgba(255,255,255,0.70)'
+          textAnchor='middle' fontSize={17} fill='rgba(255,255,255,0.70)'
           fontFamily='Roboto, sans-serif'
           transform={'rotate(-90,' + (CHART_LEFT-50) + ',' + midY + ')'}
         >
@@ -171,7 +171,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
               />
               <text
                 x={x} y={CHART_BOTTOM + 20}
-                textAnchor='middle' fontSize={14} fill='rgba(255,255,255,0.70)'
+                textAnchor='middle' fontSize={15} fill='rgba(255,255,255,0.70)'
                 fontFamily='Roboto, Consolas, monospace'
               >
                 {tickYear}
@@ -194,7 +194,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
               />
               <text
                 x={mx} y={labelY}
-                textAnchor='middle' fontSize={14}
+                textAnchor='middle' fontSize={15}
                 fill='rgba(255,255,255,0.8)'
                 fontFamily='Roboto, sans-serif'
               >
@@ -230,7 +230,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
         })}
         {/* Spectroscopy legend */}
         {legendEntries.length > 0 && (function() {
-          var LW = 145, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
+          var LW = 152, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
           var LH = TITLE_H + legendEntries.length * ROW_H + PAD_B;
           var LX = CHART_LEFT + 5;
           var LY = CHART_TOP + 120;
@@ -245,7 +245,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
               />
               <text
                 x={LX + 12} y={LY + 16}
-                fontSize={10} fill='rgba(255,255,255,0.45)'
+                fontSize={11} fill='rgba(255,255,255,0.45)'
                 fontFamily='Roboto, sans-serif' fontWeight='bold' letterSpacing={1}
               >SPECTROSCOPY</text>
               {legendEntries.map(function(entry, i) {
@@ -258,7 +258,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
                     />
                     <text
                       x={LX + 40} y={rowY + 4}
-                      fontSize={12} fill='rgba(255,255,255,0.75)'
+                      fontSize={13} fill='rgba(255,255,255,0.75)'
                       fontFamily='Roboto, sans-serif'
                     >{entry.type}</text>
                   </g>
