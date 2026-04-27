@@ -15,6 +15,6 @@ export default function LoadingIndicator() {
   }, []);
 
   return scene.isLoading() ?
-    <div className='label loading'>{loadingMessage}</div> :
+    <div className='loading'>{loadingMessage}</div> :
     null;
 }

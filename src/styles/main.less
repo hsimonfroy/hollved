@@ -84,6 +84,19 @@ a.media {
   color: wheat;
 }
 
+// ── Loading indicator (top-left, loadingIndicator.jsx) ───────────────────────
+
+.loading {
+  color: @foreground;
+  background: @background;
+  position: absolute;
+  z-index: 1;
+  padding: 10px;
+  left: 10px;
+  top: 10px;
+  font-family: monospace;
+}
+
 // ── Help panel ───────────────────────────────────────────────────────────────
 
 .help-panel {
@@ -102,6 +115,8 @@ a.media {
   z-index: 30;
   font-family: 'Roboto', sans-serif;
   animation: help-panel-in 0.18s ease-out both;
+  max-height: 85dvh;
+  overflow-y: auto;
 }
 
 @keyframes help-panel-in {
@@ -233,6 +248,7 @@ a.media {
 @media (pointer: coarse) {
   .help-panel {
     width: 200px;
+    pointer-events: auto;
   }
 }
 

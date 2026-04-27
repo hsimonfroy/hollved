@@ -4,12 +4,20 @@ import LoadingIndicator from './loadingIndicator.jsx';
 import Scene from './scene.jsx';
 import appEvents from './service/appEvents.js';
 
-function setViewportZoom(allow) {
+function lockViewportZoom() {
   var meta = document.querySelector('meta[name="viewport"]');
   if (!meta) return;
-  meta.content = allow
-    ? 'width=device-width, initial-scale=1'
-    : 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+  // First clamp current zoom to 1, then on the next frame lock it
+  meta.content = 'width=device-width, initial-scale=1, maximum-scale=1';
+  requestAnimationFrame(function() {
+    meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+  });
+}
+
+function unlockViewportZoom() {
+  var meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  meta.content = 'width=device-width, initial-scale=1';
 }
 
 export default function GalaxyPage() {
@@ -17,8 +25,8 @@ export default function GalaxyPage() {
   var currentPathRef = useRef(null);
 
   useEffect(function() {
-    setViewportZoom(false);
-    return function() { setViewportZoom(true); };
+    lockViewportZoom();
+    return unlockViewportZoom;
   }, []);
 
   useEffect(function() {
