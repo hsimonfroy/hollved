@@ -565,7 +565,7 @@ a.media {
 
   @media (hover: hover) {
     &:hover .camera-hud-label,
-    &:hover .density-chart-toggle-arrow { color: rgba(255, 255, 255, 0.85); }
+    &:hover .density-chart-toggle-arrow { color: rgba(255, 255, 255, 0.99); }
   }
 }
 
@@ -602,11 +602,11 @@ a.media {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: calc(100vh - 24px);
+  max-height: calc(100vh - 35px);
 }
 
 .density-grid-line {
-  stroke: rgba(255, 255, 255, 0.10);
+  stroke: rgba(255, 255, 255, 0.12);
   stroke-width: 1;
 }
 
@@ -622,29 +622,14 @@ a.media {
   font-size: 12px;
 }
 
-.density-axis-btn {
-  cursor: pointer;
-}
-
-.density-axis-btn-bg {
-  fill: rgba(5, 8, 20, 0.01);
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 0.5;
-}
-
-.density-axis-btn-text {
-  fill: rgba(255, 255, 255, 0.65);
+.density-axis-label {
+  fill: rgba(255, 255, 255, 0.55);
   font-family: 'Roboto Mono', 'Consolas', monospace;
   font-size: 12px;
-}
-
-@media (hover: hover) {
-  .density-axis-btn:hover .density-axis-btn-bg {
-    stroke: rgba(255, 255, 255, 0.45);
-    fill: rgba(5, 8, 20, 0.80);
-  }
-  .density-axis-btn:hover .density-axis-btn-text {
-    fill: rgba(255, 255, 255, 0.99);
+  cursor: pointer;
+  user-select: none;
+  @media (hover: hover) {
+    &:hover { fill: rgba(255, 255, 255, 0.99); }
   }
 }
 

@@ -2,15 +2,11 @@
 var SVG_W  = 400;
 var SVG_H  = 300;
 var LEFT   = 65;
-var RIGHT  = 0;
-var TOP    = 10;
-var BOTTOM = 46;
+var RIGHT  = 5;
+var TOP    = 11;
+var BOTTOM = 37;
 var W = SVG_W - LEFT - RIGHT;
 var H = SVG_H - TOP - BOTTOM;
-
-// Axis button dimensions — centered on their axis, adjust freely
-var XBTN_W = 130;  var XBTN_H = 22;
-var YBTN_W = 170;  var YBTN_H = 25;
 
 export default function DensityChart({ tracers, densities, xMode, yMode, onXMode, onYMode }) {
   var nDensityTracers = densities.chi_Mpc.length;
@@ -49,7 +45,7 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
   var yLabel = yAxisLabel(yMode, xMode);
 
   // X axis button center
-  var xBtnY = TOP + H + 30;
+  var xBtnY = TOP + H + 33;
   // Y axis button center (in rotated local coords, centered on the chart)
   var yBtnCx = 15;
   var yBtnCy = TOP + H / 2;
@@ -90,7 +86,7 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
       })}
 
       {/* Chart border */}
-      <rect x={LEFT} y={TOP} width={W} height={H} className="density-chart-border" />
+      {/* <rect x={LEFT} y={TOP} width={W} height={H} className="density-chart-border" /> */}
 
       {/* Density lines — clipped */}
       <g clipPath="url(#density-chart-clip)">
@@ -115,22 +111,19 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
         })}
       </g>
 
-      {/* Y axis button — rotated; rect and text both centered at local origin */}
-      <g className="density-axis-btn"
-         transform={'translate(' + yBtnCx + ',' + yBtnCy + ') rotate(-90)'}
+      {/* Y axis label — rotated, clickable */}
+      <g className="density-axis-label"
          onClick={function() { onYMode(yMode === 'radial' ? 'volume' : 'radial'); }}>
-        <rect x={-YBTN_W/2} y={-YBTN_H/2} width={YBTN_W} height={YBTN_H} rx={3} className="density-axis-btn-bg" />
-        <text x={0} y={0} textAnchor="middle" dominantBaseline="middle"
-              className="density-axis-btn-text">{yLabel}</text>
+        <rect x={yBtnCx - 12} y={yBtnCy - H / 2} width={24} height={H} fill="transparent" />
+        <text transform={'translate(' + yBtnCx + ',' + yBtnCy + ') rotate(-90)'}
+              textAnchor="middle" dominantBaseline="middle" pointerEvents="none">{yLabel}</text>
       </g>
 
-      {/* X axis button — centered at (LEFT+W/2, xBtnY) */}
-      <g className="density-axis-btn"
-         transform={'translate(' + (LEFT + W / 2) + ',' + xBtnY + ')'}
+      {/* X axis label — centered below chart, clickable */}
+      <g className="density-axis-label"
          onClick={function() { onXMode(xMode === 'chi' ? 'z' : 'chi'); }}>
-        <rect x={-XBTN_W/2} y={-XBTN_H/2} width={XBTN_W} height={XBTN_H} rx={3} className="density-axis-btn-bg" />
-        <text x={0} y={0} textAnchor="middle" dominantBaseline="middle"
-              className="density-axis-btn-text">{xLabel}</text>
+        <rect x={LEFT} y={xBtnY - 12} width={W} height={24} fill="transparent" />
+        <text x={LEFT + W / 2} y={xBtnY} textAnchor="middle" pointerEvents="none">{xLabel}</text>
       </g>
     </svg>
   );
@@ -139,13 +132,13 @@ export default function DensityChart({ tracers, densities, xMode, yMode, onXMode
 // ── Axis label content ────────────────────────────────────────────────────────
 
 function xAxisLabel(xMode) {
-  return xMode === 'chi' ? 'Distance [Mpc]' : 'Redshift z';
+  return xMode === 'chi' ? '‹ Distance [Mpc] ›' : '‹ Redshift z ›';
 }
 
 function yAxisLabel(yMode, xMode) {
-  if (yMode === 'volume') return <>Volume density [Mpc<tspan dy={-6} fontSize={10}>-3</tspan><tspan dy={8}>]</tspan></>;
-  if (xMode === 'chi')    return <>Radial density [Mpc<tspan dy={-6} fontSize={10}>-1</tspan><tspan dy={8}>]</tspan></>;
-  return 'Radial density';
+  if (yMode === 'volume') return <>‹ Volume density [Mpc<tspan dy={-6} fontSize={10}>-3</tspan><tspan dy={8}>] ›</tspan></>;
+  if (xMode === 'chi')    return <>‹ Radial density [Mpc<tspan dy={-6} fontSize={10}>-1</tspan><tspan dy={8}>] ›</tspan></>;
+  return '‹ Radial density ›';
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
@@ -197,6 +190,9 @@ function computeScales(densities, indices, xMode, yMode) {
   var xMin = Math.min.apply(null, allX);
   var xMax = Math.max.apply(null, allX);
   if (xMin === xMax) xMax = xMin + 1;
+  var xPad = (xMax - xMin) * 0.005;
+  xMin = Math.max(xMin - xPad, 0.000001);
+  xMax += xPad;
 
   var yMinVal = Math.min.apply(null, allY);
   var yMaxVal = Math.max.apply(null, allY);

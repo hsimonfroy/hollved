@@ -143,11 +143,8 @@ export default function TracerSelector() {
         <span className="camera-hud-value">{formatCount(galaxyCount)}</span>
         <span className="camera-hud-label">Galaxies</span>
         {surveyRows}
-        <hr className="tracer-selector-sep" />
-        {syntheticRows}
         {densities && (
-          <div>
-            <hr className="tracer-selector-sep" />
+            <div>
             <button
               className={'density-chart-toggle' + (chartOpen ? ' open' : '')}
               onClick={function() { setChartOpen(function(v) { return !v; }); }}
@@ -158,6 +155,8 @@ export default function TracerSelector() {
             </button>
           </div>
         )}
+        <hr className="tracer-selector-sep" />
+        {syntheticRows}
       </div>
       {chartOpen && densities && (
         <div className="tracer-selector-chart-panel">
