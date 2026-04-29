@@ -38,6 +38,10 @@ function sceneRenderer(container) {
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
   var DEFAULT_HIDDEN_TRACERS = ['cmb', 'radar'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
+  var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
+  var sliceEnabled = false;
+  var SLICE_THICKNESS = 200.0;
+  var SLICE_ALPHA     = 0.03;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
@@ -57,6 +61,7 @@ function sceneRenderer(container) {
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
   appEvents.resetToOrigin.on(resetToOrigin);
+  appEvents.setSliceEnabled.on(handleSetSliceEnabled);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -201,6 +206,10 @@ function sceneRenderer(container) {
       spaceshipControl.setEnabled(false); // disabled during animation
 
       currentMode = 'spaceship';
+      if (sliceEnabled) {
+        sliceEnabled = false;
+        renderer.getParticleView().getPointCloud().material.uniforms.uSliceEnabled.value = 0.0;
+      }
       updateRadarVisibility();
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
@@ -303,6 +312,9 @@ function sceneRenderer(container) {
           appEvents.cameraSpeedUpdate.fire(spaceshipControl.currentSpeed, spaceshipControl.movementSpeed);
         }
         if (baseControl.isActive()) renderer.markDirty();
+        if (sliceEnabled && currentMode === 'satellite') {
+          updateSliceUniforms(renderer.getParticleView().getPointCloud().material);
+        }
         if (radarEnabled && currentMode === 'satellite' && rulerObjects.length) {
           var upAxis = satelliteControl.getUpAxis();
           var cam    = renderer.camera();
@@ -333,6 +345,7 @@ function sceneRenderer(container) {
       }
 
       _zUp = new THREE.Vector3(0, 0, 1);
+      _sliceFwd = new THREE.Vector3();
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
@@ -351,6 +364,14 @@ function sceneRenderer(container) {
     }
 
     renderer.particles(positions);
+
+    // Sync slice constants to material (pointCloud exists after particles() call)
+    if (_sliceFwd) {
+      var mat = renderer.getParticleView().getPointCloud().material;
+      mat.uniforms.uSliceThickness.value = SLICE_THICKNESS;
+      mat.uniforms.uSliceAlpha.value     = SLICE_ALPHA;
+    }
+
     renderer.markDirty();
   }
 
@@ -425,6 +446,28 @@ function sceneRenderer(container) {
     }
     view.colors(colors);
     renderer.markDirty();
+  }
+
+  function handleSetSliceEnabled(enabled) {
+    sliceEnabled = enabled;
+    if (!renderer) return;
+    var mat = renderer.getParticleView().getPointCloud().material;
+    mat.uniforms.uSliceEnabled.value = enabled ? 1.0 : 0.0;
+    if (enabled && satelliteControl) updateSliceUniforms(mat);
+    renderer.markDirty();
+  }
+
+  function updateSliceUniforms(mat) {
+    var cam    = renderer.camera();
+    var upAxis = satelliteControl.getUpAxis();
+    var pivot  = satelliteControl.getPivot();
+    _sliceFwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    _sliceFwd.addScaledVector(upAxis, -_sliceFwd.dot(upAxis));
+    var len = _sliceFwd.length();
+    if (len < 0.001) return;
+    _sliceFwd.divideScalar(len);
+    mat.uniforms.uSliceNormal.value.copy(_sliceFwd);
+    mat.uniforms.uSlicePivot.value.copy(pivot);
   }
 
   function handleTracersChangedFromURL() {

@@ -33,6 +33,8 @@ export default function TracerSelector() {
   var [chartOpen, setChartOpen]   = useState(false);
   var [xMode, setXMode]           = useState('chi');
   var [yMode, setYMode]           = useState('volume');
+  var [sliceEnabled, setSliceEnabled] = useState(false);
+  var [isSatellite, setIsSatellite]   = useState(appConfig.getControlMode() === 'satellite');
 
   useEffect(function() {
     function handleTracerRanges(ranges) {
@@ -88,6 +90,20 @@ export default function TracerSelector() {
     appEvents.densitiesReady.on(handleDensities);
     return function() { appEvents.densitiesReady.off(handleDensities); };
   }, []);
+
+  useEffect(function() {
+    function handleModeChange(mode) {
+      setIsSatellite(mode === 'satellite');
+      if (mode !== 'satellite') setSliceEnabled(false);
+    }
+    appEvents.controlModeChanged.on(handleModeChange);
+    return function() { appEvents.controlModeChanged.off(handleModeChange); };
+  }, []);
+
+  function toggleSlice(enabled) {
+    setSliceEnabled(enabled);
+    appEvents.setSliceEnabled.fire(enabled);
+  }
 
   function toggleTracer(tracerId, visible) {
     var newTracers = tracers.map(function(t) {
@@ -157,6 +173,18 @@ export default function TracerSelector() {
         )}
         <hr className="tracer-selector-sep" />
         {syntheticRows}
+        {isSatellite && (
+          <>
+            <label className="tracer-selector-item">
+              <input
+                type='checkbox'
+                checked={sliceEnabled}
+                onChange={function(e) { toggleSlice(e.target.checked); }}
+              />
+              <span>Slice</span>
+            </label>
+          </>
+        )}
       </div>
       {chartOpen && densities && (
         <div className="tracer-selector-chart-panel">

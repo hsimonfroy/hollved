@@ -96,5 +96,11 @@ export default eventMirror([
   /**
    * Fired when the user wants to reset camera/pivot position to the origin (0,0,0).
    */
-  'resetToOrigin'
+  'resetToOrigin',
+
+  /**
+   * Fired when the user toggles the slice mode in the tracer selector (satellite mode only).
+   * Arg: (enabled: boolean)
+   */
+  'setSliceEnabled'
 ], appEvents);
