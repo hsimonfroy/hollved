@@ -130,7 +130,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
             <g key={exp}>
               <line
                 x1={CHART_LEFT} y1={y} x2={CHART_RIGHT} y2={y}
-                stroke='rgba(255,255,255,0.20)' strokeWidth={1}
+                stroke='rgba(255,255,255,0.25)' strokeWidth={1}
               />
               <text
                 x={CHART_LEFT - 10} y={y}
