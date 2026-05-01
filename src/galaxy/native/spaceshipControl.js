@@ -29,7 +29,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
   var MAX_MOVE_SPEED = 60;
-  var ROT_SPEED      = 0.5;  // Q/E roll speed (rad/s)
+  var ROT_SPEED      = 0.4;  // Q/E roll speed (rad/s)
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
 
@@ -102,8 +102,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
     }
 
     // Rotation: arrow keys + mouse + mobile joystick
-    var yaw   = (-keyState.yawRight  + keyState.yawLeft ) + mouseYawLeft   + mobileState.yawLeft;
-    var pitch = (-keyState.pitchDown + keyState.pitchUp ) - mousePitchDown  - mobileState.pitchDown;
+    var yaw   = (-keyState.yawRight  + keyState.yawLeft ) / 2 + mouseYawLeft   + mobileState.yawLeft;
+    var pitch = (-keyState.pitchDown + keyState.pitchUp ) / 2 - mousePitchDown  - mobileState.pitchDown;
     var roll  =  -keyState.rollRight + keyState.rollLeft;
 
     if (yaw || pitch || roll) {

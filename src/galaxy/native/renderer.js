@@ -40,8 +40,8 @@ function sceneRenderer(container) {
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
   var sliceEnabled = false;
-  var SLICE_THICKNESS = 200.0;
-  var SLICE_ALPHA     = 0.03;
+  var SLICE_ANGLE = Math.PI / 20; // angle between the two cones
+  var SLICE_ALPHA = 0.03;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
@@ -368,8 +368,10 @@ function sceneRenderer(container) {
     // Sync slice constants to material (pointCloud exists after particles() call)
     if (_sliceFwd) {
       var mat = renderer.getParticleView().getPointCloud().material;
-      mat.uniforms.uSliceThickness.value = SLICE_THICKNESS;
-      mat.uniforms.uSliceAlpha.value     = SLICE_ALPHA;
+      var _halfAngle = (Math.PI - SLICE_ANGLE) / 2;
+      var _cosHalf   = Math.cos(_halfAngle);
+      mat.uniforms.uSliceCosHalf2.value = _cosHalf * _cosHalf;
+      mat.uniforms.uSliceAlpha.value    = SLICE_ALPHA;
     }
 
     renderer.markDirty();
