@@ -34,6 +34,7 @@ function sceneRenderer(container) {
   var cmbSphere = null;
   var cmbVisible = true;
   var mwPoints = null;
+  var mwOldVisible = true;
   var detailedGalaxies = null;
   var radarEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
@@ -354,6 +355,7 @@ function sceneRenderer(container) {
       cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
+      mwOldVisible = configVisible ? configVisible.indexOf('mw_old') >= 0 : true;
       createMWParticles(renderer.scene());
       detailedGalaxies = createDetailedGalaxies(renderer.scene(), renderer.markDirty);
       if (configVisible && configVisible.indexOf('local') < 0) {
@@ -419,6 +421,11 @@ function sceneRenderer(container) {
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
+    if (tracerId === 'mw_old') {
+      mwOldVisible = visible;
+      if (mwPoints) { mwPoints.visible = visible; renderer.markDirty(); }
+      return;
+    }
     if (tracerId === 'local') {
       if (detailedGalaxies) detailedGalaxies.setVisible(visible);
       return;
@@ -466,7 +473,7 @@ function sceneRenderer(container) {
 
   function handleSetSliceEnabled(enabled) {
     sliceEnabled = enabled;
-    if (!renderer) return;
+    if (!renderer || !renderer.getParticleView()) return;
     var mat = renderer.getParticleView().getPointCloud().material;
     mat.uniforms.uSliceEnabled.value = enabled ? 1.0 : 0.0;
     if (enabled && satelliteControl) updateSliceUniforms(mat);
@@ -504,6 +511,8 @@ function sceneRenderer(container) {
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere.visible = cmbVisible;
     }
+    mwOldVisible = configVisible ? configVisible.indexOf('mw_old') >= 0 : true;
+    if (mwPoints) mwPoints.visible = mwOldVisible;
     if (detailedGalaxies) {
       detailedGalaxies.setVisible(configVisible ? configVisible.indexOf('local') >= 0 : true);
     }
@@ -644,7 +653,7 @@ function sceneRenderer(container) {
     var MW_RADIUS    = 0.02;   // Mpc half-extent
     var MW_THICKNESS = 0.002; // Mpc half-thickness (max Z displacement)
     var ALPHA_THRESH = 5;     // PNG alpha threshold (0–255)
-    var RES          = 150;    // downsample resolution
+    var RES          = 400;    // downsample resolution
     var N_SAMPLES    = 2;      // particles sampled per qualifying pixel
     // var ALPHA_POWER  = 1.1;   // >1 makes low-alpha particles fade faster
 
@@ -771,6 +780,7 @@ function sceneRenderer(container) {
          0.7470,  0.4838,  0.4560, 0,
          0,       0,       0,      1
       ));
+      mwPoints.visible = mwOldVisible;
       scene.add(mwPoints);
       renderer.markDirty();
     };

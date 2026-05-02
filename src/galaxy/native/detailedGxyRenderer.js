@@ -8,7 +8,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
   var allPoints = [];
   var _visible  = true;
 
-  fetch(config.dataUrl + 'aux/local_group/manifest.json')
+  fetch(config.dataUrl + 'aux/local/manifest.json')
     .then(function(r) { return r.json(); })
     .then(function(manifest) {
       manifest.galaxies.forEach(function(gal) { loadGalaxy(gal); });
@@ -25,7 +25,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
       allPoints.push(pts);
       markDirty();
     };
-    img.src = config.dataUrl + 'aux/local_group/' + gal.id + '.png';
+    img.src = config.dataUrl + 'aux/local/' + gal.id + '.png';
   }
 
   function buildPoints(gal, img) {
@@ -38,7 +38,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
     var dist      = gal.dist  / 1000; // kpc → Mpc
     var half_diam = (gal.diam / 2 / 1000) * PADDING_FACTOR;
     var half_thick = gal.thick / 2 / 1000;
-    var res       = Math.round(gal.res);
+    var res       = 4 * Math.round(gal.res);
 
     // Galaxy center in ICRS Cartesian
     var cx = dist * Math.cos(dec_rad) * Math.cos(ra_rad);
