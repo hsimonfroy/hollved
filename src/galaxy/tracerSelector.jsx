@@ -8,37 +8,38 @@
  * legend — toggling a tracer hides/shows its density curve too.
  *
  * Layout:
- *   GALAXIES  1,234,567          ← sum of visible non-synthetic tracer counts
+ *   GALAXIES  1,234,567          ← sum of visible survey tracer counts
  *   ─────────────────────
- *   ☑ ■ LRG                     ← tracer rows
+ *   ☑ ■ LRG                     ← survey tracer rows (with color swatch)
  *   ☑ ■ ELG
  *   ...
- *   ☐ ■ CMB
- *   ☐ ■ Radar
- *   ─────────────────────
  *   ▾                            ← expand/collapse chart (only when densities present)
- *   [DensityChart]               ← collapsible
+ *   ─────────────────────
+ *   ☑ ■ Local                   ← aux tracers (swatch when color is set)
+ *   ☐ ■ CMB
+ *   [satellite only:]
+ *   ☐   Radar
+ *   ☐   Slice
  */
 import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 import DensityChart from './densityChart.jsx';
 
-var DEFAULT_HIDDEN = ['cmb', 'radar'];
-var SYNTHETIC_IDS  = ['cmb', 'radar'];
+var DEFAULT_HIDDEN    = ['cmb', 'radar', 'slice'];
+var AUX_IDS           = ['local', 'cmb', 'radar', 'slice'];
+var SATELLITE_AUX_IDS = ['radar', 'slice']; // only shown in satellite mode
 
 export default function TracerSelector() {
-  var [tracers, setTracers]       = useState([]);
-  var [densities, setDensities]   = useState(null);
-  var [chartOpen, setChartOpen]   = useState(false);
-  var [xMode, setXMode]           = useState('chi');
-  var [yMode, setYMode]           = useState('volume');
-  var [sliceEnabled, setSliceEnabled] = useState(false);
-  var [isSatellite, setIsSatellite]   = useState(appConfig.getControlMode() === 'satellite');
+  var [tracers, setTracers]     = useState([]);
+  var [densities, setDensities] = useState(null);
+  var [chartOpen, setChartOpen] = useState(false);
+  var [xMode, setXMode]         = useState('chi');
+  var [yMode, setYMode]         = useState('volume');
+  var [isSatellite, setIsSatellite] = useState(appConfig.getControlMode() === 'satellite');
 
   useEffect(function() {
     function handleTracerRanges(ranges) {
-      // Reset density chart state for new graph
       setDensities(null);
       setChartOpen(false);
 
@@ -52,15 +53,22 @@ export default function TracerSelector() {
           visible: configVisible ? configVisible.indexOf(r.id) >= 0 : DEFAULT_HIDDEN.indexOf(r.id) < 0
         };
       });
-      // Append synthetic CMB tracer
+      // Append AUX tracers
+      mapped.push({
+        id: 'local', name: 'Local', color: 0xbbbbbbff, count: null,
+        visible: configVisible ? configVisible.indexOf('local') >= 0 : true
+      });
       mapped.push({
         id: 'cmb', name: 'CMB', color: 0x222222ff, count: null,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
-      // Append synthetic Radar tracer
       mapped.push({
-        id: 'radar', name: 'Radar', color: 0xbbbbbbff, count: null,
+        id: 'radar', name: 'Radar', color: null, count: null,
         visible: configVisible ? configVisible.indexOf('radar') >= 0 : false
+      });
+      mapped.push({
+        id: 'slice', name: 'Slice', color: null, count: null,
+        visible: configVisible ? configVisible.indexOf('slice') >= 0 : false
       });
       setTracers(mapped);
     }
@@ -94,16 +102,19 @@ export default function TracerSelector() {
   useEffect(function() {
     function handleModeChange(mode) {
       setIsSatellite(mode === 'satellite');
-      if (mode !== 'satellite') setSliceEnabled(false);
+      if (mode !== 'satellite') {
+        // Reset slice when leaving satellite mode
+        setTracers(function(prev) {
+          return prev.map(function(t) {
+            return t.id === 'slice' ? {id: t.id, name: t.name, color: t.color, count: t.count, visible: false} : t;
+          });
+        });
+        appEvents.setTracerVisibility.fire('slice', false);
+      }
     }
     appEvents.controlModeChanged.on(handleModeChange);
     return function() { appEvents.controlModeChanged.off(handleModeChange); };
   }, []);
-
-  function toggleSlice(enabled) {
-    setSliceEnabled(enabled);
-    appEvents.setSliceEnabled.fire(enabled);
-  }
 
   function toggleTracer(tracerId, visible) {
     var newTracers = tracers.map(function(t) {
@@ -122,9 +133,9 @@ export default function TracerSelector() {
 
   if (tracers.length === 0) return null;
 
-  // Sum counts for visible non-synthetic tracers
+  // Sum counts for visible survey (non-aux) tracers only
   var galaxyCount = tracers.reduce(function(sum, t) {
-    if (SYNTHETIC_IDS.indexOf(t.id) >= 0 || !t.visible || !t.count) return sum;
+    if (AUX_IDS.indexOf(t.id) >= 0 || !t.visible || !t.count) return sum;
     return sum + t.count;
   }, 0);
 
@@ -144,14 +155,15 @@ export default function TracerSelector() {
           checked={tracer.visible}
           onChange={function(e) { toggleTracer(tracer.id, e.target.checked); }}
         />
-        <span style={swatchStyle}></span>
+        {tracer.color !== null && <span style={swatchStyle}></span>}
         <span>{tracer.name}</span>
       </label>
     );
   }
 
-  var surveyRows    = tracers.filter(function(t) { return SYNTHETIC_IDS.indexOf(t.id) < 0; }).map(makeRow);
-  var syntheticRows = tracers.filter(function(t) { return SYNTHETIC_IDS.indexOf(t.id) >= 0; }).map(makeRow);
+  var surveyRows = tracers.filter(function(t) { return AUX_IDS.indexOf(t.id) < 0; }).map(makeRow);
+  var auxRows    = tracers.filter(function(t) { return AUX_IDS.indexOf(t.id) >= 0 && SATELLITE_AUX_IDS.indexOf(t.id) < 0; }).map(makeRow);
+  var satAuxRows = tracers.filter(function(t) { return SATELLITE_AUX_IDS.indexOf(t.id) >= 0; }).map(makeRow);
 
   return (
     <div className={'tracer-selector' + (chartOpen ? ' tracer-selector--expanded' : '')}>
@@ -160,7 +172,7 @@ export default function TracerSelector() {
         <span className="camera-hud-label">Galaxies</span>
         {surveyRows}
         {densities && (
-            <div>
+          <div>
             <button
               className={'density-chart-toggle' + (chartOpen ? ' open' : '')}
               onClick={function() { setChartOpen(function(v) { return !v; }); }}
@@ -172,19 +184,8 @@ export default function TracerSelector() {
           </div>
         )}
         <hr className="tracer-selector-sep" />
-        {syntheticRows}
-        {isSatellite && (
-          <>
-            <label className="tracer-selector-item">
-              <input
-                type='checkbox'
-                checked={sliceEnabled}
-                onChange={function(e) { toggleSlice(e.target.checked); }}
-              />
-              <span>Slice</span>
-            </label>
-          </>
-        )}
+        {auxRows}
+        {isSatellite && satAuxRows}
       </div>
       {chartOpen && densities && (
         <div className="tracer-selector-chart-panel">

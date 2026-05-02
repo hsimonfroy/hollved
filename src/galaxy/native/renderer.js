@@ -23,6 +23,7 @@ import createBaseControl     from './baseControl.js';
 import createSpaceshipControl from './spaceshipControl.js';
 import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
+import createDetailedGalaxies from './detailedGxyRenderer.js';
 import { Text } from 'troika-three-text';
 
 export default sceneRenderer;
@@ -33,6 +34,7 @@ function sceneRenderer(container) {
   var cmbSphere = null;
   var cmbVisible = true;
   var mwPoints = null;
+  var detailedGalaxies = null;
   var radarEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
@@ -353,6 +355,10 @@ function sceneRenderer(container) {
       cmbSphere.visible = cmbVisible;
 
       createMWParticles(renderer.scene());
+      detailedGalaxies = createDetailedGalaxies(renderer.scene(), renderer.markDirty);
+      if (configVisible && configVisible.indexOf('local') < 0) {
+        detailedGalaxies.setVisible(false);
+      }
 
       radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
       rulerObjects = createRadar(renderer.scene(), labelScene);
@@ -413,6 +419,14 @@ function sceneRenderer(container) {
   }
 
   function handleSetTracerVisibility(tracerId, visible) {
+    if (tracerId === 'local') {
+      if (detailedGalaxies) detailedGalaxies.setVisible(visible);
+      return;
+    }
+    if (tracerId === 'slice') {
+      handleSetSliceEnabled(visible);
+      return;
+    }
     if (tracerId === 'radar') {
       radarEnabled = visible;
       updateRadarVisibility();
@@ -489,6 +503,9 @@ function sceneRenderer(container) {
     if (cmbSphere) {
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere.visible = cmbVisible;
+    }
+    if (detailedGalaxies) {
+      detailedGalaxies.setVisible(configVisible ? configVisible.indexOf('local') >= 0 : true);
     }
 
     updateRadarVisibility();
@@ -822,6 +839,7 @@ function sceneRenderer(container) {
       mwPoints.material.dispose();
       mwPoints = null;
     }
+    if (detailedGalaxies) { detailedGalaxies.dispose(); detailedGalaxies = null; }
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
       cmbSphere.geometry.dispose();
