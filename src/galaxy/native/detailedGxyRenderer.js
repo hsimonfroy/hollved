@@ -1,9 +1,11 @@
 import config from '../../config.js';
 
 export default function createDetailedGalaxies(scene, markDirty) {
-  var PADDING_FACTOR = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
-  var N_SAMPLES      = 2;
-  var ALPHA_THRESH   = 5;   // applied AFTER Gaussian fade
+  var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
+  var RES_FACTOR              = 5;   // px/kpc
+  var DEFAULT_THICK_DIAM_RATIO = 3/4;
+  var N_SAMPLES               = 2;
+  var ALPHA_THRESH            = 5;
 
   var allPoints = [];
   var _visible  = true;
@@ -37,8 +39,8 @@ export default function createDetailedGalaxies(scene, markDirty) {
 
     var dist      = gal.dist  / 1000; // kpc → Mpc
     var half_diam = (gal.diam / 2 / 1000) * PADDING_FACTOR;
-    var half_thick = gal.thick / 2 / 1000;
-    var res       = Math.round(gal.res);
+    var half_thick = (gal.thick !== null ? gal.thick : DEFAULT_THICK_DIAM_RATIO * gal.diam) / 2 / 1000;
+    var res        = Math.round(RES_FACTOR * gal.diam);
 
     // Galaxy center in ICRS Cartesian
     var cx = dist * Math.cos(dec_rad) * Math.cos(ra_rad);
