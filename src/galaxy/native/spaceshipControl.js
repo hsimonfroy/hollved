@@ -28,7 +28,9 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center → yaw left
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
-  var MAX_MOVE_SPEED = 60;
+  var MOVE_SPEED = 10;   // Mpc/s, set by cursor
+  var MAX_MOVE_SPEED = 1000; // Mpc/s
+  var MIN_MOVE_SPEED = 0.01; // Mpc/s
   var ROT_SPEED      = 0.4;  // Q/E roll speed (rad/s)
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
@@ -75,8 +77,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   function onWheel(e) {
     if (!enabled) return;
     e.preventDefault();
-    MAX_MOVE_SPEED = Math.max(0.01, Math.min(1000,
-      MAX_MOVE_SPEED * Math.exp(-e.deltaY * WHEEL_SPEED)));
+    MOVE_SPEED = Math.max(MIN_MOVE_SPEED, Math.min(MAX_MOVE_SPEED,
+      MOVE_SPEED * Math.exp(-e.deltaY * WHEEL_SPEED)));
     markDirty();
   }
 
@@ -85,7 +87,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   function update(delta) {
     if (!enabled) return;
 
-    var moveMult = delta * MAX_MOVE_SPEED;
+    var moveMult = delta * MOVE_SPEED;
     var rotMult  = delta * ROT_SPEED / 2; // quaternion rotation is angle/2
 
     // Translation in camera-local space
@@ -93,7 +95,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
     var right = (keyState.right   + mobileState.right  ) - (keyState.left  + mobileState.left);
     var up    =  keyState.up - keyState.down;
 
-    _currentSpeed = Math.sqrt(fwd*fwd + right*right + up*up) * MAX_MOVE_SPEED;
+    _currentSpeed = Math.sqrt(fwd*fwd + right*right + up*up) * MOVE_SPEED;
 
     if (fwd || right || up) {
       camera.translateZ(-fwd   * moveMult);
@@ -141,8 +143,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
     setEnabled:  setEnabled,
     mobileState: mobileState,
 
-    get movementSpeed() { return MAX_MOVE_SPEED; },
-    set movementSpeed(v) { MAX_MOVE_SPEED = v; },
+    get movementSpeed() { return MOVE_SPEED; },
+    set movementSpeed(v) { MOVE_SPEED = v; },
     get rollSpeed()      { return ROT_SPEED; },
     set rollSpeed(v)     { ROT_SPEED = v; },
     get currentSpeed()   { return _currentSpeed; },

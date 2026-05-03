@@ -38,7 +38,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
     var dist      = gal.dist  / 1000; // kpc → Mpc
     var half_diam = (gal.diam / 2 / 1000) * PADDING_FACTOR;
     var half_thick = gal.thick / 2 / 1000;
-    var res       = 4 * Math.round(gal.res);
+    var res       = Math.round(gal.res);
 
     // Galaxy center in ICRS Cartesian
     var cx = dist * Math.cos(dec_rad) * Math.cos(ra_rad);
@@ -64,29 +64,18 @@ export default function createDetailedGalaxies(scene, markDirty) {
     var major_y = north_y * cos_pa + east_y * sin_pa;
     var major_z = north_z * cos_pa + east_z * sin_pa;
 
-    // Minor axis: perpendicular to major in sky plane
-    var minor_x = -north_x * sin_pa + east_x * cos_pa;
-    var minor_y = -north_y * sin_pa + east_y * cos_pa;
-    var minor_z = -north_z * sin_pa + east_z * cos_pa;
-
-    var cos_i = Math.cos(incl_rad), sin_i = Math.sin(incl_rad);
-
-    // col2: disk normal (-r_hat at incl=0 = face-on toward observer; minor_sky at incl=90 = edge-on)
-    var col2_x = -r_hat_x * cos_i + minor_x * sin_i;
-    var col2_y = -r_hat_y * cos_i + minor_y * sin_i;
-    var col2_z = -r_hat_z * cos_i + minor_z * sin_i;
-
-    // col1: completes right-hand frame (cross(col2, major))
-    var col1_x = minor_x * cos_i + r_hat_x * sin_i;
-    var col1_y = minor_y * cos_i + r_hat_y * sin_i;
-    var col1_z = minor_z * cos_i + r_hat_z * sin_i;
-
-    // Rotation matrix (local disk frame → ICRS), row-major for THREE.Matrix4.set()
+    // Rotation matrix: tilt sky frame by incl around major axis
+    // Columns = where sky-north, sky-east, -r_hat land after inclination
+    var q = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(major_x, major_y, major_z), -incl_rad);
+    var vN = new THREE.Vector3(north_x, north_y, north_z).applyQuaternion(q);
+    var vE = new THREE.Vector3(east_x,  east_y,  east_z ).applyQuaternion(q);
+    var vZ = new THREE.Vector3(-r_hat_x, -r_hat_y, -r_hat_z).applyQuaternion(q);
     var rotMat = new THREE.Matrix4().set(
-      major_x, col1_x, col2_x, 0,
-      major_y, col1_y, col2_y, 0,
-      major_z, col1_z, col2_z, 0,
-      0,       0,      0,      1
+      vN.x, vE.x, vZ.x, 0,
+      vN.y, vE.y, vZ.y, 0,
+      vN.z, vE.z, vZ.z, 0,
+      0,    0,    0,    1
     );
 
     // Sample image on canvas
@@ -96,32 +85,37 @@ export default function createDetailedGalaxies(scene, markDirty) {
     ctx.drawImage(img, 0, 0, res, res);
     var pixels = ctx.getImageData(0, 0, res, res).data;
 
-    // Worst-case alloc; trim at end
-    var positions = new Float32Array(res * res * N_SAMPLES * 3);
-    var colors    = new Uint8Array(res * res * N_SAMPLES * 4);
+    // First pass: count qualifying pixels
+    var count = 0;
+    for (var k = 0; k < res * res; k++) {
+      if (pixels[k * 4 + 3] >= ALPHA_THRESH) count++;
+    }
+    if (count === 0) return null;
+    var positions = new Float32Array(count * N_SAMPLES * 3);
+    var colors    = new Uint8Array(count * N_SAMPLES * 4);
     var pix = 0;
 
     for (var j = 0; j < res; j++) {
       for (var i = 0; i < res; i++) {
         var idx   = (j * res + i) * 4;
         var alpha = pixels[idx + 3];
-        if (alpha === 0) continue; // skip fully transparent early
+        if (alpha < ALPHA_THRESH) continue;
 
+        // Jitter sample position to break up regular grid effect.
         var u  = (i + Math.random() - 0.5) / (res - 1);
         var v  = (j + Math.random() - 0.5) / (res - 1);
+        
+        // Apply Gaussian alpha smoothing
         var du = u - 0.5, dv = v - 0.5;
         var gauss = Math.exp(-8.0 * (du * du + dv * dv));
-
-        // Apply Gaussian before threshold (ALPHA_THRESH applied after Gaussian)
         var a = Math.round((alpha / N_SAMPLES) * gauss);
-        if (a < ALPHA_THRESH) continue;
 
         var r = pixels[idx];
         var g = pixels[idx + 1];
         var b = pixels[idx + 2];
 
-        var x = (u - 0.5) * 2.0 * half_diam; // local X along major axis
-        var y = (v - 0.5) * 2.0 * half_diam; // local Y
+        var x = (0.5 - v) * 2.0 * half_diam;  // sky north (image top)
+        var y = (0.5 - u) * 2.0 * half_diam;  // sky east (image left)
 
         var zScale = (alpha / 255) * half_thick;
         for (var si = 0; si < N_SAMPLES; si++) {
@@ -138,11 +132,9 @@ export default function createDetailedGalaxies(scene, markDirty) {
       }
     }
 
-    if (pix === 0) return null;
-
     var geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, pix * 3), 3));
-    geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, pix * 4), 4, true));
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(colors, 4, true));
 
     var uSize = 13.0 * half_diam / res * 351.0;
     var mat = new THREE.ShaderMaterial({

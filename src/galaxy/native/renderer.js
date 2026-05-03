@@ -473,10 +473,10 @@ function sceneRenderer(container) {
 
   function handleSetSliceEnabled(enabled) {
     sliceEnabled = enabled;
-    if (!renderer || !renderer.getParticleView()) return;
-    var mat = renderer.getParticleView().getPointCloud().material;
-    mat.uniforms.uSliceEnabled.value = enabled ? 1.0 : 0.0;
-    if (enabled && satelliteControl) updateSliceUniforms(mat);
+    var pc = renderer && renderer.getParticleView() && renderer.getParticleView().getPointCloud();
+    if (!pc) return;
+    pc.material.uniforms.uSliceEnabled.value = enabled ? 1.0 : 0.0;
+    if (enabled && satelliteControl) updateSliceUniforms(pc.material);
     renderer.markDirty();
   }
 
@@ -653,7 +653,7 @@ function sceneRenderer(container) {
     var MW_RADIUS    = 0.02;   // Mpc half-extent
     var MW_THICKNESS = 0.002; // Mpc half-thickness (max Z displacement)
     var ALPHA_THRESH = 5;     // PNG alpha threshold (0–255)
-    var RES          = 400;    // downsample resolution
+    var RES          = 150;    // downsample resolution
     var N_SAMPLES    = 2;      // particles sampled per qualifying pixel
     // var ALPHA_POWER  = 1.1;   // >1 makes low-alpha particles fade faster
 
