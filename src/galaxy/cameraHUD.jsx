@@ -18,7 +18,6 @@ import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
 
-var RAD2DEG = 180 / Math.PI;
 var LOG_MIN   = -2;  // 10^LOG_MIN Mpc/s min speed
 var LOG_RANGE =  5;  // → 10^(LOG_MIN + LOG_RANGE) Mpc/s max speed
 
@@ -55,7 +54,7 @@ export default function CameraHUD() {
       if (data && data.hud) hudRef.current = data.hud;
     }
     function onCameraUpdate(p) {
-      setPos({ x: p.x, y: p.y, z: p.z });
+      setPos(p);  // {ra, dec, r} pre-computed by renderer.js
     }
     function onControlModeChanged(m) {
       setControlMode(m);
@@ -179,12 +178,9 @@ export default function CameraHUD() {
   if (!pos) return null;
 
   var hud = hudRef.current;
-  var x = pos.x, y = pos.y, z = pos.z;
-  var chi = Math.sqrt(x * x + y * y + z * z);
-
-  var ra  = chi > 0 ? Math.atan2(y, x) * RAD2DEG : 0;
-  if (ra < 0) ra += 360;
-  var dec = chi > 0 ? Math.atan2(z, Math.sqrt(x * x + y * y)) * RAD2DEG : 0;
+  var ra  = pos.ra;
+  var dec = pos.dec;
+  var chi = pos.r;
 
   var inRange     = hud && chi <= hud.chi_Mpc[hud.chi_Mpc.length - 1];
   var redshift    = inRange ? lerp(chi, hud.chi_Mpc, hud.z) : null;

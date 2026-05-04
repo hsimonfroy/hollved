@@ -3,9 +3,10 @@ import config from '../../config.js';
 export default function createDetailedGalaxies(scene, markDirty) {
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
   var RES_FACTOR              = 5;   // px/kpc
-  var DEFAULT_THICK_DIAM_RATIO = 3/4;
-  var N_SAMPLES               = 2;
-  var ALPHA_THRESH            = 5;
+  var DEFAULT_THICK_DIAM_RATIO = 3/4; // default thickness = 3/4 of diameter, if unspecified
+  var ALPHA_THRESH            = 5; // min pixel alpha to qualify
+  var N_SAMPLES               = 2; // points per qualifying pixel
+  var SMOOTH_ALPHA            = 10; // Gaussian alpha smoothing strength
 
   var allPoints = [];
   var _visible  = true;
@@ -40,7 +41,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
     var dist      = gal.dist  / 1000; // kpc → Mpc
     var half_diam = (gal.diam / 2 / 1000) * PADDING_FACTOR;
     var half_thick = (gal.thick !== null ? gal.thick : DEFAULT_THICK_DIAM_RATIO * gal.diam) / 2 / 1000;
-    var res        = Math.round(RES_FACTOR * gal.diam);
+    var res        = Math.round(gal.diam * RES_FACTOR * PADDING_FACTOR);
 
     // Galaxy center in ICRS Cartesian
     var cx = dist * Math.cos(dec_rad) * Math.cos(ra_rad);
@@ -109,7 +110,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
         
         // Apply Gaussian alpha smoothing
         var du = u - 0.5, dv = v - 0.5;
-        var gauss = Math.exp(-8.0 * (du * du + dv * dv));
+        var gauss = Math.exp(-SMOOTH_ALPHA * (du * du + dv * dv));
         var a = Math.round((alpha / N_SAMPLES) * gauss);
 
         var r = pixels[idx];

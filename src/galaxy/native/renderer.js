@@ -24,7 +24,10 @@ import createSpaceshipControl from './spaceshipControl.js';
 import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
+import { cartToRaDecR, dirToAzAlt } from './coordUtils.js';
 import { Text } from 'troika-three-text';
+
+var DEG2RAD = Math.PI / 180;
 
 export default sceneRenderer;
 
@@ -138,10 +141,19 @@ function sceneRenderer(container) {
   function updateQuery() {
     if (!renderer) return;
     var camera = renderer.camera();
-    var pos  = (currentMode === 'satellite' && satelliteControl) ? satelliteControl.getPivot() : camera.position;
-    var zoom = satelliteControl ? satelliteControl.getRadius() : appConfig.getZoom();
-    appConfig.setCameraConfig(pos, camera.quaternion, zoom);
-    appEvents.cameraHUDUpdate.fire({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
+    var cp = camera.position;
+    // HUD always shows camera position (not pivot), even in satellite mode
+    appEvents.cameraHUDUpdate.fire(cartToRaDecR(cp.x, cp.y, cp.z));
+
+    if (currentMode === 'satellite' && satelliteControl) {
+      var pivot  = satelliteControl.getPivot();
+      var up     = satelliteControl.getUpAxis();
+      var bwd    = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+      var azAlt  = dirToAzAlt({ x: bwd.x, y: bwd.y, z: bwd.z }, { x: up.x, y: up.y, z: up.z });
+      appConfig.setSatelliteState(pivot, satelliteControl.getRadius(), up, azAlt.az, azAlt.alt);
+    } else if (currentMode === 'spaceship' && spaceshipControl) {
+      appConfig.setSpaceshipState(camera.position, camera.quaternion, spaceshipControl.movementSpeed);
+    }
   }
 
   function easeInOutQuad(t) {
@@ -340,11 +352,12 @@ function sceneRenderer(container) {
 
       if (currentMode === 'satellite') {
         spaceshipControl.setEnabled(false);
-        satelliteControl.setEnabled(true);  // just set enabled flag, no initFromCamera
-        moveCameraInternal();               // restoreFromURL with URL state
+        satelliteControl.setEnabled(true);
+        moveCameraInternal();
       } else {
         satelliteControl.setEnabled(false);
         spaceshipControl.setEnabled(true);
+        spaceshipControl.movementSpeed = appConfig.getSpeed();
       }
 
       _zUp = new THREE.Vector3(0, 0, 1);
@@ -537,23 +550,18 @@ function sceneRenderer(container) {
   function moveCameraInternal() {
     if (!renderer) return;
     var camera  = renderer.camera();
-    var pos     = appConfig.getCameraPosition();
-    var lookAt  = appConfig.getCameraLookAt();  // {x,y,z,w} quaternion
-    var zoom    = appConfig.getZoom();
     var newMode = appConfig.getControlMode();
 
     if (newMode !== currentMode && satelliteControl && spaceshipControl) {
-      // Mode changed via URL — perform full mode switch
       currentMode = newMode;
       if (newMode === 'satellite') {
         spaceshipControl.setEnabled(false);
-        satelliteControl.restoreFromURL(pos, zoom, lookAt);
+        restoreSatelliteFromConfig();
         satelliteControl.setEnabled(true);
         updateRadarVisibility();
       } else {
         satelliteControl.setEnabled(false);
-        camera.position.set(pos.x, pos.y, pos.z);
-        camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
+        restoreSpaceshipFromConfig(camera);
         spaceshipControl.setEnabled(true);
         updateRadarVisibility();
       }
@@ -561,12 +569,26 @@ function sceneRenderer(container) {
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
     } else if (newMode === 'satellite' && satelliteControl) {
-      satelliteControl.restoreFromURL(pos, zoom, lookAt);
+      restoreSatelliteFromConfig();
     } else {
-      if (pos) camera.position.set(pos.x, pos.y, pos.z);
-      if (lookAt) camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
+      restoreSpaceshipFromConfig(camera);
     }
     renderer.markDirty();
+  }
+
+  function restoreSatelliteFromConfig() {
+    var pos   = appConfig.getCameraPosition();
+    var up    = appConfig.getUpAxis();
+    var azAlt = appConfig.getAzAlt();
+    var r     = appConfig.getRadius();
+    satelliteControl.restoreFromAzAlt(pos, r, up, azAlt.az * DEG2RAD, azAlt.alt * DEG2RAD);
+  }
+
+  function restoreSpaceshipFromConfig(camera) {
+    var pos    = appConfig.getCameraPosition();
+    var lookAt = appConfig.getCameraLookAt();
+    camera.position.set(pos.x, pos.y, pos.z);
+    camera.quaternion.set(lookAt.x, lookAt.y, lookAt.z, lookAt.w);
   }
 
   // ---------------------------------------------------------------------------

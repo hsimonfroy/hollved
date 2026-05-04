@@ -2,34 +2,40 @@ import appEvents from '../service/appEvents.js';
 import eventify from 'ngraph.events';
 import scene from '../store/scene.js';
 import qs from 'qs';
+import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from './coordUtils.js';
 
-
+// Default view: Butterfly orientation expressed in the new URL format.
+// Satellite fields derived analytically from rot={x:-0.7454,y:0.1422,z:-2.9714}, R=4000.
 var defaultConfig = {
-  pos: { x: 0, y: 0, z: 0 },
-  // rotvec (axis * angle)
-  rot: { x: -0.7454, y: 0.1422, z: -2.9714 }, // Butterfly
-//   rot: { x: 1.2092, y: 1.2092, z: 1.2092 }, // RA DEC plane
-  zoom: 4000,
-//   zoom: 10,
-  mode: 'satellite',
-  visibleTracers: null  // null means all tracers visible
+  mode:   'satellite',
+  pos:    { ra: 0.000, dec:  0.000, r:    0.000 },
+  zen:    { ra: 272.886, dec: -6.204 },
+  azaltr: { az:  28.000, alt:  0.000, r: 4000.000 },
+  rot:    { x: -0.7454, y: 0.1422, z: -2.9714 },
+  speed:  10.00,
+  visibleTracers: null
 };
 
 export default appConfig();
 
 function appConfig() {
   var hashConfig = parseFromHash(window.location.hash);
-  var hashUpdate; // async hash update id
+  var hashUpdate;
 
   var api = {
     getCameraPosition:  getCameraPosition,
+    getUpAxis:          getUpAxis,
+    getAzAlt:           getAzAlt,
+    getRadius:          getRadius,
+    getZoom:            getRadius,    // backward-compat alias
     getCameraLookAt:    getCameraLookAt,
-    getZoom:            getZoom,
-    setCameraConfig:    setCameraConfig,
+    getSpeed:           getSpeed,
     getVisibleTracers:  getVisibleTracers,
     setVisibleTracers:  setVisibleTracers,
     getControlMode:     getControlMode,
-    setControlMode:     setControlMode
+    setControlMode:     setControlMode,
+    setSatelliteState:  setSatelliteState,
+    setSpaceshipState:  setSpaceshipState
   };
 
   appEvents.queryChanged.on(queryChanged);
@@ -38,52 +44,80 @@ function appConfig() {
   eventify(api);
   return api;
 
+  // ── Getters ─────────────────────────────────────────────────────────────────
 
-  function getZoom() {
-    return hashConfig.zoom;
+  function getCameraPosition() {
+    var p = hashConfig.pos;
+    return raDec2Cart(p.ra, p.dec, p.r);
+  }
+
+  function getUpAxis() {
+    var z = hashConfig.zen;
+    return raDec2UnitVec(z.ra, z.dec);
+  }
+
+  function getAzAlt() {
+    return { az: hashConfig.azaltr.az, alt: hashConfig.azaltr.alt };
+  }
+
+  function getRadius() {
+    return hashConfig.azaltr.r;
+  }
+
+  function getCameraLookAt() {
+    var r = hashConfig.rot;
+    return rotvecToQuat(r.x, r.y, r.z);
+  }
+
+  function getSpeed() {
+    return hashConfig.speed;
   }
 
   function getVisibleTracers() {
     return hashConfig.visibleTracers;
   }
 
-  function getCameraPosition() {
-    return hashConfig.pos;
-  }
-
-  function getCameraLookAt() {
-    // Convert stored rotvec → quaternion on the fly
-    return rotvecToQuat(hashConfig.rot.x, hashConfig.rot.y, hashConfig.rot.z);
-  }
-
-  function queryChanged() {
-    var next = parseFromHash(window.location.hash);
-
-    var cameraChanged = !sameVec3(next.pos, hashConfig.pos) ||
-                        !sameVec3(next.rot, hashConfig.rot) ||
-                        next.zoom !== hashConfig.zoom ||
-                        next.mode !== hashConfig.mode;
-    var tracersChanged = !sameTracers(next.visibleTracers, hashConfig.visibleTracers);
-
-    if (cameraChanged) {
-      hashConfig.pos  = next.pos;
-      hashConfig.rot  = next.rot;
-      hashConfig.zoom = next.zoom;
-      hashConfig.mode = next.mode;
-      api.fire('camera');
-    }
-    if (tracersChanged) {
-      hashConfig.visibleTracers = next.visibleTracers;
-      api.fire('tracersChanged');
-    }
-  }
-
   function getControlMode() {
     return hashConfig.mode;
   }
 
-  function setControlMode(m) {
-    hashConfig.mode = m;
+  // ── Setters ─────────────────────────────────────────────────────────────────
+
+  function setSatelliteState(pivot_xyz, radius, upAxis_xyz, az_deg, alt_deg) {
+    var pr = cartToRaDecR(pivot_xyz.x, pivot_xyz.y, pivot_xyz.z);
+    var ur = unitVecToRaDec(upAxis_xyz.x, upAxis_xyz.y, upAxis_xyz.z);
+
+    var changed = hashConfig.mode !== 'satellite' ||
+      !sameRaDecR(pr, hashConfig.pos) ||
+      !sameRaDec(ur, hashConfig.zen) ||
+      Math.abs(az_deg  - hashConfig.azaltr.az)  > 1e-4 ||
+      Math.abs(alt_deg - hashConfig.azaltr.alt) > 1e-4 ||
+      Math.abs(radius  - hashConfig.azaltr.r)   > 1e-4;
+
+    if (!changed) return;
+
+    hashConfig.mode   = 'satellite';
+    hashConfig.pos    = pr;
+    hashConfig.zen    = ur;
+    hashConfig.azaltr = { az: az_deg, alt: alt_deg, r: radius };
+    updateHash();
+  }
+
+  function setSpaceshipState(pos_xyz, q, speed) {
+    var pr     = cartToRaDecR(pos_xyz.x, pos_xyz.y, pos_xyz.z);
+    var newRot = quatToRotvec(q.x, q.y, q.z, q.w);
+
+    var changed = hashConfig.mode !== 'spaceship' ||
+      !sameRaDecR(pr, hashConfig.pos) ||
+      !sameVec3(newRot, hashConfig.rot) ||
+      Math.abs(speed - hashConfig.speed) > 1e-4;
+
+    if (!changed) return;
+
+    hashConfig.mode  = 'spaceship';
+    hashConfig.pos   = pr;
+    hashConfig.rot   = newRot;
+    hashConfig.speed = speed;
     updateHash();
   }
 
@@ -92,29 +126,29 @@ function appConfig() {
     updateHash();
   }
 
-  function setCameraConfig(pos, q, zoom) {
-    var newRot = quatToRotvec(q.x, q.y, q.z, q.w);
-    var changed = !sameVec3(pos, hashConfig.pos) ||
-                  !sameVec3(newRot, hashConfig.rot) ||
-                  zoom !== hashConfig.zoom;
-    if (!changed) return;
-
-    hashConfig.pos.x = pos.x; hashConfig.pos.y = pos.y; hashConfig.pos.z = pos.z;
-    hashConfig.rot.x = newRot.x; hashConfig.rot.y = newRot.y; hashConfig.rot.z = newRot.z;
-    hashConfig.zoom  = zoom;
-
+  function setControlMode(m) {
+    hashConfig.mode = m;
     updateHash();
   }
 
+  // ── Hash serialization ──────────────────────────────────────────────────────
+
   function updateHash() {
     var name = scene.getGraphName();
-    var p = hashConfig.pos;
-    var r = hashConfig.rot;
+    var p    = hashConfig.pos;
     var hash = '#/' + name +
-      '?mode=' + hashConfig.mode +
-      '&pos='  + Math.round(p.x) + ',' + Math.round(p.y) + ',' + Math.round(p.z) +
-      '&rot='  + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4) +
-      '&zoom=' + Math.round(hashConfig.zoom);
+      '?pos=' + p.ra.toFixed(3) + ',' + p.dec.toFixed(3) + ',' + p.r.toFixed(3);
+
+    if (hashConfig.mode === 'satellite') {
+      var z = hashConfig.zen;
+      var a = hashConfig.azaltr;
+      hash += '&zen='    + z.ra.toFixed(3) + ',' + z.dec.toFixed(3);
+      hash += '&azaltr=' + a.az.toFixed(3) + ',' + a.alt.toFixed(3) + ',' + a.r.toFixed(3);
+    } else {
+      var r = hashConfig.rot;
+      hash += '&rot='   + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4);
+      hash += '&speed=' + hashConfig.speed.toFixed(2);
+    }
 
     if (hashConfig.visibleTracers !== null) {
       hash += '&trace=' + hashConfig.visibleTracers.join(',');
@@ -124,9 +158,7 @@ function appConfig() {
   }
 
   function setHash(hash) {
-    if (hashUpdate) {
-      window.clearTimeout(hashUpdate);
-    }
+    if (hashUpdate) window.clearTimeout(hashUpdate);
     hashUpdate = setTimeout(function() {
       if (window.history) {
         window.history.replaceState(undefined, undefined, hash);
@@ -137,38 +169,62 @@ function appConfig() {
     }, 400);
   }
 
-  function sameVec3(v1, v2) {
-    if (!v1 || !v2) return false;
-    return v1.x === v2.x && v1.y === v2.y && v1.z === v2.z;
+  // ── Hash change listener ────────────────────────────────────────────────────
+
+  function queryChanged() {
+    var next = parseFromHash(window.location.hash);
+
+    var cameraChanged  = !stateEqual(next, hashConfig);
+    var tracersChanged = !sameTracers(next.visibleTracers, hashConfig.visibleTracers);
+
+    if (cameraChanged || tracersChanged) hashConfig = next;
+    if (cameraChanged)  api.fire('camera');
+    if (tracersChanged) api.fire('tracersChanged');
+  }
+}
+
+// ── Parsing ───────────────────────────────────────────────────────────────────
+
+function parseFromHash(hash) {
+  if (!hash) return cloneDefault();
+
+  var query = qs.parse(hash.split('?')[1]);
+
+  var visibleTracers = defaultConfig.visibleTracers;
+  if ('trace' in query) {
+    visibleTracers = query.trace
+      ? query.trace.split(',').filter(function(s) { return s.length > 0; })
+      : [];
   }
 
-  function sameTracers(a, b) {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    if (a.length !== b.length) return false;
-    for (var i = 0; i < a.length; ++i) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
+  var mode = ('rot' in query || 'speed' in query) ? 'spaceship' : 'satellite';
+  var posArr = parseFloats3(query.pos,
+    defaultConfig.pos.ra, defaultConfig.pos.dec, defaultConfig.pos.r);
 
-  function parseFromHash(hash) {
-    if (!hash) return cloneDefault();
-
-    var query = qs.parse(hash.split('?')[1]);
-
-    var visibleTracers = defaultConfig.visibleTracers;
-    if ('trace' in query) {
-      visibleTracers = query.trace
-        ? query.trace.split(',').filter(function(s) { return s.length > 0; })
-        : [];
-    }
-
+  if (mode === 'satellite') {
+    var zenArr    = parseFloats2(query.zen,
+      defaultConfig.zen.ra, defaultConfig.zen.dec);
+    var azaltrArr = parseFloats3(query.azaltr,
+      defaultConfig.azaltr.az, defaultConfig.azaltr.alt, defaultConfig.azaltr.r);
     return {
-      pos:  parseCommaVec3(query.pos, defaultConfig.pos),
-      rot:  parseCommaVec3(query.rot, defaultConfig.rot),
-      zoom: getNumber(query.zoom, defaultConfig.zoom),
-      mode: query.mode === 'spaceship' ? 'spaceship' : defaultConfig.mode,
+      mode:   'satellite',
+      pos:    { ra: posArr[0],    dec: posArr[1],    r: posArr[2] },
+      zen:    { ra: zenArr[0],    dec: zenArr[1] },
+      azaltr: { az: azaltrArr[0], alt: azaltrArr[1], r: azaltrArr[2] },
+      rot:    { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
+      speed:  defaultConfig.speed,
+      visibleTracers: visibleTracers
+    };
+  } else {
+    var rotArr = parseFloats3(query.rot,
+      defaultConfig.rot.x, defaultConfig.rot.y, defaultConfig.rot.z);
+    return {
+      mode:   'spaceship',
+      pos:    { ra: posArr[0], dec: posArr[1], r: posArr[2] },
+      zen:    { ra: defaultConfig.zen.ra, dec: defaultConfig.zen.dec },
+      azaltr: { az: defaultConfig.azaltr.az, alt: defaultConfig.azaltr.alt, r: defaultConfig.azaltr.r },
+      rot:    { x: rotArr[0], y: rotArr[1], z: rotArr[2] },
+      speed:  getNumber(query.speed, defaultConfig.speed),
       visibleTracers: visibleTracers
     };
   }
@@ -176,23 +232,77 @@ function appConfig() {
 
 function cloneDefault() {
   return {
-    pos:  { x: defaultConfig.pos.x, y: defaultConfig.pos.y, z: defaultConfig.pos.z },
-    rot:  { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
-    zoom: defaultConfig.zoom,
-    mode: defaultConfig.mode,
+    mode:   defaultConfig.mode,
+    pos:    { ra: defaultConfig.pos.ra, dec: defaultConfig.pos.dec, r: defaultConfig.pos.r },
+    zen:    { ra: defaultConfig.zen.ra, dec: defaultConfig.zen.dec },
+    azaltr: { az: defaultConfig.azaltr.az, alt: defaultConfig.azaltr.alt, r: defaultConfig.azaltr.r },
+    rot:    { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
+    speed:  defaultConfig.speed,
     visibleTracers: defaultConfig.visibleTracers
   };
 }
 
-function parseCommaVec3(str, def) {
-  if (!str) return { x: def.x, y: def.y, z: def.z };
-  var p = str.split(',');
-  return {
-    x: getNumber(p[0], def.x),
-    y: getNumber(p[1], def.y),
-    z: getNumber(p[2], def.z)
-  };
+// ── Equality helpers ──────────────────────────────────────────────────────────
+
+function stateEqual(a, b) {
+  if (a.mode !== b.mode) return false;
+  if (!sameRaDecR(a.pos, b.pos)) return false;
+  if (a.mode === 'satellite') {
+    return sameRaDec(a.zen, b.zen) &&
+      Math.abs(a.azaltr.az  - b.azaltr.az)  < 1e-4 &&
+      Math.abs(a.azaltr.alt - b.azaltr.alt) < 1e-4 &&
+      Math.abs(a.azaltr.r   - b.azaltr.r)   < 1e-4;
+  }
+  return sameVec3(a.rot, b.rot) && Math.abs(a.speed - b.speed) < 1e-4;
 }
+
+function sameRaDecR(a, b) {
+  if (!a || !b) return false;
+  return Math.abs(a.ra  - b.ra)  < 1e-4 &&
+         Math.abs(a.dec - b.dec) < 1e-4 &&
+         Math.abs(a.r   - b.r)   < 1e-4;
+}
+
+function sameRaDec(a, b) {
+  if (!a || !b) return false;
+  return Math.abs(a.ra - b.ra) < 1e-4 && Math.abs(a.dec - b.dec) < 1e-4;
+}
+
+function sameVec3(v1, v2) {
+  if (!v1 || !v2) return false;
+  return v1.x === v2.x && v1.y === v2.y && v1.z === v2.z;
+}
+
+function sameTracers(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (var i = 0; i < a.length; ++i) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// ── Parse helpers ─────────────────────────────────────────────────────────────
+
+function parseFloats3(str, d0, d1, d2) {
+  if (!str) return [d0, d1, d2];
+  var p = str.split(',');
+  return [getNumber(p[0], d0), getNumber(p[1], d1), getNumber(p[2], d2)];
+}
+
+function parseFloats2(str, d0, d1) {
+  if (!str) return [d0, d1];
+  var p = str.split(',');
+  return [getNumber(p[0], d0), getNumber(p[1], d1)];
+}
+
+function getNumber(x, defaultValue) {
+  if (defaultValue === undefined) defaultValue = 0;
+  x = parseFloat(x);
+  if (isNaN(x)) return defaultValue;
+  return x;
+}
+
+// ── Quaternion ↔ rotvec ───────────────────────────────────────────────────────
 
 function quatToRotvec(qx, qy, qz, qw) {
   if (qw < 0) { qx = -qx; qy = -qy; qz = -qz; qw = -qw; }
@@ -207,11 +317,4 @@ function rotvecToQuat(rx, ry, rz) {
   if (angle < 1e-10) return { x: 0, y: 0, z: 0, w: 1 };
   var s = Math.sin(angle / 2) / angle;
   return { x: rx * s, y: ry * s, z: rz * s, w: Math.cos(angle / 2) };
-}
-
-function getNumber(x, defaultValue) {
-  if (defaultValue === undefined) defaultValue = 0;
-  x = parseFloat(x);
-  if (isNaN(x)) return defaultValue;
-  return x;
 }

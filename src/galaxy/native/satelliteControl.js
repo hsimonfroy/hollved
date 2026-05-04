@@ -28,6 +28,8 @@
  *   onTouchZoom(scale)    — scale = newPinchDist / prevPinchDist
  *   onTouchPan(dx, dy)
  */
+import { getLocalFrame } from './coordUtils.js';
+
 export default createSatelliteControl;
 
 function createSatelliteControl(camera, container, markDirty, keyState) {
@@ -70,13 +72,13 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   document.addEventListener('mouseup',       onMouseUp,    false);
 
   return {
-    update:          update,
-    setEnabled:      setEnabled,
-    getPivot:        function() { return pivot; },
-    setPivot:        function(x, y, z) { pivot.set(x, y, z); updateCamera(); },
-    getRadius:       function() { return radius; },
-    getUpAxis:       function() { return upAxis; },
-    restoreFromURL:  restoreFromURL,
+    update:            update,
+    setEnabled:        setEnabled,
+    getPivot:          function() { return pivot; },
+    setPivot:          function(x, y, z) { pivot.set(x, y, z); updateCamera(); },
+    getRadius:         function() { return radius; },
+    getUpAxis:         function() { return upAxis; },
+    restoreFromAzAlt:  restoreFromAzAlt,
     getFlatForward:  function() {
       // Equatorial direction the spaceship faces when returning from satellite:
       // opposite of the horizontal component of the direction from pivot to camera.
@@ -143,27 +145,28 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     if (hasMoved) updateCamera();
   }
 
-  // ── Restore from URL ──────────────────────────────────────────────────────
+  // ── Restore from az/alt (called by renderer.js on URL load/change) ──────────
 
-  function restoreFromURL(pivot3, radius3, quatLike) {
+  function restoreFromAzAlt(pivot3, r3, upAxisIn, az_rad, alt_rad) {
     pivot.set(pivot3.x, pivot3.y, pivot3.z);
-    radius = Math.max(MIN_RADIUS, radius3);
+    radius = Math.max(MIN_RADIUS, r3);
+    upAxis.set(upAxisIn.x, upAxisIn.y, upAxisIn.z).normalize();
 
-    var q = new THREE.Quaternion(quatLike.x, quatLike.y, quatLike.z, quatLike.w);
-    upAxis.set(0, 1, 0).applyQuaternion(q).normalize();
-    var backward = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    var frame  = getLocalFrame(upAxis);
+    var cosAlt = Math.cos(alt_rad), sinAlt = Math.sin(alt_rad);
+    var cosAz  = Math.cos(az_rad),  sinAz  = Math.sin(az_rad);
+    var dx = cosAlt * (cosAz * frame.north.x + sinAz * frame.east.x) + sinAlt * upAxis.x;
+    var dy = cosAlt * (cosAz * frame.north.y + sinAz * frame.east.y) + sinAlt * upAxis.y;
+    var dz = cosAlt * (cosAz * frame.north.z + sinAz * frame.east.z) + sinAlt * upAxis.z;
 
-    phi = Math.acos(Math.max(-1, Math.min(1, backward.dot(upAxis))));
+    phi = Math.acos(Math.max(-1, Math.min(1, dx * upAxis.x + dy * upAxis.y + dz * upAxis.z)));
     phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
 
-    var dot = backward.dot(upAxis);
-    var projected = new THREE.Vector3(
-      backward.x - upAxis.x * dot,
-      backward.y - upAxis.y * dot,
-      backward.z - upAxis.z * dot
-    );
-    if (projected.lengthSq() > 1e-6) {
-      fwdRef.copy(projected).normalize();
+    var dot = dx * upAxis.x + dy * upAxis.y + dz * upAxis.z;
+    var hx = dx - upAxis.x * dot, hy = dy - upAxis.y * dot, hz = dz - upAxis.z * dot;
+    var hLen = Math.sqrt(hx * hx + hy * hy + hz * hz);
+    if (hLen > 1e-6) {
+      fwdRef.set(hx / hLen, hy / hLen, hz / hLen);
     } else {
       var seed = new THREE.Vector3(1, 0, 0);
       if (Math.abs(upAxis.dot(seed)) > 0.9) seed.set(0, 0, 1);
