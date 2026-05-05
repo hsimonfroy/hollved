@@ -104,18 +104,7 @@ export default function TracerSelector() {
   }, []);
 
   useEffect(function() {
-    function handleModeChange(mode) {
-      setIsSatellite(mode === 'satellite');
-      if (mode !== 'satellite') {
-        // Reset slice when leaving satellite mode
-        setTracers(function(prev) {
-          return prev.map(function(t) {
-            return t.id === 'slice' ? {id: t.id, name: t.name, color: t.color, count: t.count, visible: false} : t;
-          });
-        });
-        appEvents.setTracerVisibility.fire('slice', false);
-      }
-    }
+    function handleModeChange(mode) { setIsSatellite(mode === 'satellite'); }
     appEvents.controlModeChanged.on(handleModeChange);
     return function() { appEvents.controlModeChanged.off(handleModeChange); };
   }, []);

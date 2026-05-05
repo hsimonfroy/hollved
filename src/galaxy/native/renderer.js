@@ -46,8 +46,9 @@ function sceneRenderer(container) {
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
   var sliceEnabled = false;
-  var SLICE_ANGLE = Math.PI / 20; // angle between the two cones
-  var SLICE_ALPHA = 0.03;
+  var SLICE_ANGLE     = Math.PI / 20; // angle between the two cones
+  var IN_SLICE_ALPHA  = 2.0;
+  var OUT_SLICE_ALPHA = 0.03;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
@@ -67,7 +68,6 @@ function sceneRenderer(container) {
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
   appEvents.resetToOrigin.on(resetToOrigin);
-  appEvents.setSliceEnabled.on(handleSetSliceEnabled);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -221,10 +221,7 @@ function sceneRenderer(container) {
       spaceshipControl.setEnabled(false); // disabled during animation
 
       currentMode = 'spaceship';
-      if (sliceEnabled) {
-        sliceEnabled = false;
-        renderer.getParticleView().getPointCloud().material.uniforms.uSliceEnabled.value = 0.0;
-      }
+      if (sliceEnabled) renderer.getParticleView().getPointCloud().material.uniforms.uSliceEnabled.value = 0.0;
       updateRadarVisibility();
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
@@ -268,6 +265,12 @@ function sceneRenderer(container) {
         cam.position.copy(endPos);
         cam.quaternion.copy(endQuat);
         satelliteControl.setEnabled(true); // no cam arg → preserves computed state
+        if (sliceEnabled) {
+          var mat = renderer.getParticleView().getPointCloud().material;
+          mat.uniforms.uSliceEnabled.value = 1.0;
+          updateSliceUniforms(mat);
+          renderer.markDirty();
+        }
       });
     }
   }
@@ -386,13 +389,18 @@ function sceneRenderer(container) {
 
     renderer.particles(positions);
 
-    // Sync slice constants to material (pointCloud exists after particles() call)
+    // Sync slice constants and URL state to material (pointCloud exists after particles() call)
     if (_sliceFwd) {
       var mat = renderer.getParticleView().getPointCloud().material;
       var _halfAngle = (Math.PI - SLICE_ANGLE) / 2;
       var _cosHalf   = Math.cos(_halfAngle);
       mat.uniforms.uSliceCosHalf2.value = _cosHalf * _cosHalf;
-      mat.uniforms.uSliceAlpha.value    = SLICE_ALPHA;
+      mat.uniforms.uInSliceAlpha.value  = IN_SLICE_ALPHA;
+      mat.uniforms.uOutSliceAlpha.value = OUT_SLICE_ALPHA;
+      var _cv = appConfig.getVisibleTracers();
+      sliceEnabled = _cv ? _cv.indexOf('slice') >= 0 : false;
+      mat.uniforms.uSliceEnabled.value = (sliceEnabled && currentMode === 'satellite') ? 1.0 : 0.0;
+      if (sliceEnabled && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(mat);
     }
 
     renderer.markDirty();
@@ -444,7 +452,13 @@ function sceneRenderer(container) {
       return;
     }
     if (tracerId === 'slice') {
-      handleSetSliceEnabled(visible);
+      sliceEnabled = visible;
+      var pc = renderer && renderer.getParticleView() && renderer.getParticleView().getPointCloud();
+      if (pc) {
+        pc.material.uniforms.uSliceEnabled.value = (visible && currentMode === 'satellite') ? 1.0 : 0.0;
+        if (visible && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(pc.material);
+      }
+      renderer.markDirty();
       return;
     }
     if (tracerId === 'radar') {
@@ -484,15 +498,6 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
-  function handleSetSliceEnabled(enabled) {
-    sliceEnabled = enabled;
-    var pc = renderer && renderer.getParticleView() && renderer.getParticleView().getPointCloud();
-    if (!pc) return;
-    pc.material.uniforms.uSliceEnabled.value = enabled ? 1.0 : 0.0;
-    if (enabled && satelliteControl) updateSliceUniforms(pc.material);
-    renderer.markDirty();
-  }
-
   function updateSliceUniforms(mat) {
     var cam    = renderer.camera();
     var upAxis = satelliteControl.getUpAxis();
@@ -510,6 +515,12 @@ function sceneRenderer(container) {
     if (!tracerRanges || !renderer) return;
     var configVisible = appConfig.getVisibleTracers();
     radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
+    sliceEnabled  = configVisible ? configVisible.indexOf('slice') >= 0 : false;
+    var _pc = renderer.getParticleView().getPointCloud();
+    if (_pc) {
+      _pc.material.uniforms.uSliceEnabled.value = (sliceEnabled && currentMode === 'satellite') ? 1.0 : 0.0;
+      if (sliceEnabled && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(_pc.material);
+    }
     tracerRanges.forEach(function(tracer) {
       tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });

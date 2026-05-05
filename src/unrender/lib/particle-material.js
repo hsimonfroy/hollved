@@ -14,7 +14,8 @@ function createParticleMaterial() {
     uSliceNormal:    { value: new THREE.Vector3(0, 0, 1) },
     uSlicePivot:     { value: new THREE.Vector3(0, 0, 0) },
     uSliceCosHalf2:  { value: 0.030 }, // cos²(80°) ≈ 20° SLICE_ANGLE default
-    uSliceAlpha:     { value: 0.03 }
+    uInSliceAlpha:   { value: 1.0 },
+    uOutSliceAlpha:  { value: 0.03 }
   };
 
   var material = new THREE.ShaderMaterial({
