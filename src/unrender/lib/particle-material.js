@@ -6,15 +6,16 @@ var fragmentShader = require('./particle-fragment-shader.js');
 module.exports = createParticleMaterial;
 
 function createParticleMaterial() {
-  var uniforms = {
-    color:        { value: new THREE.Color(0xffffff) },
-    pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
-    uSize:           { value: 0.1 },
+    var uniforms = {
+        color:        { value: new THREE.Color(0xffffff) },
+        pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
+        uSize:           { value: 0.1 },
+    // Declared here as uniform, actual values are set by renderer.js
     uSliceEnabled:   { value: 0.0 },
     uSliceNormal:    { value: new THREE.Vector3(0, 0, 1) },
     uSlicePivot:     { value: new THREE.Vector3(0, 0, 0) },
-    uSliceCosHalf2:  { value: 0.030 }, // cos²(80°) ≈ 20° SLICE_ANGLE default
-    uInSliceAlpha:   { value: 1.0 },
+    uSliceCosHalf2:  { value: 0.03 },
+    uInSliceAlpha:   { value: 2.0 },
     uOutSliceAlpha:  { value: 0.03 }
   };
 

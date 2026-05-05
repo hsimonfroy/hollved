@@ -27,7 +27,7 @@ import appConfig from './native/appConfig.js';
 import DensityChart from './densityChart.jsx';
 
 var DEFAULT_HIDDEN    = ['cmb', 'radar', 'slice'];
-var AUX_IDS           = ['local', 'mw_old', 'cmb', 'radar', 'slice'];
+var AUX_IDS           = ['local', 'cmb', 'radar', 'slice'];
 var SATELLITE_AUX_IDS = ['radar', 'slice']; // only shown in satellite mode
 
 export default function TracerSelector() {
@@ -57,10 +57,6 @@ export default function TracerSelector() {
       mapped.push({
         id: 'local', name: 'Local', color: 0xbbbbbbff, count: null,
         visible: configVisible ? configVisible.indexOf('local') >= 0 : true
-      });
-      mapped.push({
-        id: 'mw_old', name: 'MW (old)', color: null, count: null,
-        visible: configVisible ? configVisible.indexOf('mw_old') >= 0 : true
       });
       mapped.push({
         id: 'cmb', name: 'CMB', color: 0x222222ff, count: null,
