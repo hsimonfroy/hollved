@@ -3,7 +3,7 @@ var combineOptions = require('./options.js');
 var createParticleView = require('./lib/particle-view.js');
 
 var CAMERA_FOV  = 70; // vertical field of view (degrees), human central vision is about 60
-var CAMERA_NEAR = 0.01;
+var CAMERA_NEAR = 0.005;
 var CAMERA_FAR  = 100000;
 
 // Expose three.js as well, so simple clients do not have to require it

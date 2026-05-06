@@ -44,9 +44,10 @@ async function loadTracerData(endpoint, tracerId, graphName, progress) {
     meta = await request(endpoint + '/meta.json', { responseType: 'json' }) || {};
   } catch (_) { /* meta.json is optional */ }
 
+  var expectedBytes = meta.count ? meta.count * 3 * 2 : null;
   var buffer = await request(endpoint + '/positions.bin', {
     responseType: 'arraybuffer',
-    progress: reportProgress(graphName + '/' + tracerId, 'positions', progress)
+    progress: reportProgress(graphName + '/' + tracerId, 'positions', progress, expectedBytes)
   });
   var positions = new Uint16Array(buffer);  // raw float16 bits
 
@@ -97,15 +98,14 @@ function parseColor(colorStr) {
   return parseInt(String(colorStr).replace(/^0x/i, ''), 16);
 }
 
-function reportProgress(name, file, progress) {
+function reportProgress(name, file, progress, expectedBytes) {
   return function(e) {
-    var progressInfo = {
-      message: name + ' loading',
-    };
-    if (e.percent !== undefined) {
-      progressInfo.completed = Math.round(e.percent * 100) + '%';
+    var progressInfo = { message: name + ' loading' };
+    var total = e.total || expectedBytes;
+    if (total) {
+      progressInfo.completed = Math.round(e.loaded / total * 100) + '%';
     } else {
-      progressInfo.completed = Math.round(e.loaded) + ' bytes';
+      progressInfo.completed = Math.round(e.loaded / 1e6 * 10) / 10 + ' MB';
     }
     progress(progressInfo);
   };

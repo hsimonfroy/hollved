@@ -28,17 +28,7 @@ function request(url, options) {
     req.send(null);
 
     function updateProgress(e) {
-      if (e.lengthComputable) {
-        options.progress({
-          loaded: e.loaded,
-          total: e.total,
-          percent: e.loaded / e.total
-        });
-      } else {
-        options.progress({
-          loaded: e.loaded,
-        });
-      }
+      options.progress({ loaded: e.loaded, total: e.total });
     }
 
     function transferComplete() {

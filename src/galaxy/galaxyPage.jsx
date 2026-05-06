@@ -8,9 +8,9 @@ function lockViewportZoom() {
   var meta = document.querySelector('meta[name="viewport"]');
   if (!meta) return;
   // First clamp current zoom to 1, then on the next frame lock it
-  meta.content = 'width=device-width, initial-scale=1, maximum-scale=1';
+  meta.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1';
   requestAnimationFrame(function() {
-    meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+    meta.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no';
   });
 }
 
