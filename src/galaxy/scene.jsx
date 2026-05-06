@@ -5,6 +5,7 @@ import Help from './help.jsx';
 import About from './about.jsx';
 import TracerSelector from './tracerSelector.jsx';
 import CameraHUD from './cameraHUD.jsx';
+import LoadingIndicator from './loadingIndicator.jsx';
 import createNativeRenderer from './native/renderer.js';
 import appEvents from './service/appEvents.js';
 
@@ -48,6 +49,7 @@ export default function Scene() {
             {/* 🚪 */}
           </a>
         </div>
+        <LoadingIndicator />
       </div>
       <Help />
     </div>

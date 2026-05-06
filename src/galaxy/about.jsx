@@ -36,16 +36,18 @@ export default function About() {
   var [graphName, setGraphName] = useState(null);
   var [infoHtml, setInfoHtml] = useState('');
   var [logoError, setLogoError] = useState(false);
+  var [fetching, setFetching] = useState(false);
 
   useEffect(function() {
     function onDownloadRequested(name) {
       setGraphName(name);
       setLogoError(false);
       setInfoHtml('');
+      setFetching(true);
       fetch(config.dataUrl + name + '/infos.md')
         .then(function(res) { return res.ok ? res.text() : ''; })
-        .then(function(md) { if (md) setInfoHtml(markdownToHtml(md)); })
-        .catch(function() {});
+        .then(function(md) { setFetching(false); if (md) setInfoHtml(markdownToHtml(md)); })
+        .catch(function() { setFetching(false); });
     }
     function onKeyDown(e) {
       if (e.code === 'KeyI' && !e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -86,6 +88,9 @@ export default function About() {
                   onError={function() { setLogoError(true); }}
                 />
               </div>
+            )}
+            {fetching && !infoHtml && (
+              <div className='info-loading'>Loading…</div>
             )}
             {infoHtml && (
               <div

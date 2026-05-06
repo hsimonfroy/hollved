@@ -58,11 +58,9 @@ export default function Help() {
 
   // All input listeners registered once; each handler checks isMobileRef.current
   useEffect(function() {
-    function onGraphDownloaded() { setVisible(true); }
     function onDownloadRequested() { setVisible(false); }
     function onModeChanged(m) { setMode(m); }
 
-    appEvents.graphDownloaded.on(onGraphDownloaded);
     appEvents.downloadGraphRequested.on(onDownloadRequested);
     appEvents.controlModeChanged.on(onModeChanged);
 
@@ -130,7 +128,6 @@ export default function Help() {
     document.addEventListener('touchend', onTouchEnd, false);
 
     return function() {
-      appEvents.graphDownloaded.off(onGraphDownloaded);
       appEvents.downloadGraphRequested.off(onDownloadRequested);
       appEvents.controlModeChanged.off(onModeChanged);
       document.body.removeEventListener('keydown', onKeyDown);

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import LoadingIndicator from './loadingIndicator.jsx';
 import Scene from './scene.jsx';
 import appEvents from './service/appEvents.js';
 
@@ -39,7 +38,6 @@ export default function GalaxyPage() {
 
   return (
     <div>
-      <LoadingIndicator />
       <Scene />
     </div>
   );

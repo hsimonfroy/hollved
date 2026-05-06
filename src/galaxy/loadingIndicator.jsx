@@ -1,20 +1,26 @@
 import { useState, useEffect } from 'react';
 import scene from './store/scene.js';
+import appEvents from './service/appEvents.js';
 
 export default function LoadingIndicator() {
-  var [loadingMessage, setLoadingMessage] = useState('');
+  var [active, setActive] = useState(false);
+  var [msg,    setMsg]    = useState('');
 
   useEffect(function() {
-    function updateLoadingIndicator(progress) {
-      setLoadingMessage(progress.message + ' - ' + progress.completed);
+    function onProgress(p) {
+      if (p.message) setMsg(p.message + ' - ' + p.completed);
     }
-    scene.on('loadProgress', updateLoadingIndicator);
+    function onStart() { setActive(true); setMsg(''); }
+    function onDone()  { setActive(false); }
+    scene.on('loadProgress', onProgress);
+    appEvents.downloadGraphRequested.on(onStart);
+    appEvents.graphDownloaded.on(onDone);
     return function() {
-      scene.off('loadProgress', updateLoadingIndicator);
+      scene.off('loadProgress', onProgress);
+      appEvents.downloadGraphRequested.off(onStart);
+      appEvents.graphDownloaded.off(onDone);
     };
   }, []);
 
-  return scene.isLoading() ?
-    <div className='loading'>{loadingMessage}</div> :
-    null;
+  return active ? <div className='loading-progress'>{msg}</div> : null;
 }

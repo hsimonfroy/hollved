@@ -84,17 +84,14 @@ a.media {
   color: wheat;
 }
 
-// ── Loading indicator (top-left, loadingIndicator.jsx) ───────────────────────
+// ── Loading indicator (top-right, inside .top-right-panel) ───────────────────
 
-.loading {
-  color: @foreground;
-  background: @background;
-  position: absolute;
-  z-index: 1;
-  padding: 10px;
-  left: 10px;
-  top: 10px;
-  font-family: monospace;
+.loading-progress {
+  white-space: nowrap;
+  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.99);
+  pointer-events: none;
 }
 
 // ── Help panel ───────────────────────────────────────────────────────────────
@@ -640,6 +637,14 @@ a.media {
       text-decoration: underline;
     }
   }
+}
+
+.info-loading {
+  font-size: 13px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  padding: 8px 0;
 }
 
 // ── Survey timeline ───────────────────────────────────────────────────────────
