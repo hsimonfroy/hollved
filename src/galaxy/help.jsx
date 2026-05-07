@@ -160,7 +160,7 @@ export default function Help() {
         <div className='help-section'>Options</div>
         <HelpRow keys={[keys.KeyF]} label='Switch to satellite' />
         <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
-        <HelpRow keys={[keys.KeyI]} label='Show survey info' />
+        <HelpRow keys={[keys.KeyI]} label='Show info' />
       </>}
 
       {!isMobile && mode === 'satellite' && <>
@@ -177,7 +177,7 @@ export default function Help() {
         <div className='help-section'>Options</div>
         <HelpRow keys={[keys.KeyF]} label='Switch to spaceship' />
         <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
-        <HelpRow keys={[keys.KeyI]} label='Show survey info' />
+        <HelpRow keys={[keys.KeyI]} label='Show info' />
       </>}
 
       {isMobile && mode === 'spaceship' && <>
@@ -186,7 +186,7 @@ export default function Help() {
         <HelpRow keys={['Right stick']} label='Look around' />
         {/* <div className='help-section'>Options</div>
         <HelpRow keys={['🚀']} label='Switch to satellite' />
-        <HelpRow keys={['🔭']} label='Show survey info' />
+        <HelpRow keys={['🔭']} label='Show info' />
         <HelpRow keys={['🌍']} label='Reset to origin' />
         <HelpRow keys={[EXIT_ICON]} label='Back to menu' /> */}
       </>}
@@ -198,7 +198,7 @@ export default function Help() {
         <HelpRow keys={['3-finger drag']} label='Pan' />
         {/* <div className='help-section'>Options</div>
         <HelpRow keys={['🛰️']} label='Switch to spaceship' />
-        <HelpRow keys={['🔭']} label='Show survey info' />
+        <HelpRow keys={['🔭']} label='Show info' />
         <HelpRow keys={['🌍']} label='Reset to origin' />
         <HelpRow keys={[EXIT_ICON]} label='Back to menu' /> */}
       </>}

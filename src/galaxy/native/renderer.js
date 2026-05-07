@@ -46,7 +46,7 @@ function sceneRenderer(container) {
   var sliceEnabled = false;
   var SLICE_ANGLE     = Math.PI / 20; // angle between the two cones
   var IN_SLICE_ALPHA  = 2.0;
-  var OUT_SLICE_ALPHA = 0.03;
+  var OUT_SLICE_ALPHA = 0.02;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
@@ -727,6 +727,7 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
+    if (renderer) renderer.input().update = function() {};
     if (detailedGalaxies) { detailedGalaxies.dispose(); detailedGalaxies = null; }
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
@@ -751,7 +752,7 @@ function sceneRenderer(container) {
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (satelliteControl) { satelliteControl.destroy(); satelliteControl = null; }
     if (mobileControl)    { mobileControl.destroy();    mobileControl    = null; }
-    renderer.destroy();
+    if (renderer)         { renderer.destroy();         renderer         = null; }
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.tracerRangesReady.off(setTracerRanges);
     appEvents.setTracerVisibility.off(handleSetTracerVisibility);
@@ -761,7 +762,6 @@ function sceneRenderer(container) {
     appEvents.radarReady.off(onRadarReady);
     appEvents.setMovementSpeed.off(onSetMovementSpeed);
     appEvents.resetToOrigin.off(resetToOrigin);
-    renderer = null;
 
     clearInterval(queryUpdateId);
     appConfig.off('camera', moveCamera);

@@ -216,7 +216,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
           var pos = ld.pos;
           var imgSize = CARD_SIZE - 2 * CARD_PADDING;
           return (
-            <a key={s.id} href={'#/' + s.id} className='timeline-card'>
+            <a key={s.id} href={'#/' + s.id} className='timeline-card' onClick={function(e) { e.preventDefault(); navigateToGalaxy(s.id); }}>
               <rect
                 x={pos.logoX} y={pos.logoY}
                 width={CARD_SIZE} height={CARD_SIZE}
@@ -277,6 +277,11 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
   );
 }
 
+function navigateToGalaxy(name) {
+  sessionStorage.setItem('_galaxyNav', name);
+  window.location.reload();
+}
+
 export default function WelcomePage() {
   var [surveysData, setSurveysData] = useState({});
   var [logoErrors, setLogoErrors] = useState({});
@@ -321,14 +326,14 @@ export default function WelcomePage() {
       <div className='welcome-status'>
         <div className='welcome-status-title'>Running surveys 🔭</div>
         <p>
-          Note that DESI and Euclid are currently running surveys, and therefore only public DESI DR1 and Euclid Q1 data are presented for now. Visualizations will be updated along the following data releases.
+          DESI and Euclid are currently running surveys, and therefore only public DESI DR1 and Euclid Q1 data are presented for now. Visualizations will be updated along the following data releases.
         </p>
       </div>
       <p className='welcome-subtitle' style={{ marginTop: '60px' }}>Extra views</p>
       <div className='extra-views-grid'>
         {EXTRA_VIEWS.map(function(v) {
           return (
-            <a key={v.id} href={'#/' + v.id} className='survey-card'>
+            <a key={v.id} href={'#/' + v.id} className='survey-card' onClick={function(e) { e.preventDefault(); navigateToGalaxy(v.id); }}>
               {!extraLogoErrors[v.id] && (
                 <img
                   src={config.dataUrl + v.id + '/logo.png'}
