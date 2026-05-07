@@ -24,10 +24,10 @@ var SURVEYS = [
 ];
 
 // SVG layout constants (preserving user's values, fixing CHART_BOTTOM)
-var BOX_WIDTH  = 750;
-var BOX_HEIGHT = 520;
-var CHART_LEFT   = 65;
-var CHART_RIGHT  = BOX_WIDTH - 10;
+var BOX_WIDTH  = 740;
+var BOX_HEIGHT = 523;
+var CHART_LEFT   = 63;
+var CHART_RIGHT  = BOX_WIDTH - 4;
 var CHART_TOP    = 0;
 var CHART_BOTTOM = BOX_HEIGHT - 30;
 var CHART_WIDTH  = CHART_RIGHT - CHART_LEFT;
@@ -36,7 +36,7 @@ var X_MIN = 1975, X_MAX = 2031;
 var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.4;
 
 // Card dimensions (SVG units)
-var CARD_SIZE    = 90;  // square card outer size
+var CARD_SIZE    = 91;  // square card outer size
 var LOGO_X_OFFSET  = 10;   // gap between card outer edge and segment line
 var LOGO_Y_OFFSET  = 30;   // gap between card outer edge and segment line
 var CARD_PADDING = 5;   // padding inside card around logo
@@ -282,7 +282,7 @@ function navigateToGalaxy(name) {
   window.location.reload();
 }
 
-export default function WelcomePage() {
+export default function HomePage() {
   var [surveysData, setSurveysData] = useState({});
   var [logoErrors, setLogoErrors] = useState({});
   var [extraLogoErrors, setExtraLogoErrors] = useState({});
@@ -307,29 +307,29 @@ export default function WelcomePage() {
   }
 
   return (
-    <div className='welcome-page'>
-      <h1 className='welcome-title'>Lost in expansion</h1>
-      <p className='welcome-subtitle'>Explore the largest 3D maps of the (observable) Universe</p>
+    <div className='home-page'>
+      <h1 className='home-title'>Lost in expansion</h1>
+      <p className='home-subtitle'>Explore the largest 3D maps of the (observable) Universe</p>
       <SurveyTimeline
         SURVEYS={SURVEYS}
         surveysData={surveysData}
         logoErrors={logoErrors}
         onLogoError={handleLogoError}
       />
-      <div className='welcome-description'>
+      <div className='home-description'>
         <ul>
           <li>The observation that galaxies appear redder the further they are has led to the cosmological discovery that <strong>the Universe is expanding!</strong></li>
           <li>By measuring how <strong>redshifted</strong> a galaxy's light is, <strong>spectroscopic surveys</strong> can infer how much the Universe has expanded since that light was emitted, and therefore how far away the galaxy lies.</li>
           <li><strong>Current surveys catalogue millions of galaxies</strong>, charting the cosmic web across billions of light-years and revealing the history and fate of the Universe. <strong>So pick a survey, and dive into the deep!</strong></li>
         </ul>
       </div>
-      <div className='welcome-status'>
-        <div className='welcome-status-title'>Running surveys 🔭</div>
+      <div className='home-status'>
+        <div className='home-status-title'>Running surveys 🔭</div>
         <p>
           DESI and Euclid are currently running surveys, and therefore only public DESI DR1 and Euclid Q1 data are presented for now. Visualizations will be updated along the following data releases.
         </p>
       </div>
-      <p className='welcome-subtitle' style={{ marginTop: '60px' }}>Extra views</p>
+      <p className='home-subtitle' style={{ marginTop: '60px' }}>Extra views</p>
       <div className='extra-views-grid'>
         {EXTRA_VIEWS.map(function(v) {
           return (
@@ -350,8 +350,8 @@ export default function WelcomePage() {
           );
         })}
       </div>
-      <div className='welcome-status'>
-        <div className='welcome-status-title'>Status ⭐</div>
+      <div className='home-status'>
+        <div className='home-status-title'>Status ⭐</div>
         <p>
           This project is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ the{' '}
           <a href='https://github.com/hsimonfroy/hollved' target='_blank' rel='noopener noreferrer'>
@@ -359,7 +359,7 @@ export default function WelcomePage() {
           </a>.
         </p>
       </div>
-      <footer className='welcome-footer'>
+      <footer className='home-footer'>
         MIT License &middot; Copyright &copy; 2025{' '}
         <a href='https://hsimonfroy.github.io/' target='_blank' rel='noopener noreferrer'>
           Hugo Simon

@@ -31,7 +31,7 @@ function markdownToHtml(md) {
   return html;
 }
 
-export default function About() {
+export default function Info() {
   var [open, setOpen] = useState(false);
   var [graphName, setGraphName] = useState(null);
   var [infoHtml, setInfoHtml] = useState('');

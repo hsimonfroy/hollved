@@ -240,7 +240,7 @@ function sceneRenderer(container) {
       // Initialize satellite state from current camera position/orientation.
       // setEnabled(true, cam, zoom) calls initFromCamera which computes pivot/radius/upAxis/theta/phi
       // and immediately moves the camera to the orbit position via updateCamera().
-      satelliteControl.setEnabled(true, cam, appConfig.getZoom());
+      satelliteControl.setEnabled(true, cam, appConfig.getRadius());
       var endPos  = cam.position.clone();
       var endQuat = cam.quaternion.clone();
 

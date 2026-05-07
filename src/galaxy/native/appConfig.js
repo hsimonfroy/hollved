@@ -4,8 +4,7 @@ import scene from '../store/scene.js';
 import qs from 'qs';
 import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from './coordUtils.js';
 
-// Default view: Butterfly orientation expressed in the new URL format.
-// Satellite fields derived analytically from rot={x:-0.7454,y:0.1422,z:-2.9714}, R=4000.
+// Default view: Butterfly
 var defaultConfig = {
   mode:   'satellite',
   pos:    { ra: 0.000, dec:  0.000, r:    0.000 },
@@ -27,7 +26,6 @@ function appConfig() {
     getUpAxis:          getUpAxis,
     getAzAlt:           getAzAlt,
     getRadius:          getRadius,
-    getZoom:            getRadius,    // backward-compat alias
     getCameraLookAt:    getCameraLookAt,
     getSpeed:           getSpeed,
     getVisibleTracers:  getVisibleTracers,

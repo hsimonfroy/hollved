@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import ControlModeButton from './controlModeButton.jsx';
 import NoWebGL from './noWebgl.jsx';
 import Help from './help.jsx';
-import About from './about.jsx';
+import Info from './info.jsx';
 import TracerSelector from './tracerSelector.jsx';
 import CameraHUD from './cameraHUD.jsx';
 import LoadingIndicator from './loadingIndicator.jsx';
@@ -34,7 +34,7 @@ export default function Scene() {
         <CameraHUD />
         <div className='top-right-buttons'>
           <ControlModeButton />
-          <About />
+          <Info />
           <div
             className='hud-btn'
             title='Reset to origin'
