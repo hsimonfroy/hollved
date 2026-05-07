@@ -661,7 +661,7 @@ a.media {
 
 .timeline-card-bg {
   fill: rgba(5, 8, 20, 0.5);
-  stroke: rgba(255, 255, 255, 0.50);
+  stroke: ~"rgba(255,255,255,calc(0.30 + 0.69 * var(--focal-t, 0)))";
   stroke-width: 1;
   transition: stroke 0.15s;
 }
@@ -670,9 +670,10 @@ a.media {
   cursor: pointer;
   text-decoration: none;
   transition: transform 0.15s;
+  transform: ~"translateY(calc(-5px * var(--focal-t, 0)))";
 
   &:hover {
-    transform: translateY(-3px);
+    transform: translateY(-5px);
 
     .timeline-card-bg {
       stroke: rgba(255, 255, 255, 0.99);
@@ -753,7 +754,7 @@ a.media {
 .home-subtitle {
   font-size: 1.5rem;
   color: rgba(255, 255, 255, 0.70);
-  margin: 0 0 50px;
+  margin: 0 0 40px;
   text-align: center;
 }
 

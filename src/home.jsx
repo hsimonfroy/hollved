@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import config from './config.js';
 
 var SPECTROSCOPY_COLORS = {
@@ -25,7 +25,7 @@ var SURVEYS = [
 
 // SVG layout constants (preserving user's values, fixing CHART_BOTTOM)
 var BOX_WIDTH  = 740;
-var BOX_HEIGHT = 523;
+var BOX_HEIGHT = 530;
 var CHART_LEFT   = 63;
 var CHART_RIGHT  = BOX_WIDTH - 4;
 var CHART_TOP    = 0;
@@ -79,6 +79,33 @@ function computeLogoPos(survey, progs) {
 }
 
 function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
+  var cardRefs = useRef({});
+  var [focalT, setFocalT] = useState({});
+
+  useEffect(function() {
+    var appEl = document.getElementById('app');
+    if (!appEl) return;
+
+    function handleScroll() {
+      var focalY = window.innerHeight * 0.30;
+      var RADIUS = 100;
+      var next = {};
+      Object.keys(cardRefs.current).forEach(function(id) {
+        var el = cardRefs.current[id];
+        if (!el) return;
+        var rect = el.getBoundingClientRect();
+        var centerY = (rect.top + rect.bottom) / 2;
+        var dist = Math.abs(centerY - focalY);
+        next[id] = Math.max(0, 1 - dist / RADIUS);
+      });
+      setFocalT(next);
+    }
+
+    appEl.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return function() { appEl.removeEventListener('scroll', handleScroll); };
+  }, []);
+
   // Build flat program list, carrying cardSide from the parent survey
   var programs = [];
   SURVEYS.forEach(function(s) {
@@ -216,12 +243,16 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
           var pos = ld.pos;
           var imgSize = CARD_SIZE - 2 * CARD_PADDING;
           return (
-            <a key={s.id} href={'#/' + s.id} className='timeline-card' onClick={function(e) { e.preventDefault(); navigateToGalaxy(s.id); }}>
+            <a key={s.id} href={'#/' + s.id} className='timeline-card'
+              ref={function(el) { cardRefs.current[s.id] = el; }}
+              style={{ '--focal-t': focalT[s.id] || 0 }}
+              onClick={function(e) { e.preventDefault(); navigateToGalaxy(s.id); }}>
               <rect
                 x={pos.logoX} y={pos.logoY}
                 width={CARD_SIZE} height={CARD_SIZE}
                 rx={10}
                 className='timeline-card-bg'
+                style={{ '--focal-t': focalT[s.id] || 0 }}
               />
               <image
                 href={config.dataUrl + s.id + '/logo.png'}
