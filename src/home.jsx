@@ -81,6 +81,7 @@ function computeLogoPos(survey, progs) {
 function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
   var cardRefs = useRef({});
   var [focalT, setFocalT] = useState({});
+  var [hoveredId, setHoveredId] = useState(null);
 
   useEffect(function() {
     var appEl = document.getElementById('app');
@@ -242,17 +243,22 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
           var s = ld.survey;
           var pos = ld.pos;
           var imgSize = CARD_SIZE - 2 * CARD_PADDING;
+          var t = Math.max(focalT[s.id] || 0, hoveredId === s.id ? 1 : 0);
+          var strokeAlpha = (0.30 + 0.69 * t).toFixed(3);
+          var strokeWidth = (1 + 1 * t).toFixed(2);
           return (
             <a key={s.id} href={'#/' + s.id} className='timeline-card'
               ref={function(el) { cardRefs.current[s.id] = el; }}
               style={{ '--focal-t': focalT[s.id] || 0 }}
+              onMouseEnter={function() { setHoveredId(s.id); }}
+              onMouseLeave={function() { setHoveredId(null); }}
               onClick={function(e) { e.preventDefault(); navigateToGalaxy(s.id); }}>
               <rect
                 x={pos.logoX} y={pos.logoY}
                 width={CARD_SIZE} height={CARD_SIZE}
                 rx={10}
                 className='timeline-card-bg'
-                style={{ '--focal-t': focalT[s.id] || 0 }}
+                style={{ stroke: 'rgba(255,255,255,' + strokeAlpha + ')', strokeWidth: strokeWidth, transition: 'stroke 0.15s, stroke-width 0.15s' }}
               />
               <image
                 href={config.dataUrl + s.id + '/logo.png'}

@@ -661,9 +661,8 @@ a.media {
 
 .timeline-card-bg {
   fill: rgba(5, 8, 20, 0.5);
-  stroke: ~"rgba(255,255,255,calc(0.30 + 0.69 * var(--focal-t, 0)))";
+  stroke: rgba(255, 255, 255, 0.30);
   stroke-width: 1;
-  transition: stroke 0.15s;
 }
 
 .timeline-card {
@@ -674,10 +673,6 @@ a.media {
 
   &:hover {
     transform: translateY(-5px);
-
-    .timeline-card-bg {
-      stroke: rgba(255, 255, 255, 0.99);
-    }
   }
 }
 
