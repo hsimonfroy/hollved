@@ -8,6 +8,11 @@ var SPECTROSCOPY_COLORS = {
   'robotic multi-fiber': '#44ddaa',
 };
 
+var EXTRA_VIEWS = [
+  { id: 'all', label: 'All-in-one comparison of redshift catalogs (heavy)' },
+  { id: 'cf4', label: 'Redshift-independent distance catalog'              },
+];
+
 var SURVEYS = [
   { id: 'cfa',    cardSide: 'top',    nameSide: 'top'    },
   { id: '2dfgrs', cardSide: 'bottom', nameSide: 'bottom' },
@@ -275,6 +280,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
 export default function WelcomePage() {
   var [surveysData, setSurveysData] = useState({});
   var [logoErrors, setLogoErrors] = useState({});
+  var [extraLogoErrors, setExtraLogoErrors] = useState({});
 
   useEffect(function() {
     SURVEYS.forEach(function(s) {
@@ -313,7 +319,34 @@ export default function WelcomePage() {
         </ul>
       </div>
       <div className='welcome-status'>
-        <div className='welcome-status-title'>Status</div>
+        <div className='welcome-status-title'>Running surveys 🔭</div>
+        <p>
+          Note that DESI and Euclid are currently running surveys, and therefore only public DESI DR1 and Euclid Q1 data are presented for now. Visualizations will be updated along the following data releases.
+        </p>
+      </div>
+      <p className='welcome-subtitle' style={{ marginTop: '60px' }}>Extra views</p>
+      <div className='extra-views-grid'>
+        {EXTRA_VIEWS.map(function(v) {
+          return (
+            <a key={v.id} href={'#/' + v.id} className='survey-card'>
+              {!extraLogoErrors[v.id] && (
+                <img
+                  src={config.dataUrl + v.id + '/logo.png'}
+                  alt={v.label}
+                  onError={function() {
+                    setExtraLogoErrors(function(prev) {
+                      return Object.assign({}, prev, { [v.id]: true });
+                    });
+                  }}
+                />
+              )}
+              <span>{v.label}</span>
+            </a>
+          );
+        })}
+      </div>
+      <div className='welcome-status'>
+        <div className='welcome-status-title'>Status ⭐</div>
         <p>
           This project is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ the{' '}
           <a href='https://github.com/hsimonfroy/hollved' target='_blank' rel='noopener noreferrer'>
