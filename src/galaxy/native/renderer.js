@@ -26,6 +26,7 @@ import createMobileControl   from './mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
 import { cartToRaDecR, dirToAzAlt } from './coordUtils.js';
 import { Text } from 'troika-three-text';
+import RobotoUrl from '../../styles/fonts/Roboto-Regular.woff';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -617,7 +618,7 @@ function sceneRenderer(container) {
         '  vec3  viewDir = normalize(-vViewPosition);',
         '  float facing  = abs(dot(vViewNormal, viewDir));',
         // pow(2): Gaussian-like radial falloff, 0 at silhouette → no aliasing
-        '  float alpha   = pow(facing, 2.0) * 0.5;',
+        '  float alpha   = pow(facing, 2.0) * 0.01;',
         '  gl_FragColor  = vec4(2.0, 2.0, 2.0, min(alpha, 1.0));',
         '}'
       ].join('\n'),
@@ -633,11 +634,14 @@ function sceneRenderer(container) {
   function makeRulerLabel(text, radius) {
     var label = new Text();
     label.text         = text;
+    label.font         = RobotoUrl;
     label.fontSize     = radius * 0.04;
     // Labels render post-tone-map (in postScene) so plain white is truly white.
-    label.color        = 0xffffff;
+    label.color        = '#ffffff';
+    label.fillOpacity  = 0.8;
     label.outlineWidth = '10%';        // proportional black stroke
     label.outlineColor = '#000000';
+    label.outlineOpacity = 0.8;
     label.anchorX      = 'center';
     label.anchorY      = 'middle';
     label.depthTest    = false;
@@ -655,7 +659,8 @@ function sceneRenderer(container) {
         ? def.radius.toFixed(0) + ' Mpc'
         : (def.radius / 1000).toFixed(1) + ' Gpc';
       var ring  = createRulerRing(def.radius);
-      var label = makeRulerLabel(def.name + ' \u00b7 ' + distStr, def.radius);
+    //   var label = makeRulerLabel(def.name + ' \u00b7 ' + distStr, def.radius);
+      var label = makeRulerLabel(def.name, def.radius);
       scene.add(ring); ls.add(label);
       return { ring: ring, label: label, radius: def.radius };
     });
