@@ -26,7 +26,6 @@ import createMobileControl   from './mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
 import { cartToRaDecR, dirToAzAlt } from './coordUtils.js';
 import { Text } from 'troika-three-text';
-import RobotoUrl from '../../styles/fonts/Roboto-Regular.woff';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -634,7 +633,6 @@ function sceneRenderer(container) {
   function makeRulerLabel(text, radius) {
     var label = new Text();
     label.text         = text;
-    label.font         = RobotoUrl;
     label.fontSize     = radius * 0.04;
     // Labels render post-tone-map (in postScene) so plain white is truly white.
     label.color        = '#ffffff';
@@ -677,20 +675,22 @@ function sceneRenderer(container) {
   }
 
   function createCMBSphere(scene, radius, exposure, power) {
-    var base = config.dataUrl + 'aux/cmb/planck_100ghz_';
-    var cubeTexture = new THREE.CubeTextureLoader().load([
-      base + 'px.jpg', base + 'nx.jpg',
-      base + 'py.jpg', base + 'ny.jpg',
-      base + 'pz.jpg', base + 'nz.jpg'
-    ], function() { if (renderer) renderer.markDirty(); });
-    cubeTexture.colorSpace = THREE.LinearSRGBColorSpace;
+    var equirectTexture = new THREE.TextureLoader().load(
+      config.dataUrl + 'aux/cmb/planck_100ghz.jpg',
+      function() { if (renderer) renderer.markDirty(); }
+    );
+    equirectTexture.colorSpace = THREE.LinearSRGBColorSpace;
+    equirectTexture.wrapS = THREE.RepeatWrapping;
+    equirectTexture.generateMipmaps = false;
+    equirectTexture.minFilter = THREE.LinearFilter;
+    equirectTexture.anisotropy = renderer.renderer().capabilities.getMaxAnisotropy();
 
     var mat = new THREE.ShaderMaterial({
       uniforms: {
-        tCube:    { value: cubeTexture },
-        uColor:   { value: new THREE.Vector3(0.25, 0.25, 0.25) },
+        tEquirect: { value: equirectTexture },
+        uColor:    { value: new THREE.Vector3(0.25, 0.25, 0.25) },
         uExposure: { value: exposure },
-        uPower:   { value: power }
+        uPower:    { value: power }
       },
       vertexShader: [
         'varying vec3 vWorldPos;',
@@ -700,20 +700,24 @@ function sceneRenderer(container) {
         '}'
       ].join('\n'),
       fragmentShader: [
-        'uniform samplerCube tCube;',
+        'uniform sampler2D tEquirect;',
         'uniform vec3 uColor;',
         'uniform float uExposure;',
         'uniform float uPower;',
         'varying vec3 vWorldPos;',
         'void main() {',
-        // Desired LDR output after tone-mapping
-        '  vec3 target = textureCube(tCube, normalize(vWorldPos)).rgb * uColor;',
+        // Scene is ICRS Z-up: X→RA=0, Y→RA=90°, Z→north pole
+        // Image: RA=0/DEC=0 at center; RA increases leftward, DEC upward
+        '  vec3 dir = normalize(vWorldPos);',
+        '  float ra  = atan(dir.y, dir.x);',
+        '  float dec = asin(clamp(dir.z, -1.0, 1.0));',
+        '  float u = 0.5 - ra  / (2.0 * 3.14159265358979);',
+        '  float v = 0.5 + dec /       3.14159265358979;',
+        '  vec3 target = texture2D(tEquirect, vec2(u, v)).rgb * uColor;',
         '  float Lout = dot(target, vec3(0.2126, 0.7152, 0.0722));',
         // Inverse Generalized Reinhard: find HDR luminance Lin such that tone_map(Lin) = Lout
-        // Lin = Lout / pow(1 - pow(Lout, p), 1/p)
         '  float Lout_p = pow(clamp(Lout, 0.0, 0.9999), uPower);',
         '  float Lin = Lout / pow(1.0 - Lout_p, 1.0 / uPower);',
-        // Pre-divide by exposure so the tone-mapper multiplies back to Lin
         '  float scale = Lin / max(Lout * uExposure, 0.0001);',
         '  gl_FragColor = vec4(target * scale, 1.0);',
         '}'
@@ -725,8 +729,6 @@ function sceneRenderer(container) {
     var geo  = new THREE.IcosahedronGeometry(radius, 10);
     var mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = -1;
-    // No rotation needed: cube faces are generated in ICRS Z-up scene coordinates,
-    // and the lookup uses world-space position directly as the direction vector.
     scene.add(mesh);
     return mesh;
   }
@@ -737,8 +739,8 @@ function sceneRenderer(container) {
     if (cmbSphere) {
       renderer.scene().remove(cmbSphere);
       cmbSphere.geometry.dispose();
-      if (cmbSphere.material.uniforms && cmbSphere.material.uniforms.tCube)
-        cmbSphere.material.uniforms.tCube.value.dispose();
+      if (cmbSphere.material.uniforms && cmbSphere.material.uniforms.tEquirect)
+        cmbSphere.material.uniforms.tEquirect.value.dispose();
       cmbSphere.material.dispose();
       cmbSphere = null;
     }
