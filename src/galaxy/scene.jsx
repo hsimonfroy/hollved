@@ -49,8 +49,8 @@ export default function Scene() {
             {/* 🚪 */}
           </a>
         </div>
-        <LoadingIndicator />
       </div>
+      <LoadingIndicator />
       <Help />
     </div>
   );

@@ -19,7 +19,6 @@ function unrender(container, options) {
     camera: getCamera,
     input: getInput,
     renderer: getRenderer,
-    // todo: this should all be refactored into single particles class.
     particles: particles,
     getParticleView: getParicleView,
     onFrame: onFrame,
