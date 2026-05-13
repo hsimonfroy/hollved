@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import config from './config.js';
 
 var SPECTROSCOPY_COLORS = {
-  'single-slit':         '#b6aea2',
-  'manual multi-fiber':  '#afa6e1',
-  'slitless':            '#f07d81',
-  'robotic multi-fiber': '#44ddaa',
+  'single-slit':        '#b6aea2',
+  'plug-plate fibers':  '#afa6e1',
+  'slitless':           '#f07d81',
+  'robotic fibers':  '#44ddaa',
 };
 
 var EXTRA_VIEWS = [
@@ -28,12 +28,12 @@ var BOX_WIDTH  = 740;
 var BOX_HEIGHT = 530;
 var CHART_LEFT   = 63;
 var CHART_RIGHT  = BOX_WIDTH - 4;
-var CHART_TOP    = 0;
+var CHART_TOP    = 31.5;
 var CHART_BOTTOM = BOX_HEIGHT - 30;
 var CHART_WIDTH  = CHART_RIGHT - CHART_LEFT;
 var CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 var X_MIN = 1975, X_MAX = 2031;
-var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.4;
+var Y_LOG_MIN = 3.0, Y_LOG_MAX = 9.0;
 
 // Card dimensions (SVG units)
 var CARD_SIZE    = 91;  // square card outer size
@@ -127,7 +127,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
   });
 
   // Legend: unique spectroscopy types present in loaded data, in canonical order
-  var TYPE_ORDER = ['single-slit', 'manual multi-fiber', 'slitless', 'robotic multi-fiber'];
+  var TYPE_ORDER = ['single-slit', 'plug-plate fibers', 'slitless', 'robotic fibers'];
   var seenSpec = {};
   var legendEntries = [];
   programs.forEach(function(p) {
@@ -272,10 +272,10 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
         })}
         {/* Spectroscopy legend */}
         {legendEntries.length > 0 && (function() {
-          var LW = 152, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
+          var LW = 141, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
           var LH = TITLE_H + legendEntries.length * ROW_H + PAD_B;
-          var LX = CHART_LEFT + 5;
-          var LY = CHART_TOP + 120;
+          var LX = CHART_LEFT + 7;
+          var LY = CHART_TOP + 88.5;
         //   var LX = CHART_RIGHT - LW - 5;
         //   var LY = CHART_BOTTOM - LH - 2;
           return (
@@ -390,7 +390,7 @@ export default function HomePage() {
       <div className='home-status'>
         <div className='home-status-title'>Status ⭐</div>
         <p>
-          This project is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ the{' '}
+          This work is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ the{' '}
           <a href='https://github.com/hsimonfroy/hollved' target='_blank' rel='noopener noreferrer'>
             GitHub repository
           </a>.

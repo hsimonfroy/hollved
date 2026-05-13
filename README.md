@@ -4,13 +4,18 @@ An interactive visualizer of the largest 3D maps of the Universe.
 
 ![DESI DR1](assets/desi_dr1_round.png)
 
+<div align="center">
+    <picture>
+        <img alt="DESI DR1" src="assets/desi_dr1_round.png" width="600">
+    </picture>
+<div/>
 
 ## Status
-This project is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ this GitHub repository.
+This work is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ this GitHub repository.
 
 ## Features
-* Visualize the evolution of the spectroscopic surveys, that are mapping the Universe since the end of the 1970s. Learn about the specificities of each survey.
-* Orbit or fly-through the galaxies. Set your speed, select galaxy populations, display their volume and radial densities. Get an intuition about the cosmic scales, from the Milky-Way to the Cosmic Microwave Background (CMB) and the observable Universe.
+* Visualize the evolution of spectroscopic surveys, that are mapping the Universe since the end of the 1970s.
+* Orbit or fly-through the galaxies. Set your speed, select galaxy populations, display their radial and volume densities. Get a grasp on the greatness of cosmic scales, from the Milky-Way to the Cosmic Microwave Background (CMB) and the observable Universe.
 * Look at survey footprints, the large-scale structures of the cosmic web, and redshift-space distortions like the finger of god effect.  
 
 ## Processing

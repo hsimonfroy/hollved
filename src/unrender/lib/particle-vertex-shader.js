@@ -1,6 +1,7 @@
 module.exports = [
 'attribute vec4 customColor;',
 'uniform float uSize;',
+'uniform float uViewportHeight;',
 'uniform float uSliceEnabled;',
 'uniform vec3  uSliceNormal;',   // double-cone axis (unit vec, projected forward in orbit plane)
 'uniform vec3  uSlicePivot;',
@@ -10,8 +11,6 @@ module.exports = [
 '',
 'varying vec4 vColor;',
 'varying float vPointSize;',
-'',
-'const float focalLength = 351.0;',
 '',
 'void main() {',
 '  vColor = customColor;  // GPU normalizes Uint8 [0,255] → [0.0,1.0] via normalized=true',
@@ -39,7 +38,7 @@ module.exports = [
 '    return;',
 '  }',
 '',
-'  vPointSize = uSize * ( focalLength / length( mvPosition.xyz ) );',
+'  vPointSize = uSize * ( projectionMatrix[1][1] * uViewportHeight * 0.5 / length( mvPosition.xyz ) );',
 '',
 '  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
 '  if (vPointSize < 0.001) {',

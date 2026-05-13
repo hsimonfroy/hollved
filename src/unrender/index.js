@@ -23,6 +23,8 @@ function unrender(container, options) {
     getParticleView: getParicleView,
     onFrame: onFrame,
     offFrame: offFrame,
+    onResize:  function(cb) { resizeCallbacks.push(cb); },
+    offResize: function(cb) { var i = resizeCallbacks.indexOf(cb); if (i >= 0) resizeCallbacks.splice(i, 1); },
     getContainer: getContainer,
     markDirty: markDirty,
     setExposure: setExposure,
@@ -33,7 +35,8 @@ function unrender(container, options) {
 
   options = combineOptions(options);
   var lastFrame;
-  var rafCallbacks = [];
+  var rafCallbacks    = [];
+  var resizeCallbacks = [];
 
   // Demand rendering: only call renderer.render() when the camera moved or
   // data changed (markDirty). Eliminates all GPU work on idle frames.
@@ -61,6 +64,7 @@ function unrender(container, options) {
   tmScene.add(tmMesh);
 
   var particleView = createParticleView(scene);
+  particleView.getMaterial().uniforms.uViewportHeight.value = container.clientHeight;
   // Stub — renderer.js replaces input.update with the combined control updater.
   var input = {
     update:    function() {},
@@ -206,6 +210,9 @@ function unrender(container, options) {
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
     hdrTarget.setSize(container.clientWidth, container.clientHeight);
+    var h = container.clientHeight;
+    particleView.getMaterial().uniforms.uViewportHeight.value = h;
+    for (var i = 0; i < resizeCallbacks.length; ++i) resizeCallbacks[i](h);
     markDirty();
   }
 
@@ -244,7 +251,7 @@ function unrender(container, options) {
       new THREE.ShaderMaterial({
         uniforms: {
           tDiffuse: { value: hdrTarget.texture },
-          exposure: { value: 400.0 },
+          exposure: { value: 500.0 },
           power:    { value: 0.4 }
         },
         vertexShader: [

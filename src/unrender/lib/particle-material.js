@@ -9,7 +9,8 @@ function createParticleMaterial() {
     var uniforms = {
         color:        { value: new THREE.Color(0xffffff) },
         pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
-        uSize:           { value: 0.1 },
+        uSize:           { value: 0.05 },
+        uViewportHeight: { value: 600.0 },
     // Declared here as uniform, actual values are set by renderer.js
     uSliceEnabled:   { value: 0.0 },
     uSliceNormal:    { value: new THREE.Vector3(0, 0, 1) },

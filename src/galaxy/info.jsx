@@ -3,9 +3,11 @@ import appEvents from './service/appEvents.js';
 import config from '../config.js';
 
 function renderInline(text) {
-  return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, t, url) {
-    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + t + '</a>';
-  });
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, function(_, t) { return '<strong>' + t + '</strong>'; })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, t, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + t + '</a>';
+    });
 }
 
 function markdownToHtml(md) {
