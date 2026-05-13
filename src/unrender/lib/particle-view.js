@@ -11,7 +11,8 @@ function particleView(scene) {
     initWithNewCoordinates: initWithNewCoordinates,
     coordinates: getOrSetCoordinates,
     colors: getOrSetColors,
-    getPointCloud: getPointCloud
+    getPointCloud: getPointCloud,
+    getMaterial: function() { return particleMaterial; }
   };
 
   return api;

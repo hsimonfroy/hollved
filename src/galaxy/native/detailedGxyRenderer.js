@@ -1,6 +1,7 @@
 import config from '../../config.js';
 
-export default function createDetailedGalaxies(scene, markDirty) {
+export default function createDetailedGalaxies(scene, markDirty, initialViewportHeight) {
+  var viewportHeight = initialViewportHeight || 600;
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
   var RES_FACTOR              = 5;   // px/kpc
   var DEFAULT_THICK_DIAM_RATIO = 3/4; // default thickness = 3/4 of diameter, if unspecified
@@ -139,11 +140,12 @@ export default function createDetailedGalaxies(scene, markDirty) {
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('color',    new THREE.BufferAttribute(colors, 4, true));
 
-    var uSize = 13.0 * half_diam / res * 351.0;
+    var uSize = 8.0 * half_diam / res;
     var mat = new THREE.ShaderMaterial({
-      uniforms: { uSize: { value: uSize } },
+      uniforms: { uSize: { value: uSize }, uViewportHeight: { value: viewportHeight } },
       vertexShader: [
         'uniform float uSize;',
+        'uniform float uViewportHeight;',
         'attribute vec4 color;',
         'varying vec4 vColor;',
         'varying float vPointSize;',
@@ -154,7 +156,7 @@ export default function createDetailedGalaxies(scene, markDirty) {
         '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
         '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
         '  }',
-        '  vPointSize = uSize / -mvPos.z;',
+        '  vPointSize = uSize * projectionMatrix[1][1] * uViewportHeight * 0.5 / -mvPos.z;',
         '  if (vPointSize < 0.01) {',
         '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
         '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
@@ -192,6 +194,10 @@ export default function createDetailedGalaxies(scene, markDirty) {
       _visible = visible;
       allPoints.forEach(function(pts) { pts.visible = visible; });
       markDirty();
+    },
+    setViewportHeight: function(h) {
+      viewportHeight = h;
+      allPoints.forEach(function(pts) { pts.material.uniforms.uViewportHeight.value = h; });
     },
     dispose: function() {
       allPoints.forEach(function(pts) {

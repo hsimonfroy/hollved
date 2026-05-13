@@ -369,7 +369,8 @@ function sceneRenderer(container) {
       cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
-      detailedGalaxies = createDetailedGalaxies(renderer.scene(), renderer.markDirty);
+      detailedGalaxies = createDetailedGalaxies(renderer.scene(), renderer.markDirty, container.clientHeight);
+      renderer.onResize(function(h) { detailedGalaxies.setViewportHeight(h); });
       if (configVisible && configVisible.indexOf('local') < 0) {
         detailedGalaxies.setVisible(false);
       }
