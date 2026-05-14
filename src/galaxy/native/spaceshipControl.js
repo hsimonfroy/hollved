@@ -14,7 +14,8 @@
  * update(delta) must be called every RAF frame (wired via renderer.js).
  */
 export default createSpaceshipControl;
-export var MIN_MOVE_SPEED = 1e-16; // Mpc/s — exported so cameraHUD can derive its log scale
+// export var MIN_MOVE_SPEED = 1e-16; // Mpc/s — exported so cameraHUD can derive its log scale
+export var MIN_MOVE_SPEED = 1e-5; // Mpc/s — exported so cameraHUD can derive its log scale
 export var MAX_MOVE_SPEED = 1e3;  // Mpc/s — exported so cameraHUD can derive its log scale
 
 function createSpaceshipControl(camera, container, keyState, markDirty) {

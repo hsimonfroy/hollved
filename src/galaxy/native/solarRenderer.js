@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import config from '../../config.js';
 
-// Scale factor for testing (100 million × real dimensions)
 var KM_TO_MPC  = 1 / 3.085677581e19; // 1 km in Mpc
 var AU_TO_MPC  = 1 / 2.06264806e11;  // 1 AU in Mpc
 var SOLAR_CAM_NEAR = 1e-17; // Mpc — well inside Earth
-var SOLAR_CAM_FAR  = 1e-6; // Mpc — comfortably past the Sun
+var SOLAR_CAM_FAR  = 1e-6;  // Mpc — comfortably past the Sun
+var GLOW_SCALE = 22; // glow sprite diameter = sun radius × this
 
 var VERT = [
   'varying vec3 vLocalPos;',
@@ -17,7 +17,8 @@ var VERT = [
   '}'
 ].join('\n');
 
-// Sun: emissive, no lighting
+// Sun: emissive, no lighting.
+// u = 0.5 + ra/(2π): surface viewed from outside → East is right.
 var FRAG_SUN = [
   'uniform sampler2D tEquirect;',
   'varying vec3 vLocalPos;',
@@ -25,13 +26,14 @@ var FRAG_SUN = [
   '  vec3  dir = normalize(vLocalPos);',
   '  float ra  = atan(dir.y, dir.x);',
   '  float dec = asin(clamp(dir.z, -1.0, 1.0));',
-  '  float u   = 0.5 - ra  / (2.0 * 3.14159265358979);',
+  '  float u   = 0.5 + ra  / (2.0 * 3.14159265358979);',
   '  float v   = 0.5 + dec /       3.14159265358979;',
-  '  gl_FragColor = vec4(min(texture2D(tEquirect, vec2(u, v)).rgb * 3.0, vec3(1.0)), 1.0);',
+  '  gl_FragColor = vec4(min(texture2D(tEquirect, vec2(u, v)).rgb * 6.0, vec3(1.0)), 1.0);',
   '}'
 ].join('\n');
 
-// Planets: Lambert diffuse from sun + ambient fill
+// Planets: Lambertian + ambient, soft terminator.
+// u = 0.5 + ra/(2π): surface viewed from outside → East is right.
 var FRAG_PLANET = [
   'uniform sampler2D tEquirect;',
   'uniform vec3  uSunDir;',
@@ -39,16 +41,58 @@ var FRAG_PLANET = [
   'varying vec3 vLocalPos;',
   'varying vec3 vWorldNormal;',
   'void main() {',
-  '  vec3  dir  = normalize(vLocalPos);',
-  '  float ra   = atan(dir.y, dir.x);',
-  '  float dec  = asin(clamp(dir.z, -1.0, 1.0));',
-  '  float u    = 0.5 - ra  / (2.0 * 3.14159265358979);',
-  '  float v    = 0.5 + dec /       3.14159265358979;',
-  '  vec3  tex  = texture2D(tEquirect, vec2(u, v)).rgb;',
-  '  float diff = max(0.0, dot(normalize(vWorldNormal), uSunDir));',
-  '  gl_FragColor = vec4(min(tex * (uAmbient + diff), vec3(1.0)), 1.0);',
+  '  vec3  dir   = normalize(vLocalPos);',
+  '  float ra    = atan(dir.y, dir.x);',
+  '  float dec   = asin(clamp(dir.z, -1.0, 1.0));',
+  '  float u     = 0.5 + ra  / (2.0 * 3.14159265358979);',
+  '  float v     = 0.5 + dec /       3.14159265358979;',
+  '  vec3  tex   = texture2D(tEquirect, vec2(u, v)).rgb;',
+  '  float NdotL = dot(normalize(vWorldNormal), uSunDir);',
+  '  float diff  = smoothstep(-0.08, 0.15, NdotL);',
+  '  float light = uAmbient + (1.0 - uAmbient) * diff;',
+  '  gl_FragColor = vec4(tex * light, 1.0);',
   '}'
 ].join('\n');
+
+// Earth: same as FRAG_PLANET with an additional cloud layer.
+var FRAG_EARTH = [
+  'uniform sampler2D tEquirect;',
+  'uniform sampler2D tClouds;',
+  'uniform vec3  uSunDir;',
+  'uniform float uAmbient;',
+  'varying vec3 vLocalPos;',
+  'varying vec3 vWorldNormal;',
+  'void main() {',
+  '  vec3  dir   = normalize(vLocalPos);',
+  '  float ra    = atan(dir.y, dir.x);',
+  '  float dec   = asin(clamp(dir.z, -1.0, 1.0));',
+  '  float u     = 0.5 + ra  / (2.0 * 3.14159265358979);',
+  '  float v     = 0.5 + dec /       3.14159265358979;',
+  '  vec2  uv    = vec2(u, v);',
+  '  vec3  tex   = texture2D(tEquirect, uv).rgb;',
+  '  float cloud = texture2D(tClouds, uv).r;',
+  '  vec3  color = mix(tex, vec3(1.0), cloud * 0.85);',
+  '  float NdotL = dot(normalize(vWorldNormal), uSunDir);',
+  '  float diff  = smoothstep(-0.08, 0.15, NdotL);',
+  '  float light = uAmbient + (1.0 - uAmbient) * diff;',
+  '  gl_FragColor = vec4(color * light, 1.0);',
+  '}'
+].join('\n');
+
+function makeGlowTexture() {
+  var sz = 256, c = sz / 2;
+  var canvas = document.createElement('canvas');
+  canvas.width = sz; canvas.height = sz;
+  var ctx  = canvas.getContext('2d');
+  var grad = ctx.createRadialGradient(c, c, 0, c, c, c);
+  grad.addColorStop(0,    'rgba(255,245,210,1)');
+//   grad.addColorStop(0.15, 'rgba(255,220,140,0.85)');
+//   grad.addColorStop(0.35, 'rgba(255,180,60,0.35)');
+  grad.addColorStop(1,    'rgba(255,120,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, sz, sz);
+  return new THREE.CanvasTexture(canvas);
+}
 
 export default function createSolarRenderer(unrenderObj, markDirty) {
   var container   = unrenderObj.getContainer();
@@ -61,7 +105,6 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
 
   var maxAniso = unrenderObj.renderer().capabilities.getMaxAnisotropy();
 
-  // Update camera aspect on window resize
   unrenderObj.onResize(function() {
     solarCamera.aspect = container.clientWidth / container.clientHeight;
     solarCamera.updateProjectionMatrix();
@@ -73,69 +116,109 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
       return r.json();
     })
     .then(function(manifest) {
-      var earth = manifest.bodies.find(function(b) { return b.id === 'earth'; });
+      var earth     = manifest.bodies.find(function(b) { return b.id === 'earth'; });
       var earthAnom = (earth ? earth.anom : 0) * Math.PI / 180;
       var earthSma  = earth ? earth.sma : 1;
-      var earthHX   = earthSma * Math.cos(earthAnom); // AU
-      var earthHY   = earthSma * Math.sin(earthAnom); // AU
-
-      manifest.bodies.forEach(function(body) {
-        loadBody(body, earthHX, earthHY);
-      });
+      var earthHX   = earthSma * Math.cos(earthAnom);
+      var earthHY   = earthSma * Math.sin(earthAnom);
+      manifest.bodies.forEach(function(body) { loadBody(body, earthHX, earthHY); });
     })
     .catch(function(err) { console.warn('[solarRenderer] manifest load failed:', err); });
 
-  function loadBody(body, earthHX, earthHY) {
-    var tex = new THREE.TextureLoader().load(
-      config.dataUrl + 'aux/solar/' + body.id + '.jpg',
-      function() { markDirty(); }
-    );
+  function loadTex(url) {
+    var tex = new THREE.TextureLoader().load(url, function() { markDirty(); });
     tex.colorSpace      = THREE.SRGBColorSpace;
     tex.wrapS           = THREE.RepeatWrapping;
     tex.generateMipmaps = false;
     tex.minFilter       = THREE.LinearFilter;
     tex.anisotropy      = maxAniso;
+    return tex;
+  }
 
-    var radius = (body.diam / 2) * KM_TO_MPC;
-    var geo    = new THREE.IcosahedronGeometry(radius, 5);
+  function loadBody(body, earthHX, earthHY) {
+    var isSun   = body.id === 'sun';
+    var isEarth = body.id === 'earth';
+    var tex     = loadTex(config.dataUrl + 'aux/solar/' + body.id + '.jpg');
+    var radius  = (body.diam / 2) * KM_TO_MPC;
+    var geo     = new THREE.IcosahedronGeometry(radius, 5);
 
-    // Geocentric position (heliocentric minus Earth heliocentric)
     var anom = body.anom * Math.PI / 180;
     var px   = (body.sma * Math.cos(anom) - earthHX) * AU_TO_MPC;
     var py   = (body.sma * Math.sin(anom) - earthHY) * AU_TO_MPC;
 
-    var isSun = body.id === 'sun';
+    var uniforms, frag;
+    if (isSun) {
+      uniforms = { tEquirect: { value: tex } };
+      frag     = FRAG_SUN;
+    } else if (isEarth) {
+      uniforms = {
+        tEquirect: { value: tex },
+        tClouds:   { value: loadTex(config.dataUrl + 'aux/solar/earth_clouds.jpg') },
+        uSunDir:   { value: new THREE.Vector3() },
+        uAmbient:  { value: 0.2 }
+      };
+      frag = FRAG_EARTH;
+    } else {
+      uniforms = {
+        tEquirect: { value: tex },
+        uSunDir:   { value: new THREE.Vector3() },
+        uAmbient:  { value: 0.2 }
+      };
+      frag = FRAG_PLANET;
+    }
+
     var mat = new THREE.ShaderMaterial({
-      uniforms: isSun
-        ? { tEquirect: { value: tex } }
-        : { tEquirect: { value: tex }, uSunDir: { value: new THREE.Vector3() }, uAmbient: { value: 0.5 } },
+      uniforms:       uniforms,
       vertexShader:   VERT,
-      fragmentShader: isSun ? FRAG_SUN : FRAG_PLANET,
+      fragmentShader: frag,
       side:       THREE.FrontSide,
       depthTest:  true,
-      depthWrite: true
+      // Sun must not write depth: the glow (renderOrder 2) depth-tests against
+      // planet depths only, so it can render over the sun surface.
+      depthWrite:  !isSun,
+      // Sun goes into the transparent pass so mesh.renderOrder takes effect.
+      transparent: isSun
     });
 
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(px, py, 0);
-    mesh.userData.isSun = isSun;
+    mesh.renderOrder     = isSun ? 1 : 0;
+    mesh.userData.isSun  = isSun;
     solarScene.add(mesh);
     meshes.push(mesh);
 
-    if (isSun) sunMesh = mesh;
-    markDirty();
+    if (isSun) {
+      sunMesh = mesh;
 
-    // Once all bodies are loaded, wire up sun direction uniforms for planets
+      // Glow: depthTest against planets only (sun wrote no depth).
+      // renderOrder 2 → renders after sun (renderOrder 1).
+      var glowMat = new THREE.SpriteMaterial({
+        map:         makeGlowTexture(),
+        blending:    THREE.AdditiveBlending,
+        depthTest:   true,
+        depthWrite:  false,
+        transparent: true
+      });
+      var glow = new THREE.Sprite(glowMat);
+      glow.renderOrder = 2;
+      var gs = radius * GLOW_SCALE;
+      glow.scale.set(gs, gs, 1);
+      glow.position.set(px, py, 0);
+      glow.userData.isGlow = true;
+      solarScene.add(glow);
+      meshes.push(glow);
+    }
+
+    markDirty();
     updateSunDirs();
   }
 
   function updateSunDirs() {
     if (!sunMesh) return;
     meshes.forEach(function(m) {
-      if (m.userData.isSun) return;
+      if (m.userData.isSun || m.userData.isGlow) return;
       var u = m.material.uniforms.uSunDir;
-      if (!u) return;
-      u.value.subVectors(sunMesh.position, m.position).normalize();
+      if (u) u.value.subVectors(sunMesh.position, m.position).normalize();
     });
   }
 
@@ -151,17 +234,22 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   unrenderObj.onAfterToneMap(solarPass);
 
   return {
-    setVisible: function(v) {
-      _visible = v;
-      markDirty();
-    },
+    setVisible: function(v) { _visible = v; markDirty(); },
     dispose: function() {
       unrenderObj.offAfterToneMap(solarPass);
       meshes.forEach(function(m) {
         solarScene.remove(m);
-        m.geometry.dispose();
-        if (m.material.uniforms.tEquirect) m.material.uniforms.tEquirect.value.dispose();
-        m.material.dispose();
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) {
+          var u = m.material.uniforms;
+          if (u) {
+            if (u.tEquirect) u.tEquirect.value.dispose();
+            if (u.tClouds)   u.tClouds.value.dispose();
+          } else if (m.material.map) {
+            m.material.map.dispose();
+          }
+          m.material.dispose();
+        }
       });
       meshes = [];
       sunMesh = null;
