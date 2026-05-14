@@ -20,7 +20,7 @@ var RAD2DEG = 180 / Math.PI;
 
 export function cartToRaDecR(x, y, z) {
   var r = Math.sqrt(x * x + y * y + z * z);
-  if (r < 1e-10) return { ra: 0, dec: 0, r: 0 };
+  if (r < 1e-20) return { ra: 0, dec: 0, r: 0 };
   var dec = Math.asin(Math.max(-1, Math.min(1, z / r))) * RAD2DEG;
   var ra  = Math.atan2(y, x) * RAD2DEG;
   if (ra < 0) ra += 360;
