@@ -2,14 +2,10 @@ import * as THREE from 'three';
 import config from '../../config.js';
 
 // Scale factor for testing (100 million × real dimensions)
-var SCALE = 1e8;
 var KM_TO_MPC  = 1 / 3.085677581e19; // 1 km in Mpc
 var AU_TO_MPC  = 1 / 2.06264806e11;  // 1 AU in Mpc
-KM_TO_MPC  = KM_TO_MPC  * SCALE;
-AU_TO_MPC  = AU_TO_MPC  * SCALE;
-
-var SOLAR_CAM_NEAR = 1e-9; // Mpc — well inside Earth at test scale
-var SOLAR_CAM_FAR  = 1e-2; // Mpc — covers ~10 kpc, comfortably past the Sun
+var SOLAR_CAM_NEAR = 1e-17; // Mpc — well inside Earth
+var SOLAR_CAM_FAR  = 1e-6; // Mpc — comfortably past the Sun
 
 var VERT = [
   'varying vec3 vLocalPos;',
@@ -31,7 +27,7 @@ var FRAG_SUN = [
   '  float dec = asin(clamp(dir.z, -1.0, 1.0));',
   '  float u   = 0.5 - ra  / (2.0 * 3.14159265358979);',
   '  float v   = 0.5 + dec /       3.14159265358979;',
-  '  gl_FragColor = vec4(texture2D(tEquirect, vec2(u, v)).rgb, 1.0);',
+  '  gl_FragColor = vec4(min(texture2D(tEquirect, vec2(u, v)).rgb * 3.0, vec3(1.0)), 1.0);',
   '}'
 ].join('\n');
 
@@ -50,7 +46,7 @@ var FRAG_PLANET = [
   '  float v    = 0.5 + dec /       3.14159265358979;',
   '  vec3  tex  = texture2D(tEquirect, vec2(u, v)).rgb;',
   '  float diff = max(0.0, dot(normalize(vWorldNormal), uSunDir));',
-  '  gl_FragColor = vec4(tex * (uAmbient + (1.0 - uAmbient) * diff), 1.0);',
+  '  gl_FragColor = vec4(min(tex * (uAmbient + diff), vec3(1.0)), 1.0);',
   '}'
 ].join('\n');
 
@@ -101,7 +97,7 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     tex.anisotropy      = maxAniso;
 
     var radius = (body.diam / 2) * KM_TO_MPC;
-    var geo    = new THREE.IcosahedronGeometry(radius, 10);
+    var geo    = new THREE.IcosahedronGeometry(radius, 5);
 
     // Geocentric position (heliocentric minus Earth heliocentric)
     var anom = body.anom * Math.PI / 180;
@@ -112,7 +108,7 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     var mat = new THREE.ShaderMaterial({
       uniforms: isSun
         ? { tEquirect: { value: tex } }
-        : { tEquirect: { value: tex }, uSunDir: { value: new THREE.Vector3() }, uAmbient: { value: 0.1 } },
+        : { tEquirect: { value: tex }, uSunDir: { value: new THREE.Vector3() }, uAmbient: { value: 0.5 } },
       vertexShader:   VERT,
       fragmentShader: isSun ? FRAG_SUN : FRAG_PLANET,
       side:       THREE.FrontSide,

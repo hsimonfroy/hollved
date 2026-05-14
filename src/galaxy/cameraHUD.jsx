@@ -8,7 +8,7 @@
  *
  * Speed rows (spaceship mode only):
  *   SPEED  xx.xx Mpc/s
- *   [────────────────●──] logarithmic slider (10 kpc/s – 1000 Mpc/s)
+ *   [────────────────●──] logarithmic slider (MIN_MOVE_SPEED – MAX_MOVE_SPEED)
  *
  * HUD lookup table arrives via appEvents.radarReady once at load time.
  * Position arrives via appEvents.cameraHUDUpdate every ~200ms.
@@ -17,9 +17,11 @@
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
+import { MIN_MOVE_SPEED, MAX_MOVE_SPEED } from './native/spaceshipControl.js';
 
-var LOG_MIN   = -2;  // 10^LOG_MIN Mpc/s min speed
-var LOG_RANGE =  5;  // → 10^(LOG_MIN + LOG_RANGE) Mpc/s max speed
+var LOG_MIN   = Math.floor(Math.log10(MIN_MOVE_SPEED));
+var LOG_RANGE = Math.ceil(Math.log10(MAX_MOVE_SPEED)) - LOG_MIN;
+var CLAMP_MIN = Math.pow(10, LOG_MIN - 1);  // one decade below min, safe log10 lower bound
 
 export default function CameraHUD() {
   var hudRef = useRef(null);   // hud lookup arrays
@@ -69,13 +71,13 @@ export default function CameraHUD() {
     }
     function onSpeedUpdate(speed, ms) {
       currentSpeedRef.current = speed;
-      fillTargetRef.current = Math.min(1, speed / Math.max(ms, 0.0001));
+      fillTargetRef.current = Math.min(1, speed / Math.max(ms, CLAMP_MIN));
       // Show current speed only when neither dragging nor wheeling
       if (!isDraggingRef.current && !isWheelingRef.current && speedTextRef.current)
         speedTextRef.current.textContent = formatSpeed(speed);
-      if (Math.abs(ms - maxSpeedRef.current) > 1e-9) {
+      if (ms !== maxSpeedRef.current) {
         maxSpeedRef.current = ms;
-        cursorFracRef.current = (Math.log10(Math.max(0.0001, ms)) - LOG_MIN) / LOG_RANGE;
+        cursorFracRef.current = (Math.log10(Math.max(CLAMP_MIN, ms)) - LOG_MIN) / LOG_RANGE;
         setMaxSpeed(ms);
         // Wheel change: show max speed label temporarily
         if (!isDraggingRef.current) {
@@ -186,7 +188,8 @@ export default function CameraHUD() {
   var redshift    = inRange ? lerp(chi, hud.chi_Mpc, hud.z) : null;
   var lookbackMyr = inRange ? lerp(chi, hud.chi_Mpc, hud.lookback_Myr) : null;
 
-  var cursorPct = ((Math.log10(Math.max(0.0001, maxSpeed)) - LOG_MIN) / LOG_RANGE * 100).toFixed(1) + '%';
+  var cursorFrac = Math.max(0, Math.min(1, (Math.log10(Math.max(CLAMP_MIN, maxSpeed)) - LOG_MIN) / LOG_RANGE));
+  var cursorPct  = (cursorFrac * 100).toFixed(1) + '%';
 
   return (
     <div className="camera-hud">
@@ -249,30 +252,53 @@ function lerp(x, xs, ys) {
   return ys[lo] + t * (ys[hi] - ys[lo]);
 }
 
+var DIST_KM = 3.2408e-20; // 1 km in Mpc
+var DIST_AU = 4.848e-12; // 1 AU in Mpc
+
+var AGE_mSEC = 3.171e-17; // 1 msec in Myr
+var AGE_SEC = 3.171e-14; // 1 sec in Myr
+var AGE_MIN = 1.901e-12; // 1 min in Myr
+var AGE_HR  = 1.141e-10; // 1 hr  in Myr
+var AGE_DAY = 2.738e-9;  // 1 day in Myr
+var AGE_YR  = 1e-6;      // 1 yr  in Myr
+
+var MARGIN = 1e1; // anticipate change of units
+
 function formatSI(chi) {
-  if (chi < 1e-3) return chi.toFixed(1) + ' pc';
-  if (chi < 1)    return (chi * 1e3).toFixed(0) + ' kpc';
-  if (chi < 1e3)  return chi.toFixed(1) + ' Mpc';
+  if (chi < DIST_AU / MARGIN) return (chi / DIST_KM).toFixed(0) + ' km';
+  if (chi < 1e-6 / MARGIN)    return (chi / DIST_AU).toFixed(2) + ' AU';
+  if (chi < 1e-3)             return (chi * 1e6).toFixed(2) + ' pc';
+  if (chi < 1)                return (chi * 1e3).toFixed(2) + ' kpc';
+  if (chi < 1e3)              return chi.toFixed(2) + ' Mpc';
   return (chi / 1e3).toFixed(2) + ' Gpc';
 }
 
 function formatZ(z) {
-  if (z < 0.01)  return z.toFixed(5);
-  if (z < 1)     return z.toFixed(3);
-  if (z < 100)   return z.toFixed(1);
+  if (z < 1e-2)  return z.toFixed(5);
+  if (z < 1e0)   return z.toFixed(3);
+  if (z < 1e2)   return z.toFixed(1);
   return z.toFixed(0);
 }
 
+
 function formatAge(myr) {
-  if (myr < 0.001) return '0 yr ago';
-  if (myr < 1)     return (myr * 1e3).toFixed(0) + ' kyr ago';
-  if (myr < 1e3)   return myr.toFixed(1) + ' Myr ago';
-  return (myr / 1e3).toFixed(2) + ' Gyr ago';
+  if (myr < AGE_mSEC) return 'now';
+  if (myr < AGE_SEC)  return (myr / AGE_mSEC).toFixed(0) + ' ms ago';
+  if (myr < AGE_MIN)  return (myr / AGE_SEC).toFixed(0) + ' s ago';
+  if (myr < AGE_HR)   return (myr / AGE_MIN).toFixed(0) + ' min ago';
+  if (myr < AGE_DAY)  return (myr / AGE_HR).toFixed(0)  + ' h ago';
+  if (myr < AGE_YR)   return (myr / AGE_DAY).toFixed(0) + ' d ago';
+  if (myr < 1e-3)     return (myr / AGE_YR).toFixed(0)  + ' yr ago';
+  if (myr < 1)        return (myr * 1e3).toFixed(1)     + ' kyr ago';
+  if (myr < 1e3)      return myr.toFixed(1)              + ' Myr ago';
+  return (myr / 1e3).toFixed(2)                         + ' Gyr ago';
 }
 
 function formatSpeed(mpcPerSec) {
-  if (mpcPerSec < 1e-3) return (mpcPerSec * 1e6).toFixed(0) + ' pc/s';
-  if (mpcPerSec < 1)    return (mpcPerSec * 1e3).toFixed(1) + ' kpc/s';
-  if (mpcPerSec < 1000) return mpcPerSec.toFixed(2) + ' Mpc/s';
+  if (mpcPerSec < DIST_AU / MARGIN) return (mpcPerSec / DIST_KM).toFixed(0) + ' km/s';
+  if (mpcPerSec < 1e-6 / MARGIN)    return (mpcPerSec / DIST_AU).toFixed(2) + ' AU/s';
+  if (mpcPerSec < 1e-3)             return (mpcPerSec * 1e6).toFixed(2) + ' pc/s';
+  if (mpcPerSec < 1)                return (mpcPerSec * 1e3).toFixed(2) + ' kpc/s';
+  if (mpcPerSec < 1000)             return mpcPerSec.toFixed(2) + ' Mpc/s';
   return (mpcPerSec / 1e3).toFixed(2) + ' Gpc/s';
 }

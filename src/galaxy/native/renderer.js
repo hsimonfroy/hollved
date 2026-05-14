@@ -114,8 +114,6 @@ function sceneRenderer(container) {
 
     } else {
       // Spaceship: fly to origin, oriented toward origin from current position
-      if (startPos.lengthSq() < 1e-6) return; // already at origin
-
       var endPos = origin.clone();
 
       // End orientation: look toward origin, preserving roll.

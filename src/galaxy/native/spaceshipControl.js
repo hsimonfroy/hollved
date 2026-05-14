@@ -14,6 +14,8 @@
  * update(delta) must be called every RAF frame (wired via renderer.js).
  */
 export default createSpaceshipControl;
+export var MIN_MOVE_SPEED = 1e-16; // Mpc/s — exported so cameraHUD can derive its log scale
+export var MAX_MOVE_SPEED = 1e3;  // Mpc/s — exported so cameraHUD can derive its log scale
 
 function createSpaceshipControl(camera, container, keyState, markDirty) {
   var THREE = window.THREE;
@@ -29,8 +31,6 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
   var MOVE_SPEED = 10;   // Mpc/s, set by cursor
-  var MAX_MOVE_SPEED = 1000; // Mpc/s
-  var MIN_MOVE_SPEED = 0.01; // Mpc/s
   var ROT_SPEED      = 0.4;  // Q/E roll speed (rad/s)
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
