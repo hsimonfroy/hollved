@@ -8,9 +8,9 @@ import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from './coord
 var defaultConfig = {
   mode:   'satellite',
   pos:    { ra: 0.000, dec:  0.000, r:    0.000 },
-  zen:    { ra: 272.886, dec: -6.204 },
+  zen:    { ra: 270.000, dec: 0.000 },
   azaltr: { az:  28.000, alt:  0.000, r: 4000.000 },
-  rot:    { x: -0.7454, y: 0.1422, z: -2.9714 },
+  rot:    { x: 0.7600, y: 0.0000, z: 3.0483 },
   speed:  10.00,
   visibleTracers: null
 };

@@ -3,11 +3,12 @@ import config from '../../config.js';
 export default function createDetailedGalaxies(scene, markDirty, initialViewportHeight) {
   var viewportHeight = initialViewportHeight || 600;
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
-  var RES_FACTOR              = 5;   // px/kpc
+  var RES_FACTOR              = 9;   // resolution in px/kpc
   var DEFAULT_THICK_DIAM_RATIO = 3/4; // default thickness = 3/4 of diameter, if unspecified
   var ALPHA_THRESH            = 5; // min pixel alpha to qualify
   var N_SAMPLES               = 2; // points per qualifying pixel
   var SMOOTH_ALPHA            = 10; // Gaussian alpha smoothing strength
+  var PART_SIZE               = 4.0; // particle size in px
 
   var allPoints = [];
   var _visible  = true;
@@ -144,7 +145,7 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('color',    new THREE.BufferAttribute(colors, 4, true));
 
-    var uSize = 8.0 * half_diam / res;
+    var uSize = PART_SIZE / RES_FACTOR / 1000;
     var mat = new THREE.ShaderMaterial({
       uniforms: { uSize: { value: uSize }, uViewportHeight: { value: viewportHeight } },
       vertexShader: [
