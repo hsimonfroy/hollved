@@ -30,11 +30,14 @@ function unrender(container, options) {
     setExposure: setExposure,
     setPower: setPower,
     getExposure: getExposure,
-    getPower: getPower
+    getPower: getPower,
+    onAfterToneMap:  function(cb) { afterToneMapCallbacks.push(cb); },
+    offAfterToneMap: function(cb) { var i = afterToneMapCallbacks.indexOf(cb); if (i >= 0) afterToneMapCallbacks.splice(i, 1); }
   };
 
   options = combineOptions(options);
   var lastFrame;
+  var afterToneMapCallbacks = [];
   var rafCallbacks    = [];
   var resizeCallbacks = [];
 
@@ -101,6 +104,9 @@ function unrender(container, options) {
       renderer.setRenderTarget(null);
       renderer.clear();                          // clear screen before tone-map
       renderer.render(tmScene, tmCamera);        // tone-map HDR → screen
+      for (var j = 0; j < afterToneMapCallbacks.length; ++j) {
+        afterToneMapCallbacks[j](renderer, camera);
+      }
       renderer.render(postScene, camera);        // labels on top, normal alpha blending
       _needsRender = false;
     }

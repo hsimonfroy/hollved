@@ -13,10 +13,14 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
   var _visible  = true;
 
   fetch(config.dataUrl + 'aux/local/manifest.json')
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(function(manifest) {
       manifest.galaxies.forEach(function(gal) { loadGalaxy(gal); });
-    });
+    })
+    .catch(function(err) { console.warn('[detailedGxyRenderer] manifest load failed:', err); });
 
   function loadGalaxy(gal) {
     var img = new Image();
