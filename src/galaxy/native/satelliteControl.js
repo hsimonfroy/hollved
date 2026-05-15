@@ -57,7 +57,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   var PAN_SPEED = 0.001;
   // Zoom constants
 //   var MIN_RADIUS    = 4e-16;          // minimum orbit radius
-    var MIN_RADIUS    = 1e-5;          // minimum orbit radius
+  var MIN_RADIUS    = 1e-5;          // minimum orbit radius
   var SWITCH_RADIUS = 100;        // orbit radius when entering satellite from spaceship
   var SWITCH_ANGLE  = Math.PI / 16; // elevation above equatorial plane on satellite entry (rad)
   var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel

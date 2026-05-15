@@ -684,7 +684,9 @@ function sceneRenderer(container) {
       base + 'py.jpg', base + 'ny.jpg',
       base + 'pz.jpg', base + 'nz.jpg'
     ], function() { if (renderer) renderer.markDirty(); });
-    cubeTexture.colorSpace = THREE.LinearSRGBColorSpace;
+    cubeTexture.colorSpace      = THREE.LinearSRGBColorSpace;
+    cubeTexture.generateMipmaps = true;
+    cubeTexture.minFilter       = THREE.LinearMipmapLinearFilter;
 
     var mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -694,21 +696,26 @@ function sceneRenderer(container) {
         uPower:    { value: power }
       },
       vertexShader: [
-        'varying vec3 vWorldPos;',
+        'precision highp float;',
+        // Pass a unit-length direction (not world-space position) so mobile mediump
+        // varying interpolators don't lose precision on large magnitudes when the
+        // camera is outside the sphere (where vertex w varies sharply across triangles).
+        'varying vec3 vDir;',
         'void main() {',
-        '  vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;',
+        '  vDir = normalize(position);',
         '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
         '}'
       ].join('\n'),
       fragmentShader: [
+        'precision highp float;',
         'uniform samplerCube tCube;',
         'uniform vec3 uColor;',
         'uniform float uExposure;',
         'uniform float uPower;',
-        'varying vec3 vWorldPos;',
+        'varying vec3 vDir;',
         'void main() {',
         // Desired LDR output after tone-mapping
-        '  vec3 target = textureCube(tCube, normalize(vWorldPos)).rgb * uColor;',
+        '  vec3 target = textureCube(tCube, normalize(vDir)).rgb * uColor;',
         '  float Lout = dot(target, vec3(0.2126, 0.7152, 0.0722));',
         // Inverse Generalized Reinhard: find HDR luminance Lin such that tone_map(Lin) = Lout
         // Lin = Lout / pow(1 - pow(Lout, p), 1/p)
@@ -719,11 +726,12 @@ function sceneRenderer(container) {
         '  gl_FragColor = vec4(target * scale, 1.0);',
         '}'
       ].join('\n'),
-      side: THREE.BackSide,
-      depthWrite: false
+      side:       THREE.BackSide,
+      depthWrite: false,
+      depthTest:  false
     });
 
-    var geo  = new THREE.IcosahedronGeometry(radius, 10);
+    var geo  = new THREE.IcosahedronGeometry(radius, 9);
     var mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = -1;
     // No rotation needed: cube faces are generated in ICRS Z-up scene coordinates,
