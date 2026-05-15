@@ -1,14 +1,11 @@
 # Hollved
 An interactive visualizer of the largest 3D maps of the Universe.
 
-
-![DESI DR1](assets/desi_dr1_round.png)
-
 <div align="center">
     <picture>
         <img alt="DESI DR1" src="assets/desi_dr1_round.png" width="600">
     </picture>
-<div/>
+</div>
 
 ## Status
 This work is currently in development. If you find it useful, consider sharing it, providing feedback, or starring ⭐ this GitHub repository.

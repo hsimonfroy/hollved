@@ -41,7 +41,7 @@ module.exports = [
 '  vPointSize = uSize * ( projectionMatrix[1][1] * uViewportHeight * 0.5 / length( mvPosition.xyz ) );',
 '',
 '  // Cull sub-pixel points: avoids fragment shader invocation for very distant nodes',
-'  if (vPointSize < 0.001) {',
+'  if (vPointSize < 0.0003) {',
 '    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
 '    gl_PointSize = 0.0;',
 '    return;',

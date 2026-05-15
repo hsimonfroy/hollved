@@ -206,7 +206,7 @@ export default function CameraHUD() {
       <div className="camera-hud-row">
         <span className="camera-hud-label">DISTANCE</span>
         <span className="camera-hud-value">
-          {inRange ? formatSI(chi) : '?'}
+          {inRange ? formatDist(chi) : '?'}
         </span>
         <span className="camera-hud-label">AGE</span>
         <span className="camera-hud-value">
@@ -264,41 +264,46 @@ var AGE_YR  = 1e-6;      // 1 yr  in Myr
 
 var MARGIN = 1e1; // anticipate change of units
 
-function formatSI(chi) {
-  if (chi < DIST_AU / MARGIN) return (chi / DIST_KM).toFixed(0) + ' km';
-  if (chi < 1e-6 / MARGIN)    return (chi / DIST_AU).toFixed(2) + ' AU';
-  if (chi < 1e-3)             return (chi * 1e6).toFixed(2) + ' pc';
-  if (chi < 1)                return (chi * 1e3).toFixed(2) + ' kpc';
-  if (chi < 1e3)              return chi.toFixed(2) + ' Mpc';
-  return (chi / 1e3).toFixed(2) + ' Gpc';
+function sig3(x) {
+  if (!x) return '0';
+  var dec = Math.max(0, 2 - Math.floor(Math.log10(Math.abs(x))));
+  return x.toFixed(dec);
+}
+
+function formatDist(chi) {
+  if (chi < DIST_AU / MARGIN) return sig3(chi / DIST_KM) + ' km';
+  if (chi < 1e-6 / MARGIN)    return sig3(chi / DIST_AU) + ' AU';
+  if (chi < 1e-3)             return sig3(chi * 1e6)     + ' pc';
+  if (chi < 1)                return sig3(chi * 1e3)     + ' kpc';
+  if (chi < 1e3)              return sig3(chi)           + ' Mpc';
+                              return sig3(chi / 1e3)     + ' Gpc';
+}
+
+function formatSpeed(mpcPerSec) {
+  if (mpcPerSec < DIST_AU / MARGIN) return sig3(mpcPerSec / DIST_KM) + ' km/s';
+  if (mpcPerSec < 1e-6 / MARGIN)    return sig3(mpcPerSec / DIST_AU) + ' AU/s';
+  if (mpcPerSec < 1e-3)             return sig3(mpcPerSec * 1e6)     + ' pc/s';
+  if (mpcPerSec < 1)                return sig3(mpcPerSec * 1e3)     + ' kpc/s';
+  if (mpcPerSec < 1e3)              return sig3(mpcPerSec)           + ' Mpc/s';
+                                    return sig3(mpcPerSec / 1e3)     + ' Gpc/s';
 }
 
 function formatZ(z) {
-  if (z < 1e-2)  return z.toFixed(5);
-  if (z < 1e0)   return z.toFixed(3);
-  if (z < 1e2)   return z.toFixed(1);
-  return z.toFixed(0);
+  if (z < 1e-5)  return z.toFixed(6);
+  if (z < 1e-3)  return z.toFixed(5);
+                 return sig3(z);
 }
-
 
 function formatAge(myr) {
   if (myr < AGE_mSEC) return 'now';
   if (myr < AGE_SEC)  return (myr / AGE_mSEC).toFixed(0) + ' ms ago';
-  if (myr < AGE_MIN)  return (myr / AGE_SEC).toFixed(0) + ' s ago';
-  if (myr < AGE_HR)   return (myr / AGE_MIN).toFixed(0) + ' min ago';
-  if (myr < AGE_DAY)  return (myr / AGE_HR).toFixed(0)  + ' h ago';
-  if (myr < AGE_YR)   return (myr / AGE_DAY).toFixed(0) + ' d ago';
-  if (myr < 1e-3)     return (myr / AGE_YR).toFixed(0)  + ' yr ago';
-  if (myr < 1)        return (myr * 1e3).toFixed(1)     + ' kyr ago';
-  if (myr < 1e3)      return myr.toFixed(1)              + ' Myr ago';
-  return (myr / 1e3).toFixed(2)                         + ' Gyr ago';
+  if (myr < AGE_MIN)  return (myr / AGE_SEC).toFixed(0)  + ' s ago';
+  if (myr < AGE_HR)   return (myr / AGE_MIN).toFixed(0)  + ' min ago';
+  if (myr < AGE_DAY)  return (myr / AGE_HR).toFixed(0)   + ' h ago';
+  if (myr < AGE_YR)   return (myr / AGE_DAY).toFixed(0)  + ' d ago';
+  if (myr < 1e-3)     return (myr / AGE_YR).toFixed(0)   + ' yr ago';
+  if (myr < 1)        return sig3(myr * 1e3)             + ' kyr ago';
+  if (myr < 1e3)      return sig3(myr)                   + ' Myr ago';
+                      return sig3(myr / 1e3)             + ' Gyr ago';
 }
 
-function formatSpeed(mpcPerSec) {
-  if (mpcPerSec < DIST_AU / MARGIN) return (mpcPerSec / DIST_KM).toFixed(0) + ' km/s';
-  if (mpcPerSec < 1e-6 / MARGIN)    return (mpcPerSec / DIST_AU).toFixed(2) + ' AU/s';
-  if (mpcPerSec < 1e-3)             return (mpcPerSec * 1e6).toFixed(2) + ' pc/s';
-  if (mpcPerSec < 1)                return (mpcPerSec * 1e3).toFixed(2) + ' kpc/s';
-  if (mpcPerSec < 1000)             return mpcPerSec.toFixed(2) + ' Mpc/s';
-  return (mpcPerSec / 1e3).toFixed(2) + ' Gpc/s';
-}

@@ -10,8 +10,8 @@ var defaultConfig = {
   pos:    { ra: 0.000, dec:  0.000, r:    0.000 },
   zen:    { ra: 270.000, dec: 0.000 },
   azaltr: { az:  28.000, alt:  0.000, r: 4000.000 },
-  rot:    { x: 0.7600, y: 0.0000, z: 3.0483 },
-  speed:  10.00,
+  rot:    { x: 0.760, y: 0.000, z: 3.048 },
+  speed:  1.000, // Mpc/s
   visibleTracers: null
 };
 
@@ -144,8 +144,8 @@ function appConfig() {
       hash += '&azaltr=' + a.az.toFixed(3) + ',' + a.alt.toFixed(3) + ',' + a.r.toFixed(3);
     } else {
       var r = hashConfig.rot;
-      hash += '&rot='   + r.x.toFixed(4) + ',' + r.y.toFixed(4) + ',' + r.z.toFixed(4);
-      hash += '&speed=' + hashConfig.speed.toFixed(2);
+      hash += '&rot='   + r.x.toFixed(3) + ',' + r.y.toFixed(3) + ',' + r.z.toFixed(3);
+      hash += '&speed=' + hashConfig.speed.toFixed(3);
     }
 
     if (hashConfig.visibleTracers !== null) {
