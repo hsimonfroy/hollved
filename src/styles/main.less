@@ -407,6 +407,13 @@ a.media {
   gap: 6px;
   line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
+
+  @media (hover: hover) {
+    &:hover {
+      color: rgba(255, 255, 255, 0.99);
+      -webkit-text-stroke: 0.7px currentColor;
+    }
+  }
 }
 
 // Custom checkbox: appearance:none so the tick color is fully under our control.
@@ -418,7 +425,7 @@ a.media {
   width: 14px;
   height: 14px;
   margin: 10;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 2px;
   background-color: transparent;
   cursor: pointer;
@@ -485,14 +492,12 @@ a.media {
 .density-chart-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   font: inherit;
-//   font-family: 'Roboto Mono', 'Consolas', monospace;
-//   font-size: 8px;
   align-self: flex-start;
   -webkit-tap-highlight-color: transparent;
 
@@ -522,13 +527,13 @@ a.media {
   transform-origin: center;
 }
 
-// arrow-travel = labelWidth(≈58px) + gap(6px); label-travel = arrowWidth(≈10px) + gap(6px)
+// arrow-travel = labelWidth(≈58px) + gap(3px); label-travel = arrowWidth(≈10px) + gap(3px)
 .density-chart-toggle.open .density-chart-toggle-arrow {
   translate: -64px 0;
   transform: rotate(180deg);
 }
 
-.density-chart-toggle.open .camera-hud-label { translate: 16px 0; }
+.density-chart-toggle.open .camera-hud-label { translate: 12px 0; }
 
 // ── Density chart SVG ─────────────────────────────────────────────────────────
 

@@ -55,11 +55,11 @@ export default function TracerSelector() {
       });
       // Append AUX tracers
       mapped.push({
-        id: 'local', name: 'Local', color: '#690495', count: null,
+        id: 'local', name: 'Local', color: '#8200ba', count: null,
         visible: configVisible ? configVisible.indexOf('local') >= 0 : true
       });
       mapped.push({
-        id: 'cmb', name: 'CMB', color: '#444444', count: null,
+        id: 'cmb', name: 'CMB', color: '#555555', count: null,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
       mapped.push({
@@ -210,7 +210,7 @@ function tickColor(color32) {
   var g = ((color32 >>> 16) & 0xff) / 255;
   var b = ((color32 >>> 8)  & 0xff) / 255;
   var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum > 0.3 ? '#000' : '#fff';
+  return lum > 0.2 ? '#000' : '#fff';
 }
 
 function formatCount(n) {
