@@ -11,6 +11,7 @@
 
 // Minimal CSS reset (replaces Bootstrap's normalize)
 *, *::before, *::after { box-sizing: border-box; }
+html { -webkit-tap-highlight-color: transparent; }
 body { margin: 0; }
 a { color: inherit; }
 
@@ -197,8 +198,8 @@ a.media {
     align-items: center;
     justify-content: center;
     position: fixed;
-    bottom: 30px;
-    left: 30px;
+    bottom: 16px;
+    left: 16px;
     width: 120px;
     height: 120px;
     border-radius: 50%;
@@ -224,8 +225,8 @@ a.media {
     align-items: center;
     justify-content: center;
     position: fixed;
-    bottom: 30px;
-    right: 30px;
+    bottom: 16px;
+    right: 16px;
     width: 120px;
     height: 120px;
     border-radius: 50%;
@@ -387,6 +388,8 @@ a.media {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
 }
 
 
@@ -403,6 +406,37 @@ a.media {
   margin: 0;
   gap: 6px;
   line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+// Custom checkbox: appearance:none so the tick color is fully under our control.
+// Per-row inline style sets `--row-bg` (filled background when checked) and
+// `--tick-color` (white or black, chosen by tickColor() in tracerSelector.jsx).
+.tracer-selector-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 10;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  background-color: transparent;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+
+  &:checked {
+    background-color: var(--row-bg, rgba(255, 255, 255, 0.7));
+    border-color: transparent;
+  }
+  &:checked::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background-color: var(--tick-color, #000);
+    clip-path: polygon(14% 47%, 0 60%, 39% 100%, 100% 22%, 86% 8%, 39% 71%);
+  }
 }
 
 @media (max-width: 640px) {
@@ -420,6 +454,16 @@ a.media {
   max-width: calc(100dvw - 24px);
   max-height: calc(100dvh - 24px);
   z-index: 35;
+}
+
+// On touch devices in spaceship mode, reserve bottom space so the left joystick
+// stays visible (joystick top edge sits at 16 + 120 = 136px from bottom of dvh).
+// Satellite mode has no joysticks, so it keeps the default desktop cap.
+@media (pointer: coarse) {
+  .tracer-selector.is-spaceship,
+  .tracer-selector.is-spaceship.tracer-selector--expanded {
+    max-height: calc(100dvh - 12px - 140px);
+  }
 }
 
 .tracer-selector-list {
@@ -450,6 +494,9 @@ a.media {
 //   font-family: 'Roboto Mono', 'Consolas', monospace;
 //   font-size: 8px;
   align-self: flex-start;
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus { outline: none; }
 
   @media (hover: hover) {
     &:hover .camera-hud-label,
@@ -491,6 +538,12 @@ a.media {
   height: auto;
   max-width: 100%;
   max-height: calc(100dvh - 35px);
+}
+
+@media (pointer: coarse) {
+  .tracer-selector.is-spaceship .density-chart-svg {
+    max-height: calc(100dvh - 12px - 140px - 24px);
+  }
 }
 
 .density-grid-line {
@@ -546,7 +599,10 @@ a.media {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   text-decoration: none;
+
+  &:focus { outline: none; }
 
   @media (hover: hover) {
     &:hover {
@@ -555,10 +611,10 @@ a.media {
       color: rgba(255, 255, 255, 0.9);
       text-decoration: none;
     }
-  }
-  &:active {
-    background: rgba(5, 8, 20, 0.85);
-    border-color: rgba(255, 255, 255, 0.45);
+    &:active {
+      background: rgba(5, 8, 20, 0.85);
+      border-color: rgba(255, 255, 255, 0.45);
+    }
   }
 }
 

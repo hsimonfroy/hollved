@@ -55,11 +55,11 @@ export default function TracerSelector() {
       });
       // Append AUX tracers
       mapped.push({
-        id: 'local', name: 'Local', color: 0xbbbbbbff, count: null,
+        id: 'local', name: 'Local', color: '#690495', count: null,
         visible: configVisible ? configVisible.indexOf('local') >= 0 : true
       });
       mapped.push({
-        id: 'cmb', name: 'CMB', color: 0x222222ff, count: null,
+        id: 'cmb', name: 'CMB', color: '#444444', count: null,
         visible: configVisible ? configVisible.indexOf('cmb') >= 0 : false
       });
       mapped.push({
@@ -129,22 +129,17 @@ export default function TracerSelector() {
   }, 0);
 
   function makeRow(tracer) {
-    var swatchStyle = {
-      display: 'inline-block',
-      width: '10px',
-      height: '10px',
-      backgroundColor: colorToCSS(tracer.color),
-      border: '1px solid rgba(255,255,255,0.3)',
-      flexShrink: 0
-    };
+    var inputStyle = tracer.color !== null
+      ? { '--row-bg': colorToCSS(tracer.color), '--tick-color': tickColor(tracer.color) }
+      : undefined;
     return (
       <label key={tracer.id} className="tracer-selector-item">
         <input
           type='checkbox'
           checked={tracer.visible}
+          style={inputStyle}
           onChange={function(e) { toggleTracer(tracer.id, e.target.checked); }}
         />
-        {tracer.color !== null && <span style={swatchStyle}></span>}
         <span>{tracer.name}</span>
       </label>
     );
@@ -155,7 +150,11 @@ export default function TracerSelector() {
   var satAuxRows = tracers.filter(function(t) { return SATELLITE_AUX_IDS.indexOf(t.id) >= 0; }).map(makeRow);
 
   return (
-    <div className={'tracer-selector' + (chartOpen ? ' tracer-selector--expanded' : '')}>
+    <div className={
+      'tracer-selector'
+      + (chartOpen ? ' tracer-selector--expanded' : '')
+      + (isSatellite ? ' is-satellite' : ' is-spaceship')
+    }>
       <div className="tracer-selector-list">
         <span className="camera-hud-value">{formatCount(galaxyCount)}</span>
         <span className="camera-hud-label">Galaxies</span>
@@ -193,10 +192,25 @@ export default function TracerSelector() {
 }
 
 function colorToCSS(color32) {
+  if (typeof color32 === 'string') return color32;
   var r = (color32 >>> 24) & 0xff;
   var g = (color32 >>> 16) & 0xff;
   var b = (color32 >>> 8)  & 0xff;
   return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// Pick a tick color (black or white) based on Rec.709 relative luminance of the
+// tracer color. Threshold is the only knob — tweak in one place to flip more
+// colors one way or the other.
+function tickColor(color32) {
+  if (typeof color32 === 'string') {
+    color32 = parseInt(color32.slice(1), 16);
+  }
+  var r = ((color32 >>> 24) & 0xff) / 255;
+  var g = ((color32 >>> 16) & 0xff) / 255;
+  var b = ((color32 >>> 8)  & 0xff) / 255;
+  var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.55 ? '#000' : '#fff';
 }
 
 function formatCount(n) {

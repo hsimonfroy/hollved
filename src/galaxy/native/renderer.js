@@ -696,18 +696,24 @@ function sceneRenderer(container) {
         uPower:    { value: power }
       },
       vertexShader: [
-        'precision highp float;',
         // Pass a unit-length direction (not world-space position) so mobile mediump
         // varying interpolators don't lose precision on large magnitudes when the
         // camera is outside the sphere (where vertex w varies sharply across triangles).
         'varying vec3 vDir;',
         'void main() {',
-        '  vDir = normalize(position);',
-        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        // RTE (Relative-To-Eye) transform: subtract cameraPosition BEFORE the rotation
+        // so the mat-vec multiply runs on a small camera-relative vector. The standard
+        // modelViewMatrix path adds R*position to a large -R*cameraPosition translation,
+        // which loses precision on mobile clip/raster hardware and produces black/dropped
+        // triangles when the camera is far from the origin.
+        '  vec3 worldPos = (modelMatrix * vec4(position, 1.0)).xyz;',
+        '  vec3 camRel   = worldPos - cameraPosition;',
+        '  vec3 viewPos  = mat3(viewMatrix) * camRel;',
+        '  vDir          = normalize(position);',
+        '  gl_Position   = projectionMatrix * vec4(viewPos, 1.0);',
         '}'
       ].join('\n'),
       fragmentShader: [
-        'precision highp float;',
         'uniform samplerCube tCube;',
         'uniform vec3 uColor;',
         'uniform float uExposure;',
