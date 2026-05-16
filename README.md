@@ -3,8 +3,8 @@ An interactive visualizer of the largest 3D maps of the Universe.
 
 <div align="center">
     <picture>
-        <!-- <img alt="DESI DR1" src="assets/desi_slice.png" width="600"> -->
-        <img alt="DESI DR1" src="assets/desi_cmb.png" width="600">
+        <!-- <img alt="DESI DR1" src="assets/desi_slice.png" width="700"> -->
+        <img alt="DESI DR1" src="assets/desi_cmb.png" width="700">
     </picture>
 </div>
 
@@ -19,7 +19,7 @@ This work is currently in development. If you find it useful, consider sharing i
 
 <div align="center">
     <picture>
-        <img alt="Mobile Demo" src="assets/mobile_demo.png" width="600">
+        <img alt="Mobile Demo" src="assets/mobile_demo.png" width="700">
     </picture>
 </div>
 
