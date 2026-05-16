@@ -130,7 +130,7 @@ export default function TracerSelector() {
 
   function makeRow(tracer) {
     var inputStyle = tracer.color !== null
-      ? { accentColor: colorToCSS(tracer.color) }
+      ? { '--row-bg': colorToCSS(tracer.color), '--tick-color': tickColor(tracer.color) }
       : undefined;
     return (
       <label key={tracer.id} className="tracer-selector-item">
@@ -197,6 +197,20 @@ function colorToCSS(color32) {
   var g = (color32 >>> 16) & 0xff;
   var b = (color32 >>> 8)  & 0xff;
   return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// Pick a tick color (black or white) based on Rec.709 relative luminance of the
+// tracer color. Threshold is the only knob — tweak in one place to flip more
+// colors one way or the other.
+function tickColor(color32) {
+  if (typeof color32 === 'string') {
+    color32 = parseInt(color32.slice(1), 16);
+  }
+  var r = ((color32 >>> 24) & 0xff) / 255;
+  var g = ((color32 >>> 16) & 0xff) / 255;
+  var b = ((color32 >>> 8)  & 0xff) / 255;
+  var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.3 ? '#000' : '#fff';
 }
 
 function formatCount(n) {

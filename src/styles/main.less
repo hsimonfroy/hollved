@@ -409,13 +409,34 @@ a.media {
   -webkit-tap-highlight-color: transparent;
 }
 
-// Native checkbox with per-tracer accent-color. `color-scheme: dark` flips the
-// unchecked state to a dark fill with a light border so it reads on the glass
-// panel; the tick color is left to the browser (luminance-based contrast).
+// Custom checkbox: appearance:none so the tick color is fully under our control.
+// Per-row inline style sets `--row-bg` (filled background when checked) and
+// `--tick-color` (white or black, chosen by tickColor() in tracerSelector.jsx).
 .tracer-selector-item input[type="checkbox"] {
-  color-scheme: dark;
-  accent-color: rgba(255, 255, 255, 0.7);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 10;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  background-color: transparent;
   cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+
+  &:checked {
+    background-color: var(--row-bg, rgba(255, 255, 255, 0.7));
+    border-color: transparent;
+  }
+  &:checked::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background-color: var(--tick-color, #000);
+    clip-path: polygon(14% 47%, 0 60%, 39% 100%, 100% 22%, 86% 8%, 39% 71%);
+  }
 }
 
 @media (max-width: 640px) {
