@@ -34,6 +34,8 @@ export default function TracerSelector() {
   var [tracers, setTracers]     = useState([]);
   var [densities, setDensities] = useState(null);
   var [chartOpen, setChartOpen] = useState(false);
+  var [labelOpen, setLabelOpen] = useState(false);
+  var [flipping, setFlipping]   = useState(false);
   var [xMode, setXMode]         = useState('chi');
   var [yMode, setYMode]         = useState('volume');
   var [isSatellite, setIsSatellite] = useState(appConfig.getControlMode() === 'satellite');
@@ -120,6 +122,14 @@ export default function TracerSelector() {
     appConfig.setVisibleTracers(isDefault ? null : visibleIds);
   }
 
+  function toggleChart() {
+    if (flipping) return;
+    setFlipping(true);
+    setChartOpen(function(v) { return !v; });
+    setTimeout(function() { setLabelOpen(function(v) { return !v; }); }, 150);
+    setTimeout(function() { setFlipping(false); }, 300);
+  }
+
   if (tracers.length === 0) return null;
 
   // Sum counts for visible survey (non-aux) tracers only
@@ -162,12 +172,13 @@ export default function TracerSelector() {
         {densities && (
           <div>
             <button
-              className={'density-chart-toggle' + (chartOpen ? ' open' : '')}
-              onClick={function() { setChartOpen(function(v) { return !v; }); }}
+              className={'density-chart-toggle camera-hud-label' + (flipping ? ' flipping' : '')}
+              onClick={toggleChart}
               title={chartOpen ? 'Hide density chart' : 'Show density chart'}
             >
-              <span className="camera-hud-label">Densities</span>
-              <span className="density-chart-toggle-arrow">›</span>
+              {labelOpen
+                ? <><span className="density-chart-toggle-arrow">‹</span>DENSITIES</>
+                : <>DENSITIES<span className="density-chart-toggle-arrow">›</span></>}
             </button>
           </div>
         )}
