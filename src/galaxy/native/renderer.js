@@ -86,53 +86,22 @@ function sceneRenderer(container) {
 
   function resetToOrigin() {
     if (!renderer) return;
-    if (cameraAnim) return; // ignore while animation is running
+    if (cameraAnim) return;
 
-    var cam    = renderer.camera();
-    var origin = new THREE.Vector3(0, 0, 0);
+    var cam = renderer.camera();
     var startPos  = cam.position.clone();
     var startQuat = cam.quaternion.clone();
 
     if (currentMode === 'satellite' && satelliteControl) {
-      // Move pivot to origin; updateCamera() repositions and reorients camera automatically
-      satelliteControl.setPivot(0, 0, 0);
+      satelliteControl.setPivot(0, 0, 0); // repositions cam internally
       var endPos  = cam.position.clone();
       var endQuat = cam.quaternion.clone();
-
-      // Restore camera for animation start
-      cam.position.copy(startPos);
-      cam.quaternion.copy(startQuat);
-
-      // Disable input during animation; internal pivot/radius/theta/phi state is preserved
       satelliteControl.setEnabled(false);
-
       startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
-        cam.position.copy(endPos);
-        cam.quaternion.copy(endQuat);
-        satelliteControl.setEnabled(true); // no cam arg → state already correct
+        satelliteControl.setEnabled(true);
       });
-
     } else {
-      // Spaceship: fly to origin, oriented toward origin from current position
-      var endPos = origin.clone();
-
-      // End orientation: look toward origin, preserving roll.
-      // cam.up is stale; the real world-up is the camera's local Y axis rotated by its quaternion.
-      var dir = origin.clone().sub(startPos).normalize();
-      var worldUp = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
-      // Project worldUp onto the plane perpendicular to dir to preserve roll
-      var projUp = worldUp.clone().sub(dir.clone().multiplyScalar(worldUp.dot(dir)));
-      if (projUp.lengthSq() < 1e-6) projUp.set(0, 1, 0); // fallback if looking straight at origin
-      projUp.normalize();
-      var scratchCam = new THREE.PerspectiveCamera();
-      scratchCam.up.copy(projUp);
-      scratchCam.lookAt(dir); // scratchCam is at world origin; lookAt(dir) = look toward dir
-      var endQuat = scratchCam.quaternion.clone();
-
-      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
-        cam.position.copy(endPos);
-        cam.quaternion.copy(endQuat);
-      });
+      startCameraAnim(startPos, new THREE.Vector3(), startQuat, startQuat, 500, function() {});
     }
   }
 
