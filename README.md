@@ -33,7 +33,7 @@ This work is currently in development. If you find it useful, consider sharing i
 
 
 ## Acknowledgements
-This work has been deeply inspired by Andrei Kashcha's [software package visualizer](https://github.com/anvaka/pm), Charlie Hoey's [Gaia DR1 rendering](https://cdn.charliehoey.com/threejs-demos/gaia_dr1.html), and Claire Lamman's [DESI visuals](https://cmlamman.github.io/science_art.html).
+This work has been deeply inspired by Andrei Kashcha's [software package visualizer](https://github.com/anvaka/pm), Charlie Hoey's [Gaia DR1 rendering](https://cdn.charliehoey.com/threejs-demos/gaia_dr1.html), and Claire Lamman's [DESI visuals](https://cmlamman.github.io/science_art.html). See also Otávio Alves' [fly-through](https://github.com/otavioalonso/spaceship/tree/main).
 
 This work makes use of public data from multiple types and sources:
 * Redshift catalogs:

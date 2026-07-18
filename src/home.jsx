@@ -3,7 +3,7 @@ import config from './config.js';
 
 var SPECTROSCOPY_COLORS = {
   'single-slit':        '#b6aea2',
-  'plug-plate fibers':  '#afa6e1',
+  'plate-based fibers':  '#afa6e1',
   'slitless':           '#f07d81',
   'robotic fibers':  '#44ddaa',
 };
@@ -127,7 +127,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
   });
 
   // Legend: unique spectroscopy types present in loaded data, in canonical order
-  var TYPE_ORDER = ['single-slit', 'plug-plate fibers', 'slitless', 'robotic fibers'];
+  var TYPE_ORDER = ['single-slit', 'plate-based fibers', 'slitless', 'robotic fibers'];
   var seenSpec = {};
   var legendEntries = [];
   programs.forEach(function(p) {
@@ -272,7 +272,7 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
         })}
         {/* Spectroscopy legend */}
         {legendEntries.length > 0 && (function() {
-          var LW = 141, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
+          var LW = 150, TITLE_H = 26, ROW_H = 20, PAD_B = 5;
           var LH = TITLE_H + legendEntries.length * ROW_H + PAD_B;
           var LX = CHART_LEFT + 7;
           var LY = CHART_TOP + 88.5;
