@@ -25,8 +25,8 @@ import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
 import createSolarRenderer    from './solarRenderer.js';
-import { cartToRaDecR, dirToAzAlt } from './coordUtils.js';
-import { Text } from 'troika-three-text';
+import { cartToRaDecR, dirToAzAlt, getLocalFrame } from './coordUtils.js';
+import { createGlowMaterial, makeRadarLabel } from './radarStyle.js';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -306,15 +306,26 @@ function sceneRenderer(container) {
           // Project camera position onto the equatorial plane to find the label direction
           var camDir = cam.position.clone();
           camDir.addScaledVector(upAxis, -camDir.dot(upAxis));
-          var hasCamDir = camDir.length() > 0.0001;
-          if (hasCamDir) camDir.normalize();
+          var camLen = camDir.length();
+          // The guard is relative to the camera distance, not an absolute floor.
+          // An absolute one (it was 1e-4 Mpc) stops the labels updating whenever
+          // the camera is nearer than that to the up axis, so zooming in past
+          // ~100 pc stranded them all on one side of the ring and a 180° turn
+          // revealed the stack. All it has to catch is normalising a vector that
+          // is pure cancellation noise, which is a relative condition.
+          if (camLen > cam.position.length() * 1e-12) {
+            camDir.divideScalar(camLen);
+          } else {
+            // Camera sits on the up axis: no edge is nearest, so any fixed
+            // direction in the equatorial plane is as good as another.
+            var north = getLocalFrame(upAxis).north;
+            camDir.set(north.x, north.y, north.z);
+          }
           rulerObjects.forEach(function(r) {
             // Rings stay fixed at origin; only orientation tracks upAxis (roll)
             r.ring.quaternion.setFromUnitVectors(_zUp, upAxis);
             // Label sits at the ring edge closest to the camera in the equatorial plane
-            if (hasCamDir) {
-              r.label.position.copy(camDir).multiplyScalar(r.radius * 1.05);
-            }
+            r.label.position.copy(camDir).multiplyScalar(r.radius * 1.05);
             r.label.quaternion.copy(cam.quaternion); // billboard: face camera
           });
         }
@@ -569,58 +580,17 @@ function sceneRenderer(container) {
 
   function createRulerRing(radius) {
     var tubeR = radius * 0.005;   // visual glow half-width
-    // facing = |dot(N, V)| → 0 at silhouette, 1 at surface facing camera
     var geo = new THREE.TorusGeometry(radius, tubeR, 16, 256);
-    var mat = new THREE.ShaderMaterial({
-      vertexShader: [
-        'varying vec3 vViewPosition;',
-        'varying vec3 vViewNormal;',
-        'void main() {',
-        '  vec4 mvPos   = modelViewMatrix * vec4(position, 1.0);',
-        '  vViewPosition = mvPos.xyz;',
-        '  vViewNormal   = normalize(normalMatrix * normal);',
-        '  gl_Position   = projectionMatrix * mvPos;',
-        '}'
-      ].join('\n'),
-      fragmentShader: [
-        'varying vec3 vViewPosition;',
-        'varying vec3 vViewNormal;',
-        'void main() {',
-        '  vec3  viewDir = normalize(-vViewPosition);',
-        '  float facing  = abs(dot(vViewNormal, viewDir));',
-        // pow(2): Gaussian-like radial falloff, 0 at silhouette → no aliasing
-        '  float alpha   = pow(facing, 2.0) * 0.01;',
-        '  gl_FragColor  = vec4(2.0, 2.0, 2.0, min(alpha, 1.0));',
-        '}'
-      ].join('\n'),
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    return new THREE.Mesh(geo, mat);
+    // intensity 2.0: ruler rings render into the HDR buffer, before tone-mapping
+    return new THREE.Mesh(geo, createGlowMaterial(2.0, 0.01));
   }
 
   function makeRulerLabel(text, radius) {
-    var label = new Text();
-    label.text         = text;
-    label.fontSize     = radius * 0.04;
     // Labels render post-tone-map (in postScene) so plain white is truly white.
-    label.color        = '#ffffff';
-    label.fillOpacity  = 0.8;
-    label.outlineWidth = '10%';        // proportional black stroke
-    label.outlineColor = '#000000';
-    label.outlineOpacity = 0.8;
-    label.anchorX      = 'center';
-    label.anchorY      = 'middle';
-    label.depthTest    = false;
-    label.renderOrder  = 999;
-    label.sync(function() {
+    return makeRadarLabel(text, radius * 0.04, function() {
       // Text geometry is ready — wake the RAF loop so the label appears immediately.
       if (renderer) renderer.markDirty();
     });
-    return label;
   }
 
   function createRadar(scene, ls) {
@@ -643,6 +613,8 @@ function sceneRenderer(container) {
       r.ring.visible  = show;
       r.label.visible = show;
     });
+    // Same toggle materialises the solar orbit paths and body name labels.
+    if (solarRenderer) solarRenderer.setRadarVisible(show);
     if (renderer) renderer.markDirty();
   }
 
