@@ -9,12 +9,16 @@
  * exactly at the origin; see `sunGroup` below.
  *
  * Everything astronomical is evaluated ONCE, at manifest load. Per frame the
- * pass only billboards ~10 labels/glows and updates the near plane.
+ * pass only places ~10 labels, sizes the Sun's corona, sets the planet dots'
+ * alpha and updates the near plane.
  */
 import * as THREE from 'three';
 import config from '../../config.js';
 import { raDec2UnitVec } from './coordUtils.js';
-import { createOrbitLineMaterial, makeRadarLabel } from './radarStyle.js';
+import { createOrbitLineMaterial } from './radarStyle.js';
+import createLabelLayer from './labelLayer.js';
+import createHeliosphere from './heliosphere.js';
+import createStarMaterial from '../../unrender/lib/star-material.js';
 
 var KM_TO_MPC = 1 / 3.085677581e19; // 1 km in Mpc
 var AU_TO_MPC = 1 / 2.06264806e11;  // 1 AU in Mpc
@@ -22,52 +26,50 @@ var DEG2RAD   = Math.PI / 180;
 var J2000_JD  = 2451545.0;
 
 var SOLAR_CAM_NEAR = 1e-17; // Mpc — floor for the dynamic near plane
-var SOLAR_CAM_FAR  = 1e-6;  // Mpc — ~206 AU, comfortably past Neptune
+var SOLAR_CAM_FAR  = 3e-3;  // Mpc — comfortably past Neptune
 var SOLAR_CAM_FOV  = 70;
 
 // Earth's centre relative to the Earth-Moon barycentre, which is what JPL's
 // "EM Bary" elements actually describe: m_moon / (m_earth + m_moon).
 var EMB_FACTOR = 0.012150585;
 
-// Brightness. Rendering constants, not physical data, so they live here and not
-// in the manifest. The Sun's 6.0 was previously hardcoded inside FRAG_SUN; the
-// planets never had a knob at all (their lit side was pinned to the raw texture
-// value, with uAmbient only lifting the dark side).
+// Rendering constants, not physical data, so they live here and not
+// in the manifest.
 var SUN_BRIGHTNESS  = 6.0;
-var BODY_BRIGHTNESS = 1.7;
-var BODY_AMBIENT    = 0.2;
+var BODY_BRIGHTNESS = 1.5;
+var BODY_AMBIENT    = 0.03;
+// A ring's "ambient" is Saturnshine and multiple scattering between particles,
+// nothing like a planet's night side, so it gets its own pair.
+var RING_BRIGHTNESS = 2.5;
+var RING_AMBIENT    = 0.1;
 
-// Glow sprites. Bodies stay true-to-scale, so a distant planet is sub-pixel and
-// produces no fragments at all; the glow is what keeps it visible, as a star
-// rather than an inflated disc.
-var SUN_GLOW_SCALE  = 14;  // corona: glow radius = sun radius x this
-var BODY_GLOW_SCALE = 1.5;
-var GLOW_MIN_PX     = 1.5; // on-screen glow radius floor
-var BODY_GLOW_ALPHA = 1.0;
+// Bodies stay true-to-scale, so a distant one is sub-pixel and rasterises to
+// nothing. The Sun answers that with a corona; every other body with a plain dot,
+// deliberately NOT a glow -- a glow would make a planet read as a star, and stars
+// are coming later as their own particles.
+var SUN_GLOW_SCALE  = 14;   // corona physical radius in sun radius, while resolved
+var SUN_GLOW_MIN_PX = 5;  // ...but never smaller on screen, so it still reads at 200 AU
+// Screen RADIUS of the stand-in dot, and how bright it is. DOT_PX is the fade
+// width too
+var DOT_PX          = 1.0;
+var DOT_ALPHA       = 0.5;
 
 // Orbit trails: sampled backward in time over one period, fading to nothing.
 var TRAIL_SEGMENTS  = 512;
+// An escaping spacecraft has no period, so its trail needs a span of its own.
+// A decade covers ~36 AU, which reads as a direction of travel from outside the
+// planets; a single year is a tick mark at any zoom that fits the Voyagers in.
+var ESCAPE_TRAIL_DAYS = 15 * 365.25;
 var ORBIT_MAX_ALPHA = 0.5; // alpha at the body; renders post-tone-map onto LDR
+
+// Inside a body you see its inner surface, faintly, so the sky still reads through
+// it. The texture is shown unlit there (uAmbient driven to 1) -- a terminator on a
+// surface you are standing inside is meaningless, and half the map would be black.
+var INSIDE_ALPHA = 0.3;
 
 var RING_SEGMENTS = 256;
 var RING_PENUMBRA = 0.03; // shadow edge softness, in planet radii
 var RING_UNLIT_FACE = 0.35; // dimming when viewed from the shaded face
-
-// Labels. Size never encodes anything: every label is LABEL_PX on screen at any
-// zoom, and overlap is resolved by hiding the loser (the standard planetarium
-// approach). Shrinking distant labels instead, as this used to, is both
-// undiscriminating -- at 41 AU the Sun, Jupiter and Neptune all landed within a
-// pixel of each other -- and least legible exactly where names matter most.
-var LABEL_PX            = 16;   // on-screen text height, in pixels
-var LABEL_FILL_ALPHA    = 0.8;
-var LABEL_OUTLINE_ALPHA = 0.8;
-// Depth cue: fade relative to the NEAREST labelled body, not to an absolute
-// distance. An absolute fade would dim everything uniformly once zoomed out,
-// reproducing the very problem the size falloff had.
-var LABEL_FADE_POWER    = 0.4;
-var LABEL_MIN_ALPHA     = 0.35;
-var LABEL_PAD_PX        = 2;    // gap required between two label boxes
-var LABEL_FALLBACK_EM   = 0.55; // per-character width before troika has synced
 
 // -----------------------------------------------------------------------------
 // Shaders
@@ -102,6 +104,7 @@ var BODY_VERT = [
 var BODY_FRAG = [
   'uniform sampler2D tEquirect;',
   'uniform float uBrightness;',
+  'uniform float uAlpha;',
   '#ifdef CLOUDS',
   'uniform sampler2D tClouds;',
   '#endif',
@@ -126,7 +129,14 @@ var BODY_FRAG = [
   '  color *= uAmbient + (1.0 - uAmbient) * smoothstep(-0.08, 0.15, NdotL);',
   '#endif',
   // clamped because this pass writes straight to LDR, after tone-mapping
-  '  gl_FragColor = vec4(min(color * uBrightness, vec3(1.0)), 1.0);',
+  '  gl_FragColor = vec4(min(color * uBrightness, vec3(1.0)), uAlpha);',
+  // The texture was decoded sRGB -> linear on sampling, and the framebuffer is
+  // sRGB, so it has to be encoded back. Every built-in material sharing this
+  // pass -- the corona sprite, the planet dots, the trail lines, the labels --
+  // does this via #include <colorspace_fragment>; a ShaderMaterial does not, and
+  // without it the bodies were the only things writing linear values to an sRGB
+  // target. three injects linearToOutputTexel into every non-raw ShaderMaterial.
+  '  gl_FragColor = linearToOutputTexel(gl_FragColor);',
   '}'
 ].join('\n');
 
@@ -176,20 +186,21 @@ var RING_FRAG = [
   '  float light  = uAmbient + (1.0 - uAmbient)',
   '               * abs(uSunDirLocal.z) * shadow * uUnlitFace;',
   '  gl_FragColor = vec4(min(c.rgb * light * uBrightness, vec3(1.0)), c.a);',
+  '  gl_FragColor = linearToOutputTexel(gl_FragColor);',  // see BODY_FRAG
   '}'
 ].join('\n');
 
-function makeGlowTexture() {
-  var sz = 128, c = sz / 2;
-  var canvas = document.createElement('canvas');
-  canvas.width = sz; canvas.height = sz;
-  var ctx  = canvas.getContext('2d');
-  var grad = ctx.createRadialGradient(c, c, 0, c, c, c);
-  grad.addColorStop(0, 'rgba(255,245,210,0.5)');
-  grad.addColorStop(1, 'rgba(255,120,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, sz, sz);
-  return new THREE.CanvasTexture(canvas);
+// Common settings for every map in this pass. The shaders all encode to sRGB on
+// output, so a map has to be decoded on the way in or it round-trips through only
+// half a transfer. No mip chain either: a 3 px dot against a 64 px texture selects
+// a level coarse enough to average its bright core away -- measured, the dot
+// rendered at 15/255 where its centre should give ~137 -- and none of these maps
+// carries detail a mip chain would preserve.
+function solarTexture(tex) {
+  tex.colorSpace      = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter       = THREE.LinearFilter;
+  return tex;
 }
 
 // -----------------------------------------------------------------------------
@@ -340,7 +351,12 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   var bodyById  = {};
   var orbitMats = {};   // body id -> orbital-plane to ICRS matrix (Kepler bodies)
   var epochDays = 0;
-  var records   = [];   // one per body: mesh, glow, label, cached world position
+  var labels    = createLabelLayer(solarScene, solarCamera, markDirty);
+  var records   = [];   // one per body: mesh, world position; glow = Sun only
+  var sunRec    = null; // the Sun's record; its .dist is the heliosphere's fade input
+  var helio     = null; // the heliopause shell, centred on the Sun
+  var dots      = null; // THREE.Points holding every body except the Sun
+  var dotColors = null; // its colour attribute; only the alpha channel varies
   var trails    = [];
   var rings     = [];
   var _visible  = true;
@@ -348,16 +364,9 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
 
   var viewportWidth  = container.clientWidth  || 800;
   var viewportHeight = container.clientHeight || 600;
-  var _camUp  = new THREE.Vector3();
   var _sunDir = new THREE.Vector3();
-  var _pole   = new THREE.Vector3();
   var _invQuat = new THREE.Quaternion();
   var _toCam  = new THREE.Vector3();
-  var _ndc    = new THREE.Vector3();
-  var _fwd    = new THREE.Vector3();
-  var _order  = [];   // records sorted by apparent size; sorted in place, never reallocated
-  var _placed = [];   // accepted label boxes this frame, with _placedCount live entries
-  var _placedCount = 0;
   var maxAniso = unrenderObj.renderer().capabilities.getMaxAnisotropy();
 
   unrenderObj.onResize(function() {
@@ -388,7 +397,9 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
       sunGroup.position.copy(positionAt(bodyById.earth, epochDays)).negate();
 
       m.bodies.forEach(loadBody);
+      buildDots();          // needs every record, so it runs after the loop
       updateSunDirs();
+      if (m.heliosphere) helio = createHeliosphere(sunGroup, m.heliosphere);
       applyRadarVisibility();
       markDirty();
     })
@@ -406,6 +417,7 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     if (body.orbit.model === 'lunar-series') {              // Moon: Earth + geocentric
       return positionAt(bodyById.earth, d).add(moonGeoAt(d));
     }
+    if (body.orbit.model === 'escape') return escapePosition(body.orbit, d);
     var p = keplerPosition(body.orbit, d, orbitMats[body.id]).multiplyScalar(AU_TO_MPC);
     // JPL's Earth row is the Earth-Moon BARYCENTRE, not Earth. Resolving it
     // moves Earth by up to 4671 km — 0.73 Earth radii, so without this the
@@ -419,7 +431,35 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     return moon ? lunarPosition(moon.orbit, d, manifest.obliquity) : new THREE.Vector3();
   }
 
+  // Straight-line coast out of the system, for the Voyagers: position plus
+  // velocity times elapsed time, both straight from the Horizons state vector.
+  //
+  // The line does NOT pass through the Sun, and that is the whole point. Both
+  // craft carry angular momentum from their flybys -- Voyager 1's asymptote misses
+  // the Sun by 11.3 AU, so its velocity sits 4.0 deg off its radius vector. A
+  // purely radial model (distance along a fixed ra/dec) was tried first and is
+  // wrong by 6.6% for Voyager 1 and 19.5% for Voyager 2 back in 2000, because it
+  // forces both paths to converge on the Sun. This form is within 2% everywhere
+  // from 2000 to 2100 and ~0.2% across 2010-2050.
+  //
+  // Residual error is real gravity: the Sun still pulls at 2.6e-7 m/s^2 at 150 AU,
+  // which bends the true path very slightly. Nothing else is approximated.
+  //
+  // The vectors are ICRF EQUATORIAL, so this returns the frame the ecliptic
+  // elements only reach after orbitalToEquatorial; no obliquity rotation applies.
+  function escapePosition(orbit, d) {
+    var dt = d - (orbit.epoch - J2000_JD);   // days since the state-vector epoch
+    var p  = orbit.posAu, v = orbit.velAuPerDay;
+    return new THREE.Vector3(p[0] + v[0] * dt, p[1] + v[1] * dt, p[2] + v[2] * dt)
+      .multiplyScalar(AU_TO_MPC);
+  }
+
+  function isEscaping(body) {
+    return !!(body.orbit && body.orbit.model === 'escape');
+  }
+
   function trailPeriodDays(body) {
+    if (isEscaping(body)) return ESCAPE_TRAIL_DAYS;
     if (!body.orbit) return 0;
     return body.orbit.periodDays || (body.orbit.mDot ? 360 / body.orbit.mDot : 0);
   }
@@ -429,13 +469,10 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   // ---------------------------------------------------------------------------
 
   function loadTex(file) {
-    var tex = new THREE.TextureLoader().load(
-      config.dataUrl + 'aux/solar/' + file, function() { markDirty(); });
-    tex.colorSpace      = THREE.SRGBColorSpace;
-    tex.wrapS           = THREE.RepeatWrapping;
-    tex.generateMipmaps = false;
-    tex.minFilter       = THREE.LinearFilter;
-    tex.anisotropy      = maxAniso;
+    var tex = solarTexture(new THREE.TextureLoader().load(
+      config.dataUrl + 'aux/solar/' + file, function() { markDirty(); }));
+    tex.wrapS      = THREE.RepeatWrapping;
+    tex.anisotropy = maxAniso;
     return tex;
   }
 
@@ -443,7 +480,8 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     var isSun    = body.id === 'sun';
     var uniforms = {
       tEquirect:   { value: loadTex(body.id + '.jpg') },
-      uBrightness: { value: isSun ? SUN_BRIGHTNESS : BODY_BRIGHTNESS }
+      uBrightness: { value: isSun ? SUN_BRIGHTNESS : BODY_BRIGHTNESS },
+      uAlpha:      { value: 1.0 }
     };
     var defines = {};
     if (!isSun) {
@@ -462,11 +500,14 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
       fragmentShader: BODY_FRAG,
       side:      THREE.FrontSide,
       depthTest: true,
-      // Sun must not write depth: the glow (renderOrder 2) depth-tests against
+      // Sun must not write depth: its corona (renderOrder 2) depth-tests against
       // planet depths only, so it can render over the sun's own surface.
       depthWrite:  !isSun,
-      // Sun goes into the transparent pass so mesh.renderOrder takes effect.
-      transparent: isSun
+      // Always transparent, never toggled: three derives its `opaque` program-cache
+      // flag from this, so flipping it at runtime would recompile the shader. At
+      // uAlpha 1 the blend is indistinguishable from opaque, and renderOrder still
+      // orders the pass. Same reason `side` is only touched on an actual crossing.
+      transparent: true
     });
   }
 
@@ -506,8 +547,8 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
         // from Saturn); widened so the edge antialiases instead of crawling
         uPenumbra:    { value: RING_PENUMBRA },
         uUnlitFace:   { value: 1.0 },
-        uAmbient:     { value: BODY_AMBIENT },
-        uBrightness:  { value: BODY_BRIGHTNESS }
+        uAmbient:     { value: RING_AMBIENT },
+        uBrightness:  { value: RING_BRIGHTNESS }
       },
       vertexShader:   RING_VERT,
       fragmentShader: RING_FRAG,
@@ -517,15 +558,24 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     }));
     ring.renderOrder = 1;
     mesh.add(ring);
-    rings.push({
-      ring: ring, mesh: mesh,
-      worldPos: sunGroup.position.clone().add(mesh.position)
-    });
+    return ring;
   }
 
-  function buildGlow(pos) {
+  // The Sun's corona: a billboard, because it has to scale with the disc and
+  // reaches ~1300 px across from close range, well past any gl_PointSize limit.
+  function buildCorona(pos) {
+    var sz = 128, c = sz / 2;
+    var canvas = document.createElement('canvas');
+    canvas.width = sz; canvas.height = sz;
+    var ctx  = canvas.getContext('2d');
+    var grad = ctx.createRadialGradient(c, c, 0, c, c, c);
+    grad.addColorStop(0, 'rgba(255, 245, 210, 0.99)');
+    grad.addColorStop(1, 'rgba(255, 220, 190, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, sz, sz);
+
     var glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map:         makeGlowTexture(),
+      map:         solarTexture(new THREE.CanvasTexture(canvas)),
       blending:    THREE.AdditiveBlending,
       depthTest:   true,
       depthWrite:  false,
@@ -535,6 +585,37 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     glow.position.copy(pos);
     sunGroup.add(glow);
     return glow;
+  }
+
+  // Every other body, in one draw call, drawn by the shared star material: a fixed
+  // DOT_PX on screen carrying the redshift catalogue's own sprite, so a distant
+  // planet looks like one more particle rather than a star. Only its alpha varies,
+  // through the customColor attribute the material's vertex shader reads.
+  //
+  // Points rather than billboards because the rasteriser aligns a point to the
+  // pixel grid: a ~3 px quad lands on a different sub-pixel offset for each body,
+  // and identical planets measured 15..101 out of 255 purely from where they fell.
+  // A point of a given gl_PointSize always covers the same pixels.
+  function buildDots() {
+    var bodies = records.filter(function(rec) { return !rec.isSun; });
+    if (!bodies.length) return;
+
+    var pos = new Float32Array(bodies.length * 3);
+    dotColors = new Float32Array(bodies.length * 4);
+    bodies.forEach(function(rec, i) {
+      rec.pos.toArray(pos, i * 3);
+      dotColors[i * 4] = dotColors[i * 4 + 1] = dotColors[i * 4 + 2] = 1;
+      rec.dotIndex = i;
+    });
+
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('customColor', new THREE.BufferAttribute(dotColors, 4));
+    geo.computeBoundingSphere();   // nothing moves after load
+
+    dots = new THREE.Points(geo, createStarMaterial(2 * DOT_PX));
+    dots.renderOrder = 2;
+    sunGroup.add(dots);
   }
 
   // Sampled backward in time over one period, fading to nothing at the tail.
@@ -584,112 +665,162 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     trails.push(line);
   }
 
-  // Lives in solarScene rather than sunGroup: repositioned in world space each
-  // frame, and worldPos is precomputed because nothing moves after load.
-  function buildLabel(body) {
-    var label = makeRadarLabel(body.name, 1.0, markDirty);
-    label.frustumCulled = false;
-    label.visible       = _radarVisible;
-    solarScene.add(label);
-    return label;
-  }
-
   function loadBody(body) {
     var isSun  = body.id === 'sun';
     var radius = (body.diam / 2) * KM_TO_MPC;
     var pos    = positionAt(body, epochDays);
 
-    var mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 5),
-                              makeBodyMaterial(body));
-    mesh.position.copy(pos);
-    mesh.renderOrder = isSun ? 1 : 0;
-    // Real axial tilt and spin phase, for every body including Earth: local +Z
-    // to the IAU north pole, local +X to the prime meridian at angle W(d).
-    if (body.pole) applyPoleOrientation(mesh, body.pole, epochDays);
-    sunGroup.add(mesh);
+    // A spacecraft gets no mesh and no material: 5 m across it is sub-pixel at
+    // every zoom this scene reaches, and there is no surface map to put on it. It
+    // exists as a dot, a label and a trail, which is all `records` needs.
+    var mesh = null;
+    if (!isEscaping(body)) {
+      mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 5),
+                            makeBodyMaterial(body));
+      mesh.position.copy(pos);
+      mesh.renderOrder = isSun ? 1 : 0;
+      // Real axial tilt and spin phase, for every body including Earth: local +Z
+      // to the IAU north pole, local +X to the prime meridian at angle W(d).
+      if (body.pole) applyPoleOrientation(mesh, body.pole, epochDays);
+      sunGroup.add(mesh);
+    }
 
-    if (body.ring) buildRing(body, mesh);
+    var ring = body.ring ? buildRing(body, mesh) : null;
     buildTrail(body);
 
     var rec = {
       name:      body.name,
-      mesh:      mesh,
-      glow:      buildGlow(pos),
-      label:     buildLabel(body),
+      mesh:      mesh,        // null for a spacecraft
+      pos:       pos,         // heliocentric; what the dot is built from
+      glow:      isSun ? buildCorona(pos) : null,
       radius:    radius,
       worldPos:  sunGroup.position.clone().add(pos),
-      glowScale: isSun ? SUN_GLOW_SCALE : BODY_GLOW_SCALE,
-      glowFades: !isSun,
+      // -pos is the direction to the Sun: sunGroup's origin IS the Sun.
+      sunDir:    isSun ? new THREE.Vector3() : pos.clone().negate().normalize(),
+      isSun:     isSun,
       dist:      0,
-      rPx:       0,
-      box:       [0, 0, 0, 0]   // reused every frame; never reallocated
+      rPx:       0
     };
     records.push(rec);
-    _order.push(rec);
+    if (isSun) sunRec = rec;
+    // Nothing moves after load, so the label layer's copy of worldPos is final.
+    labels.add(body.name, rec.worldPos, radius);
+    // The ring never moves, so its pole is fixed; only the camera swings across
+    // the ring plane. Holding the record avoids a second copy of worldPos.
+    if (ring) {
+      rings.push({
+        ring: ring, rec: rec,
+        pole: new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion)
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Per-frame
   // ---------------------------------------------------------------------------
 
-  // Bodies sit relative to sunGroup, whose origin IS the Sun, so the direction
-  // to the Sun is simply -position.
+  // Nothing here moves after load, so this runs once. rec.sunDir was derived in
+  // loadBody (the direction to the Sun is just -position, since sunGroup's
+  // origin IS the Sun); the shaders and the phase angle both read it from there.
   function updateSunDirs() {
     records.forEach(function(rec) {
+      if (!rec.mesh) return;                   // spacecraft: no surface to light
       var u = rec.mesh.material.uniforms.uSunDir;
-      if (u) u.value.copy(rec.mesh.position).negate().normalize();
+      if (u) u.value.copy(rec.sunDir);
     });
     rings.forEach(function(r) {
       // Into the ring's own frame, where the pole is +Z, so the shader's
       // Lambert term is just abs(uSunDirLocal.z) and the shadow axis is direct.
-      _sunDir.copy(r.mesh.position).negate().normalize()
-        .applyQuaternion(_invQuat.copy(r.mesh.quaternion).invert());
+      _sunDir.copy(r.rec.sunDir)
+        .applyQuaternion(_invQuat.copy(r.rec.mesh.quaternion).invert());
       r.ring.material.uniforms.uSunDirLocal.value.copy(_sunDir);
     });
   }
 
-  // Per *rendered* frame (the RAF loop is stop-on-idle): billboard the glows,
-  // place the labels, and derive the near plane. Two passes, because the label
-  // declutter has to sort by apparent size first.
+  // Per *rendered* frame (the RAF loop is stop-on-idle): size the Sun's corona,
+  // set each dot's alpha, place the labels, and derive the near plane.
   function updateSolarFrame() {
     if (!records.length) return;
     var halfFov  = SOLAR_CAM_FOV * DEG2RAD / 2;
     var pxPerRad = viewportHeight / (2 * Math.tan(halfFov));
     var camPos   = solarCamera.position;
     var nearest  = Infinity;
-    var nearestLabel = Infinity;
-    _fwd.set(0, 0, -1).applyQuaternion(solarCamera.quaternion);
 
     records.forEach(function(rec) {
       var dist = rec.worldPos.distanceTo(camPos);
       rec.dist = dist;
       rec.rPx  = rec.radius / dist * pxPerRad;
       nearest  = Math.min(nearest, dist - rec.radius);
-      if (dist < nearestLabel) nearestLabel = dist;
 
-      // Bodies stay true-to-scale, so a distant one is sub-pixel and rasterises
-      // to nothing. Flooring the *glow* keeps it visible as a star without
-      // inflating the body, and fading the glow once the disc resolves keeps it
-      // from washing the surface out.
-      var gW = Math.max(rec.rPx * rec.glowScale, GLOW_MIN_PX) / pxPerRad * dist;
-      rec.glow.scale.set(2 * gW, 2 * gW, 1);
-      rec.glow.material.opacity = rec.glowFades
-        ? BODY_GLOW_ALPHA * GLOW_MIN_PX / (rec.rPx + GLOW_MIN_PX)
-        : 1;
+      updateBodyFace(rec, dist < rec.radius);
+
+      // The Sun keeps a real corona while it is resolved, floored on screen so it
+      // still reads as a light source from 200 AU, where its disc is 0.015 px.
+      if (rec.isSun) {
+        var w = Math.max(rec.rPx * SUN_GLOW_SCALE, SUN_GLOW_MIN_PX) / pxPerRad * dist;
+        rec.glow.scale.set(2 * w, 2 * w, 1);
+        return;
+      }
+      // Every other body is one point in `dots`, at a fixed DOT_PX, so only its
+      // alpha changes: full while the body is too small to rasterise, fading to
+      // nothing as its own disc grows to take over. Deliberately not
+      // flux-conserving -- real flux falls as rPx^2 and the planet would vanish --
+      // and carrying no phase term, so it stays visible from its night side.
+      // ...fading out over the last pixel before the body itself starts to draw,
+      // which is a resolution threshold rather than a tunable, so DOT_PX is free to
+      // set the dot's size without also setting how long it lingers.
+      dotColors[rec.dotIndex * 4 + 3] = DOT_ALPHA * Math.max(0, 1 - rec.rPx);
     });
+    if (dots) dots.geometry.attributes.customColor.needsUpdate = true;
 
-    placeLabels(pxPerRad, nearestLabel, camPos);
+    labels.update(viewportWidth, viewportHeight);
     updateRingFacing(camPos);
+    // The heliosphere is centred on the Sun, so it fades on the Sun's distance --
+    // already measured above, so this costs one call and no new geometry maths.
+    if (helio) helio.update(sunRec.dist, pxPerRad);
 
     // z-buffer precision is set by the NEAR plane, not the far one. Left at
     // 1e-17 a body a few pixels across gets only a handful of depth levels
     // (Jupiter at 0.1 AU: 3), so its trail z-fights against it. Tracking the
     // nearest body instead gives ~1e5 levels.
-    var near = Math.min(Math.max(nearest * 0.5, SOLAR_CAM_NEAR), SOLAR_CAM_FAR * 1e-6);
+    //
+    // The ceiling is 1e-8 of the far plane (~6 AU) rather than the 1e-6 (~619 AU)
+    // the depth budget alone would allow, because `nearest` only sees BODIES. Once
+    // the camera is far from all of them -- which is exactly where you are when
+    // looking back up the heliosphere's tail -- a 619 AU near plane would clip the
+    // tail wall right beside you. Lowering the ceiling only ever reduces `near`,
+    // and only out where every body is already sub-pixel.
+    var near = Math.min(Math.max(nearest * 0.5, SOLAR_CAM_NEAR), SOLAR_CAM_FAR * 1e-8);
     if (near !== solarCamera.near) {
       solarCamera.near = near;
       solarCamera.updateProjectionMatrix();
     }
+  }
+
+  // Fly inside a body and you should see its inner surface, not vanish into an
+  // invisible shell (FrontSide culls the far hemisphere, which is the only one in
+  // front of you once you are within the radius).
+  //
+  // `side` is the one thing here that costs anything: three puts FLIP_SIDED in the
+  // program cache key, so changing it recompiles the shader. Hence the guard --
+  // it is written only on an actual crossing, at most once per entry or exit, and
+  // never per frame. uAlpha, uAmbient and depthWrite are plain state, free to set.
+  function updateBodyFace(rec, inside) {
+    if (!rec.mesh) return;                       // spacecraft have no surface
+    var mat  = rec.mesh.material;
+    var want = inside ? THREE.BackSide : THREE.FrontSide;
+    if (mat.side !== want) { mat.side = want; mat.needsUpdate = true; }
+
+    mat.uniforms.uAlpha.value = inside ? INSIDE_ALPHA : 1.0;
+    // Unlit inside: uAmbient already scales the whole Lambert term, so driving it
+    // to 1 shows the flat map with no new shader branch. The Sun has no LIT define
+    // and so no uAmbient at all.
+    if (mat.uniforms.uAmbient) {
+      mat.uniforms.uAmbient.value = inside ? 1.0 : BODY_AMBIENT;
+    }
+    // A faint shell must not hide what is behind it -- including the far side of
+    // its own orbit trail.
+    mat.depthWrite = inside ? false : !rec.isSun;
   }
 
   // The viewer is on one side of the ring plane or the other -- a single sign
@@ -697,96 +828,19 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   // face a ring is much darker, since it is lit only by what gets through.
   function updateRingFacing(camPos) {
     rings.forEach(function(r) {
-      // sunSide is already the local-frame z; local +Z maps to the world pole,
-      // so dotting the world-space view vector with that pole compares like
-      // with like.
-      _pole.set(0, 0, 1).applyQuaternion(r.mesh.quaternion);
+      // sunSide is already the local-frame z; r.pole is that same local +Z in
+      // world space, fixed at build time, so dotting the world-space view
+      // vector with it compares like with like.
       var sunSide  = r.ring.material.uniforms.uSunDirLocal.value.z;
-      var viewSide = _toCam.copy(camPos).sub(r.worldPos).dot(_pole);
+      var viewSide = _toCam.subVectors(camPos, r.rec.worldPos).dot(r.pole);
       r.ring.material.uniforms.uUnlitFace.value =
         (sunSide * viewSide > 0) ? 1.0 : RING_UNLIT_FACE;
     });
   }
 
-  // Greedy screen-space decluttering. Labels are a constant LABEL_PX tall, so
-  // two of them collide whenever their bodies are close on screen -- Earth and
-  // the Moon are 1.2 px apart at 1 AU. Walk the bodies largest-apparent-size
-  // first and drop any label whose box hits one already placed. Apparent size
-  // is the right priority because it needs no authored ranking and adapts: the
-  // Sun wins the inner cluster from far away, Earth beats the Moon at normal
-  // range, and the Moon beats Earth once you are alongside it.
-  function placeLabels(pxPerRad, nearestLabel, camPos) {
-    if (!_radarVisible) {
-      records.forEach(function(rec) { rec.label.visible = false; });
-      return;
-    }
-    var labelK = LABEL_PX / pxPerRad;   // world size per unit distance
-    var halfW  = viewportWidth  / 2;
-    var halfH  = viewportHeight / 2;
-    _camUp.set(0, 1, 0).applyQuaternion(solarCamera.quaternion);
-
-    _order.sort(function(a, b) { return b.rPx - a.rPx; });
-    _placedCount = 0;
-
-    for (var i = 0; i < _order.length; ++i) {
-      var rec  = _order[i];
-      var size = labelK * rec.dist;
-
-      rec.label.scale.setScalar(size);
-      rec.label.quaternion.copy(solarCamera.quaternion);
-      rec.label.position.copy(rec.worldPos)
-        .addScaledVector(_camUp, rec.radius + size * 0.9);
-
-      // Behind the camera project() mirrors the point, which would strand the
-      // label on the wrong side of the screen.
-      _ndc.copy(rec.label.position);
-      if (_ndc.sub(camPos).dot(_fwd) <= 0) { rec.label.visible = false; continue; }
-
-      _ndc.copy(rec.label.position).project(solarCamera);
-      var cx = _ndc.x * halfW, cy = _ndc.y * halfH;
-      var box = labelBox(rec, cx, cy);
-
-      var clash = false;
-      for (var j = 0; j < _placedCount && !clash; ++j) {
-        var q = _placed[j];
-        clash = box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1];
-      }
-      rec.label.visible = !clash;
-      if (clash) continue;
-      _placed[_placedCount++] = box;
-
-      // Depth cue relative to the nearest labelled body, so it works at every
-      // zoom rather than dimming the whole scene once you pull back.
-      var alpha = Math.pow(nearestLabel / rec.dist, LABEL_FADE_POWER);
-      alpha = Math.min(1, Math.max(LABEL_MIN_ALPHA, alpha));
-      rec.label.fillOpacity    = LABEL_FILL_ALPHA    * alpha;
-      rec.label.outlineOpacity = LABEL_OUTLINE_ALPHA * alpha;
-    }
-  }
-
-  // Screen-space box in pixels, centred on the label anchor. fontSize is 1 and
-  // the label is scaled to LABEL_PX on screen, so troika's blockBounds -- which
-  // are in em -- convert straight to pixels with no corner projection.
-  function labelBox(rec, cx, cy) {
-    var info = rec.label.textRenderInfo;
-    var w, h;
-    if (info && info.blockBounds) {
-      w = (info.blockBounds[2] - info.blockBounds[0]) * LABEL_PX;
-      h = (info.blockBounds[3] - info.blockBounds[1]) * LABEL_PX;
-    } else {                       // troika syncs asynchronously
-      w = LABEL_FALLBACK_EM * rec.name.length * LABEL_PX;
-      h = LABEL_PX;
-    }
-    w = w / 2 + LABEL_PAD_PX;
-    h = h / 2 + LABEL_PAD_PX;
-    var box = rec.box;
-    box[0] = cx - w; box[1] = cy - h; box[2] = cx + w; box[3] = cy + h;
-    return box;
-  }
-
   function applyRadarVisibility() {
     trails.forEach(function(t) { t.visible = _radarVisible; });
-    records.forEach(function(r) { r.label.visible = _radarVisible; });
+    labels.setVisible(_radarVisible);
   }
 
   function solarPass(threeRenderer, mainCamera) {
@@ -801,6 +855,7 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
 
   unrenderObj.onAfterToneMap(solarPass);
 
+  // Every map has exactly one owning material, so it goes with that material.
   function disposeMaterial(mat) {
     if (!mat) return;
     var u = mat.uniforms;
@@ -826,23 +881,33 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     dispose: function() {
       unrenderObj.offAfterToneMap(solarPass);
       records.forEach(function(rec) {
-        rec.mesh.traverse(function(o) {          // picks up Saturn's ring child
-          if (o.geometry) o.geometry.dispose();
-          disposeMaterial(o.material);
-        });
-        sunGroup.remove(rec.mesh);
-        sunGroup.remove(rec.glow);
-        disposeMaterial(rec.glow.material);
-        solarScene.remove(rec.label);
-        rec.label.dispose();
+        if (rec.mesh) {
+          rec.mesh.traverse(function(o) {        // picks up Saturn's ring child
+            if (o.geometry) o.geometry.dispose();
+            disposeMaterial(o.material);
+          });
+          sunGroup.remove(rec.mesh);
+        }
+        if (rec.glow) {                          // the Sun's corona; the rest are `dots`
+          sunGroup.remove(rec.glow);
+          disposeMaterial(rec.glow.material);
+        }
       });
+      labels.dispose();
+      if (helio) { helio.dispose(); helio = null; }
       trails.forEach(function(t) {
         sunGroup.remove(t);
         t.geometry.dispose();
         t.material.dispose();
       });
       solarScene.remove(sunGroup);
-      records = []; _order = []; _placed = []; _placedCount = 0;
+      if (dots) {
+        sunGroup.remove(dots);
+        dots.geometry.dispose();
+        disposeMaterial(dots.material);
+        dots = null; dotColors = null;
+      }
+      records = []; sunRec = null;
       trails = []; rings = []; bodyById = {}; orbitMats = {};
     }
   };

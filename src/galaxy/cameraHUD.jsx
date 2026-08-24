@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
 import appConfig from './native/appConfig.js';
-import { MIN_MOVE_SPEED, MAX_MOVE_SPEED } from './native/spaceshipControl.js';
+import { MIN_MOVE_SPEED, MAX_MOVE_SPEED, DEFAULT_MOVE_SPEED } from './native/spaceshipControl.js';
 
 var LOG_MIN   = Math.floor(Math.log10(MIN_MOVE_SPEED));
 var LOG_RANGE = Math.ceil(Math.log10(MAX_MOVE_SPEED)) - LOG_MIN;
@@ -34,7 +34,7 @@ export default function CameraHUD() {
 
   // Refs readable inside RAF closure without stale captures
   var maxSpeedRef      = useRef(10);
-  var cursorFracRef    = useRef((Math.log10(10) - LOG_MIN) / LOG_RANGE); // cursor pos 0..1
+  var cursorFracRef    = useRef((Math.log10(DEFAULT_MOVE_SPEED) - LOG_MIN) / LOG_RANGE); // cursor pos 0..1
   var isDraggingRef    = useRef(false);
   var isWheelingRef    = useRef(false);
   var wheelTimerRef    = useRef(null);

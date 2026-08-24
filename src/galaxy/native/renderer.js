@@ -45,6 +45,10 @@ function sceneRenderer(container) {
   var DEFAULT_HIDDEN_TRACERS = ['cmb', 'radar'];
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
+  var _rulerDir = null, _rulerQuat = null; // per-frame ruler scratch
+  var RING_ALPHA         = 0.01; // peak ring alpha, once fully faded in
+  var RULER_LABEL_ALPHA  = 0.8;
+  var RING_FADE_DECADES  = 1;    // fade in over one decade of camera distance
   var sliceEnabled = false;
   var SLICE_ANGLE     = Math.PI / 20; // angle between the two cones
   var IN_SLICE_ALPHA  = 2.0;
@@ -187,9 +191,13 @@ function sceneRenderer(container) {
       satelliteControl.setEnabled(false);
       spaceshipControl.setEnabled(false); // disabled during animation
 
+      // Fly on at the speed the orbit was already moving at. Without this you
+      // leave a planet-scale orbit at whatever the last free-fly speed was and
+      // cross the galaxy in a second.
+      spaceshipControl.movementSpeed = satelliteControl.getMoveSpeed();
+
       currentMode = 'spaceship';
       if (sliceEnabled) renderer.getParticleView().getPointCloud().material.uniforms.uSliceEnabled.value = 0.0;
-      updateRadarVisibility();
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
@@ -209,7 +217,13 @@ function sceneRenderer(container) {
       // Initialize satellite state from current camera position/orientation.
       // setEnabled(true, cam, zoom) calls initFromCamera which computes pivot/radius/upAxis/theta/phi
       // and immediately moves the camera to the orbit position via updateCamera().
-      satelliteControl.setEnabled(true, cam, appConfig.getRadius());
+      //
+      // The orbit radius is the inverse of the rule above, so the round trip
+      // F -> F is the identity. Restoring appConfig.getRadius() instead, as this
+      // used to, threw away the zoom you had just flown to: leave a 4000 Mpc
+      // orbit, fly down to a planet, press F, and you got a 4000 Mpc orbit again.
+      satelliteControl.setEnabled(true, cam,
+        satelliteControl.radiusForSpeed(spaceshipControl.movementSpeed));
       var endPos  = cam.position.clone();
       var endQuat = cam.quaternion.clone();
 
@@ -223,7 +237,6 @@ function sceneRenderer(container) {
       spaceshipControl.setEnabled(false); // disabled during animation
 
       currentMode = 'satellite';
-      updateRadarVisibility();
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
@@ -300,35 +313,7 @@ function sceneRenderer(container) {
         if (sliceEnabled && currentMode === 'satellite') {
           updateSliceUniforms(renderer.getParticleView().getPointCloud().material);
         }
-        if (radarEnabled && currentMode === 'satellite' && rulerObjects.length) {
-          var upAxis = satelliteControl.getUpAxis();
-          var cam    = renderer.camera();
-          // Project camera position onto the equatorial plane to find the label direction
-          var camDir = cam.position.clone();
-          camDir.addScaledVector(upAxis, -camDir.dot(upAxis));
-          var camLen = camDir.length();
-          // The guard is relative to the camera distance, not an absolute floor.
-          // An absolute one (it was 1e-4 Mpc) stops the labels updating whenever
-          // the camera is nearer than that to the up axis, so zooming in past
-          // ~100 pc stranded them all on one side of the ring and a 180° turn
-          // revealed the stack. All it has to catch is normalising a vector that
-          // is pure cancellation noise, which is a relative condition.
-          if (camLen > cam.position.length() * 1e-12) {
-            camDir.divideScalar(camLen);
-          } else {
-            // Camera sits on the up axis: no edge is nearest, so any fixed
-            // direction in the equatorial plane is as good as another.
-            var north = getLocalFrame(upAxis).north;
-            camDir.set(north.x, north.y, north.z);
-          }
-          rulerObjects.forEach(function(r) {
-            // Rings stay fixed at origin; only orientation tracks upAxis (roll)
-            r.ring.quaternion.setFromUnitVectors(_zUp, upAxis);
-            // Label sits at the ring edge closest to the camera in the equatorial plane
-            r.label.position.copy(camDir).multiplyScalar(r.radius * 1.05);
-            r.label.quaternion.copy(cam.quaternion); // billboard: face camera
-          });
-        }
+        if (rulerObjects.length) updateRulers();
       };
 
       if (currentMode === 'satellite') {
@@ -343,16 +328,16 @@ function sceneRenderer(container) {
 
       _zUp = new THREE.Vector3(0, 0, 1);
       _sliceFwd = new THREE.Vector3();
+      _rulerDir  = new THREE.Vector3();
+      _rulerQuat = new THREE.Quaternion();
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
-      detailedGalaxies = createDetailedGalaxies(renderer.scene(), renderer.markDirty, container.clientHeight);
-      renderer.onResize(function(h) { detailedGalaxies.setViewportHeight(h); });
-
-      solarRenderer = createSolarRenderer(renderer, renderer.markDirty);
+      detailedGalaxies = createDetailedGalaxies(renderer, renderer.markDirty);
+      solarRenderer    = createSolarRenderer(renderer, renderer.markDirty);
       if (configVisible && configVisible.indexOf('local') < 0) {
         detailedGalaxies.setVisible(false);
       }
@@ -541,12 +526,10 @@ function sceneRenderer(container) {
         spaceshipControl.setEnabled(false);
         restoreSatelliteFromConfig();
         satelliteControl.setEnabled(true);
-        updateRadarVisibility();
       } else {
         satelliteControl.setEnabled(false);
         restoreSpaceshipFromConfig(camera);
         spaceshipControl.setEnabled(true);
-        updateRadarVisibility();
       }
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
@@ -581,8 +564,9 @@ function sceneRenderer(container) {
   function createRulerRing(radius) {
     var tubeR = radius * 0.005;   // visual glow half-width
     var geo = new THREE.TorusGeometry(radius, tubeR, 16, 256);
-    // intensity 2.0: ruler rings render into the HDR buffer, before tone-mapping
-    return new THREE.Mesh(geo, createGlowMaterial(2.0, 0.01));
+    // intensity 2.0: ruler rings render into the HDR buffer, before tone-mapping.
+    // RING_ALPHA is the peak; updateRulers scales it down as the ring fades in.
+    return new THREE.Mesh(geo, createGlowMaterial(2.0, RING_ALPHA));
   }
 
   function makeRulerLabel(text, radius) {
@@ -607,14 +591,58 @@ function sceneRenderer(container) {
     return objs;
   }
 
-  function updateRadarVisibility() {
-    var show = radarEnabled && currentMode === 'satellite';
+  // A ring is a satellite-mode instrument: it reads as a floor laid under the scene, which only means anything in the orbit frame. Each ring then fades in over the decade of camera distance below its own radius rather than appearing at full strength the instant you cross it.
+  function updateRulers() {
+    if (!radarEnabled || currentMode !== 'satellite') {
+      rulerObjects.forEach(hideRuler);
+      return;
+    }
+    var cam     = renderer.camera();
+    var camDist = cam.position.length();
+    var upAxis  = satelliteControl.getUpAxis();
+
+    // Nearest point on a ring to the camera: drop the camera onto the ring plane, then scale out to the radius. The rings are concentric and coplanar, so one direction serves all of them.
+    var camDir = _rulerDir.copy(cam.position)
+      .addScaledVector(upAxis, -cam.position.dot(upAxis));
+    var camLen = camDir.length();
+    // Relative, not an absolute floor: an absolute one (it was 1e-4 Mpc) stops the labels updating whenever the camera is nearer than that to the up axis, so zooming in past ~100 pc stranded them all on one side. All it has to catch is normalising a vector that is pure cancellation noise, which is relative.
+    if (camLen > camDist * 1e-12) {
+      camDir.divideScalar(camLen);
+    } else {
+      // Camera on the axis: no edge is nearest, so any equatorial direction serves.
+      var north = getLocalFrame(upAxis).north;
+      camDir.set(north.x, north.y, north.z);
+    }
+
+    _rulerQuat.setFromUnitVectors(_zUp, upAxis);
+
     rulerObjects.forEach(function(r) {
-      r.ring.visible  = show;
-      r.label.visible = show;
+      // 0 one decade inside the ring, 1 at the radius itself. Measured in log space. camDist = 0 gives -Infinity, clamped to 0.
+      var t = Math.log10(camDist / r.radius) / RING_FADE_DECADES + 1;
+      t = Math.min(1, Math.max(0, t));
+      if (t <= 0) { hideRuler(r); return; }
+
+      r.ring.visible = r.label.visible = true;
+      r.ring.material.uniforms.uAlpha.value = RING_ALPHA * t;
+      r.ring.quaternion.copy(_rulerQuat);   // rings stay at the origin; only the plane turns
+      r.label.fillOpacity    = RULER_LABEL_ALPHA * t;
+      r.label.outlineOpacity = RULER_LABEL_ALPHA * t;
+      r.label.position.copy(camDir).multiplyScalar(r.radius * 1.05);
+      r.label.quaternion.copy(cam.quaternion); // billboard: face camera
     });
-    // Same toggle materialises the solar orbit paths and body name labels.
-    if (solarRenderer) solarRenderer.setRadarVisible(show);
+  }
+
+  function hideRuler(r) {
+    r.ring.visible = r.label.visible = false;
+  }
+
+  // Master switch for everything the radar toggle drives. The rings themselves are
+  // updateRulers' business, re-decided every frame before the next render.
+  function updateRadarVisibility() {
+    // Same toggle materialises the solar orbit paths and body name labels, and
+    // the local group's galaxy names.
+    if (solarRenderer)    solarRenderer.setRadarVisible(radarEnabled);
+    if (detailedGalaxies) detailedGalaxies.setRadarVisible(radarEnabled);
     if (renderer) renderer.markDirty();
   }
 

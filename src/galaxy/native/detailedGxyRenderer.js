@@ -1,7 +1,22 @@
 import config from '../../config.js';
+import { raDec2Cart } from './coordUtils.js';
+import createLabelLayer from './labelLayer.js';
 
-export default function createDetailedGalaxies(scene, markDirty, initialViewportHeight) {
-  var viewportHeight = initialViewportHeight || 600;
+// A galaxy's name is drawn only inside a zoom window, both ends expressed as its
+// apparent DIAMETER, so one rule covers ten objects spanning 2 to 44 kpc:
+//   below MIN_DIAM_PX the galaxy is a speck — you have dezoomed past it;
+//   above MAX_DIAM_FRAC of the viewport it overflows the frame — you are inside
+//   it rather than looking at it.
+// The dwarfs therefore name themselves only once you are in the M31 group, and
+// the Milky Way only once you are outside it, with nothing authored per galaxy.
+var LABEL_MIN_DIAM_PX   = 1.5;
+var LABEL_MAX_DIAM_FRAC = 0.5;
+
+export default function createDetailedGalaxies(unrenderObj, markDirty) {
+  var container      = unrenderObj.getContainer();
+  var scene          = unrenderObj.scene();
+  var viewportWidth  = container.clientWidth  || 800;
+  var viewportHeight = container.clientHeight || 600;
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
   var RES_FACTOR              = 9;   // resolution in px/kpc
   var DEFAULT_THICK_DIAM_RATIO = 3/4; // default thickness = 3/4 of diameter, if unspecified
@@ -12,6 +27,30 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
 
   var allPoints = [];
   var _visible  = true;
+  var _radarVisible = false;
+
+  // Labels go in the post-tone-map scene, like the ruler rings': white text
+  // written straight to LDR is truly white.
+  var labels = createLabelLayer(unrenderObj.postScene(), unrenderObj.camera(), markDirty, {
+    minDiamPx:   LABEL_MIN_DIAM_PX,
+    maxDiamFrac: LABEL_MAX_DIAM_FRAC
+  });
+
+  unrenderObj.onResize(function() {
+    viewportWidth  = container.clientWidth  || 800;
+    viewportHeight = container.clientHeight || 600;
+    allPoints.forEach(function(pts) {
+      pts.material.uniforms.uViewportHeight.value = viewportHeight;
+    });
+  });
+
+  // onAfterToneMap, not onFrame: a registered onFrame callback keeps
+  // rafCallbacks.length > 0 and so defeats unrender's stop-on-idle. This one
+  // fires only on frames that actually render, right before postScene is drawn.
+  function labelPass() {
+    labels.update(viewportWidth, viewportHeight);
+  }
+  unrenderObj.onAfterToneMap(labelPass);
 
   fetch(config.dataUrl + 'aux/local/manifest.json')
     .then(function(r) {
@@ -19,7 +58,14 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
       return r.json();
     })
     .then(function(manifest) {
-      manifest.galaxies.forEach(function(gal) { loadGalaxy(gal); });
+      manifest.galaxies.forEach(function(gal) {
+        // Registered before the PNG arrives, so a name never waits on megabytes
+        // of texture. kpc -> Mpc, and the radius is the physical one: the
+        // PADDING_FACTOR below is an image-framing artefact, not a size.
+        labels.add(gal.name, raDec2Cart(gal.ra, gal.dec, gal.dist / 1000),
+                   gal.diam / 2 / 1000);
+        loadGalaxy(gal);
+      });
     })
     .catch(function(err) { console.warn('[detailedGxyRenderer] manifest load failed:', err); });
 
@@ -50,9 +96,7 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
     var res        = Math.round(gal.diam * RES_FACTOR * PADDING_FACTOR);
 
     // Galaxy center in ICRS Cartesian
-    var cx = dist * Math.cos(dec_rad) * Math.cos(ra_rad);
-    var cy = dist * Math.cos(dec_rad) * Math.sin(ra_rad);
-    var cz = dist * Math.sin(dec_rad);
+    var center = raDec2Cart(gal.ra, gal.dec, dist);
 
     // Local orthonormal frame at (RA, Dec)
     var r_hat_x = Math.cos(dec_rad) * Math.cos(ra_rad);
@@ -189,22 +233,31 @@ export default function createDetailedGalaxies(scene, markDirty, initialViewport
     });
 
     var pts = new THREE.Points(geo, mat);
-    pts.position.set(cx, cy, cz);
+    pts.position.set(center.x, center.y, center.z);
     pts.setRotationFromMatrix(rotMat);
     return pts;
+  }
+
+  // Two independent gates: the `local` tracer draws the galaxies at all, the
+  // radar toggle draws the annotation over them.
+  function applyLabelVisibility() {
+    labels.setVisible(_visible && _radarVisible);
   }
 
   return {
     setVisible: function(visible) {
       _visible = visible;
       allPoints.forEach(function(pts) { pts.visible = visible; });
+      applyLabelVisibility();
       markDirty();
     },
-    setViewportHeight: function(h) {
-      viewportHeight = h;
-      allPoints.forEach(function(pts) { pts.material.uniforms.uViewportHeight.value = h; });
+    setRadarVisible: function(visible) {
+      _radarVisible = visible;
+      applyLabelVisibility();
     },
     dispose: function() {
+      unrenderObj.offAfterToneMap(labelPass);
+      labels.dispose();
       allPoints.forEach(function(pts) {
         scene.remove(pts);
         pts.geometry.dispose();

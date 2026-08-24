@@ -17,6 +17,9 @@ export default createSpaceshipControl;
 export var MIN_MOVE_SPEED = 1e-16; // Mpc/s — exported so cameraHUD can derive its log scale
 // export var MIN_MOVE_SPEED = 1e-5; // Mpc/s — exported so cameraHUD can derive its log scale
 export var MAX_MOVE_SPEED = 1e3;  // Mpc/s — exported so cameraHUD can derive its log scale
+// Only the speed before anything sets one: entering spaceship mode inherits the
+// rate the satellite zoom implies, and a URL carries its own.
+export var DEFAULT_MOVE_SPEED = 1;  // Mpc/s
 
 function createSpaceshipControl(camera, container, keyState, markDirty) {
   var THREE = window.THREE;
@@ -31,7 +34,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mouseYawLeft   = 0;  // -1..1: positive = cursor left of center → yaw left
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
-  var MOVE_SPEED = 10;   // Mpc/s, set by cursor
+  var MOVE_SPEED = DEFAULT_MOVE_SPEED;   // Mpc/s, set by cursor
   var ROT_SPEED      = 0.4;  // Q/E roll speed (rad/s)
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
@@ -78,9 +81,15 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   function onWheel(e) {
     if (!enabled) return;
     e.preventDefault();
-    MOVE_SPEED = Math.max(MIN_MOVE_SPEED, Math.min(MAX_MOVE_SPEED,
-      MOVE_SPEED * Math.exp(-e.deltaY * WHEEL_SPEED)));
+    setMoveSpeed(MOVE_SPEED * Math.exp(-e.deltaY * WHEEL_SPEED));
     markDirty();
+  }
+
+  // The one place the speed is bounded. Every source goes through here -- the
+  // wheel, the HUD slider, a URL, and the satellite zoom inherited on a mode
+  // switch -- so none of them can set a speed outside the slider's own range.
+  function setMoveSpeed(v) {
+    MOVE_SPEED = Math.max(MIN_MOVE_SPEED, Math.min(MAX_MOVE_SPEED, v));
   }
 
   // ── Per-frame update ───────────────────────────────────────────────────────
@@ -145,7 +154,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
     mobileState: mobileState,
 
     get movementSpeed() { return MOVE_SPEED; },
-    set movementSpeed(v) { MOVE_SPEED = v; },
+    set movementSpeed(v) { setMoveSpeed(v); },
     get rollSpeed()      { return ROT_SPEED; },
     set rollSpeed(v)     { ROT_SPEED = v; },
     get currentSpeed()   { return _currentSpeed; },

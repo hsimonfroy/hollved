@@ -17,8 +17,8 @@
  *   ─────────────────────
  *   ☑ ■ Local                   ← aux tracers (swatch when color is set)
  *   ☐ ■ CMB
+ *   ☐ ■ Radar
  *   [satellite only:]
- *   ☐   Radar
  *   ☐   Slice
  */
 import { useState, useEffect } from 'react';
@@ -28,7 +28,7 @@ import DensityChart from './densityChart.jsx';
 
 var DEFAULT_HIDDEN    = ['cmb', 'radar', 'slice'];
 var AUX_IDS           = ['local', 'cmb', 'radar', 'slice'];
-var SATELLITE_AUX_IDS = ['radar', 'slice']; // only shown in satellite mode
+var SATELLITE_AUX_IDS = ['slice']; // only shown in satellite mode
 
 export default function TracerSelector() {
   var [tracers, setTracers]     = useState([]);

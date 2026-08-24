@@ -1,7 +1,8 @@
 /**
- * Shared visual style for radar overlays.
+ * Shared visual style for the additive overlays: radar instruments, and the
+ * heliosphere shell.
  *
- * Two callers, same look, different geometry and scale regimes:
+ * Callers, same look, different geometry and scale regimes:
  *   renderer.js      — cosmological ruler rings. Circular, and their radii (Mpc)
  *                      are comparable to the camera distances used to view them,
  *                      so a world-space tube works. Drawn into the HDR buffer
@@ -11,8 +12,11 @@
  *                      to ~200 AU), so the tube radius must be screen-space or
  *                      it either aliases when far or swallows the camera when
  *                      near. Drawn *after* tone-mapping onto LDR pixels.
+ *   heliosphere.js   — the heliopause shell, via createShellMaterial. Same
+ *                      vertex shader and blend state; only the view-dependent
+ *                      alpha differs, a slab law rather than a tube's.
  *
- * The fragment shader — the actual "radar" look — is shared verbatim.
+ * The blend state and the vertex shader are shared verbatim.
  */
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
@@ -30,6 +34,55 @@ var GLOW_FRAG = [
   '  float facing  = abs(dot(vViewNormal, viewDir));',
   '  float alpha   = pow(facing, 2.0) * uAlpha;',
   '  gl_FragColor  = vec4(vec3(uIntensity), min(alpha, 1.0));',
+  '}'
+].join('\n');
+
+// A shell is the same statement -- brightness follows the path length through the
+// emitting material -- applied to the opposite geometry. Across a tube you look
+// along the facing direction; through a thin shell of thickness t you look along
+// 1/|N.V|, which is t head-on and diverges at the silhouette. The cap stands in
+// for the finite thickness that stops the real divergence. Note this is a slab
+// law, NOT GLOW_FRAG's inverted: a falloff that reaches zero at normal incidence
+// leaves the shell visible only as a rim.
+//
+// vUv.y carries a per-vertex emission weight the CALLER bakes into the geometry,
+// not a raw coordinate: the heliopause writes an exponential decay in AU down the
+// tail there. Keeping the law on the CPU means it is expressed in the units it is
+// argued about, needs no uniform, and can be retuned without touching a shader.
+//
+// The discard matters here specifically. A faded tail still rasterises, and this
+// surface is fullscreen-sized; skipping the blend and the framebuffer write on
+// fragments that would add nothing is most of the tail's cost.
+var SHELL_FRAG = [
+  'uniform vec3  uColor;',
+  'uniform float uAlpha;',
+  'uniform float uLimbCap;',
+  'varying vec3 vViewPosition;',
+  'varying vec3 vViewNormal;',
+  'varying vec2 vUv;',
+  'void main() {',
+  '  vec3  viewDir = normalize(-vViewPosition);',
+  '  float facing  = abs(dot(normalize(vViewNormal), viewDir));',
+  '  float slab    = min(1.0 / max(facing, 1e-3), uLimbCap);',
+  '  float a       = uAlpha * slab * vUv.y;',
+  '  if (a < 0.002) discard;',
+  '  gl_FragColor  = vec4(uColor, min(a, 1.0));',
+  '}'
+].join('\n');
+
+// Both materials need the view-space position and normal, and nothing else. vUv
+// costs one varying and is unused by GLOW_FRAG; a second near-identical vertex
+// shader to save it would be the more expensive kind of duplication.
+var GLOW_VERT = [
+  'varying vec3 vViewPosition;',
+  'varying vec3 vViewNormal;',
+  'varying vec2 vUv;',
+  'void main() {',
+  '  vec4 mvPos    = modelViewMatrix * vec4(position, 1.0);',
+  '  vViewPosition = mvPos.xyz;',
+  '  vViewNormal   = normalize(normalMatrix * normal);',
+  '  vUv           = uv;',
+  '  gl_Position   = projectionMatrix * mvPos;',
   '}'
 ].join('\n');
 
@@ -52,17 +105,33 @@ export function createGlowMaterial(intensity, alpha) {
       uIntensity: { value: intensity },
       uAlpha:     { value: alpha }
     },
-    vertexShader: [
-      'varying vec3 vViewPosition;',
-      'varying vec3 vViewNormal;',
-      'void main() {',
-      '  vec4 mvPos    = modelViewMatrix * vec4(position, 1.0);',
-      '  vViewPosition = mvPos.xyz;',
-      '  vViewNormal   = normalize(normalMatrix * normal);',
-      '  gl_Position   = projectionMatrix * mvPos;',
-      '}'
-    ].join('\n'),
+    vertexShader:   GLOW_VERT,
     fragmentShader: GLOW_FRAG
+  }, GLOW_COMMON));
+}
+
+/**
+ * Optically thin shell: a faint veil head-on, brightening toward the silhouette
+ * as the line of sight lengthens through it, and dimming along vUv.y.
+ *
+ * Additive, so it can only ever brighten what is behind it — a shell drawn this
+ * way never occludes the Sun, and needs no sorting despite being DoubleSide.
+ *
+ * @param {THREE.Vector3} color     RGB, post-tone-map LDR levels.
+ * @param {number}        alpha     alpha at NORMAL incidence. Set per frame.
+ * @param {number}        limbCap   how much brighter the limb may get, at most.
+ *
+ * The caller must bake a per-vertex emission weight into the geometry's uv.y.
+ */
+export function createShellMaterial(color, alpha, limbCap) {
+  return new THREE.ShaderMaterial(Object.assign({
+    uniforms: {
+      uColor:   { value: color },
+      uAlpha:   { value: alpha },
+      uLimbCap: { value: limbCap }
+    },
+    vertexShader:   GLOW_VERT,
+    fragmentShader: SHELL_FRAG
   }, GLOW_COMMON));
 }
 

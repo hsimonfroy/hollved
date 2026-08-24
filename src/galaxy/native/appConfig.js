@@ -4,14 +4,42 @@ import scene from '../store/scene.js';
 import qs from 'qs';
 import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from './coordUtils.js';
 
-// Default view: Butterfly
+// Distances and speeds span 25 orders of magnitude — a spaceship crossing a
+// planet's surface at 1e-16 Mpc/s, a satellite orbit at 1e4 Mpc. Fixed-point
+// decimals cannot hold that: .toFixed(3) writes every solar-system radius as
+// "0.000". So the three magnitudes below are stored as log10 of the SI value
+// (metres, m/s), trading absolute resolution for relative resolution — a flat
+// ±0.115% at every scale, which is what a zoom actually needs.
+var MPC_TO_M = 3.085677581e22;  // matches KM_TO_MPC in solarRenderer.js
+var LOG_MAX  = 28;              // 1e28 m ~ 3e5 Mpc, past CAMERA_FAR (1e5 Mpc)
+
+// Mpc -> log10(metres). Floored at 1 m so r = 0 writes a clean "0.000" rather
+// than -Infinity; 1 m is 3.2e-23 Mpc, which cartToRaDecR already collapses back
+// to exactly 0, so the origin is a stable cycle.
+function toLog(mpc) {
+  return Math.log10(Math.max(mpc * MPC_TO_M, 1));
+}
+
+// log10(metres) -> Mpc. The clamp is load-bearing: a pre-existing bookmark holds
+// azaltr=...,4000, and 10^4000 is Infinity, which turns the camera matrix to NaN
+// and the screen black. Clamped, an old link degrades to a very distant view.
+function fromLog(log) {
+  return Math.pow(10, Math.min(Math.max(log, 0), LOG_MAX)) / MPC_TO_M;
+}
+
+// Default view: Butterfly. Written the way the hash writes them, so the default
+// and its own serialisation are the same number and reloading never nudges it.
+var LOG_POS_R  = 0.000;   // 1 m from the origin — the origin, at scene scale
+var LOG_RADIUS = 26;  // ~ 4000 Mpc
+var LOG_SPEED  = 22.5;  // ~ 1 Mpc/s
+
 var defaultConfig = {
   mode:   'satellite',
-  pos:    { ra: 0.000, dec:  0.000, r:    0.000 },
+  pos:    { ra: 0.000, dec:  0.000, r: fromLog(LOG_POS_R) },
   zen:    { ra: 270.000, dec: 0.000 },
-  azaltr: { az:  28.000, alt:  0.000, r: 4000.000 },
+  azaltr: { az:  28.000, alt:  0.000, r: fromLog(LOG_RADIUS) },
   rot:    { x: 0.760, y: 0.000, z: 3.048 },
-  speed:  1.000, // Mpc/s
+  speed:  fromLog(LOG_SPEED), // Mpc/s
   visibleTracers: null
 };
 
@@ -81,42 +109,31 @@ function appConfig() {
 
   // ── Setters ─────────────────────────────────────────────────────────────────
 
+  // Both setters write first and compare afterwards: two states are "the same
+  // view" exactly when they serialise identically. The comparison this replaced
+  // was five hand-tuned ABSOLUTE epsilons (1e-4), and at a radius of 1e-15 Mpc no
+  // zoom, however large, ever cleared one — the URL simply stopped updating in
+  // the regime the log encoding exists to serve.
   function setSatelliteState(pivot_xyz, radius, upAxis_xyz, az_deg, alt_deg) {
-    var pr = cartToRaDecR(pivot_xyz.x, pivot_xyz.y, pivot_xyz.z);
-    var ur = unitVecToRaDec(upAxis_xyz.x, upAxis_xyz.y, upAxis_xyz.z);
-
-    var changed = hashConfig.mode !== 'satellite' ||
-      !sameRaDecR(pr, hashConfig.pos) ||
-      !sameRaDec(ur, hashConfig.zen) ||
-      Math.abs(az_deg  - hashConfig.azaltr.az)  > 1e-4 ||
-      Math.abs(alt_deg - hashConfig.azaltr.alt) > 1e-4 ||
-      Math.abs(radius  - hashConfig.azaltr.r)   > 1e-4;
-
-    if (!changed) return;
+    var before = formatCamera(hashConfig);
 
     hashConfig.mode   = 'satellite';
-    hashConfig.pos    = pr;
-    hashConfig.zen    = ur;
+    hashConfig.pos    = cartToRaDecR(pivot_xyz.x, pivot_xyz.y, pivot_xyz.z);
+    hashConfig.zen    = unitVecToRaDec(upAxis_xyz.x, upAxis_xyz.y, upAxis_xyz.z);
     hashConfig.azaltr = { az: az_deg, alt: alt_deg, r: radius };
-    updateHash();
+
+    if (formatCamera(hashConfig) !== before) updateHash();
   }
 
   function setSpaceshipState(pos_xyz, q, speed) {
-    var pr     = cartToRaDecR(pos_xyz.x, pos_xyz.y, pos_xyz.z);
-    var newRot = quatToRotvec(q.x, q.y, q.z, q.w);
-
-    var changed = hashConfig.mode !== 'spaceship' ||
-      !sameRaDecR(pr, hashConfig.pos) ||
-      !sameVec3(newRot, hashConfig.rot) ||
-      Math.abs(speed - hashConfig.speed) > 1e-4;
-
-    if (!changed) return;
+    var before = formatCamera(hashConfig);
 
     hashConfig.mode  = 'spaceship';
-    hashConfig.pos   = pr;
-    hashConfig.rot   = newRot;
+    hashConfig.pos   = cartToRaDecR(pos_xyz.x, pos_xyz.y, pos_xyz.z);
+    hashConfig.rot   = quatToRotvec(q.x, q.y, q.z, q.w);
     hashConfig.speed = speed;
-    updateHash();
+
+    if (formatCamera(hashConfig) !== before) updateHash();
   }
 
   function setVisibleTracers(tracerIds) {
@@ -132,21 +149,7 @@ function appConfig() {
   // ── Hash serialization ──────────────────────────────────────────────────────
 
   function updateHash() {
-    var name = scene.getGraphName();
-    var p    = hashConfig.pos;
-    var hash = '#/' + name +
-      '?pos=' + p.ra.toFixed(3) + ',' + p.dec.toFixed(3) + ',' + p.r.toFixed(3);
-
-    if (hashConfig.mode === 'satellite') {
-      var z = hashConfig.zen;
-      var a = hashConfig.azaltr;
-      hash += '&zen='    + z.ra.toFixed(3) + ',' + z.dec.toFixed(3);
-      hash += '&azaltr=' + a.az.toFixed(3) + ',' + a.alt.toFixed(3) + ',' + a.r.toFixed(3);
-    } else {
-      var r = hashConfig.rot;
-      hash += '&rot='   + r.x.toFixed(3) + ',' + r.y.toFixed(3) + ',' + r.z.toFixed(3);
-      hash += '&speed=' + hashConfig.speed.toFixed(3);
-    }
+    var hash = '#/' + scene.getGraphName() + '?' + formatCamera(hashConfig);
 
     if (hashConfig.visibleTracers !== null) {
       hash += '&trace=' + hashConfig.visibleTracers.join(',');
@@ -172,13 +175,40 @@ function appConfig() {
   function queryChanged() {
     var next = parseFromHash(window.location.hash);
 
-    var cameraChanged  = !stateEqual(next, hashConfig);
+    var cameraChanged  = formatCamera(next) !== formatCamera(hashConfig);
     var tracersChanged = !sameTracers(next.visibleTracers, hashConfig.visibleTracers);
 
     if (cameraChanged || tracersChanged) hashConfig = next;
     if (cameraChanged)  api.fire('camera');
     if (tracersChanged) api.fire('tracersChanged');
   }
+}
+
+// ── Serialization ─────────────────────────────────────────────────────────────
+
+// The camera half of the query — and, because it is the only thing the URL
+// records, the definition of "the view changed". Distances go through toLog;
+// zen, az/alt and rot do not, being pure orientation, where 0.001 of a unit is
+// well under a pixel at any zoom.
+function formatCamera(c) {
+  var s = 'pos=' + fix3(c.pos.ra) + ',' + fix3(c.pos.dec) + ',' + fix3(toLog(c.pos.r));
+  if (c.mode === 'satellite') {
+    s += '&zen='    + fix3(c.zen.ra) + ',' + fix3(c.zen.dec);
+    s += '&azaltr=' + fix3(c.azaltr.az) + ',' + fix3(c.azaltr.alt) +
+                                          ',' + fix3(toLog(c.azaltr.r));
+  } else {
+    s += '&rot='   + fix3(c.rot.x) + ',' + fix3(c.rot.y) + ',' + fix3(c.rot.z);
+    s += '&speed=' + fix3(toLog(c.speed));
+  }
+  return s;
+}
+
+// A hair below zero formats as "-0.000", which is honest but ugly in a URL and,
+// now that the string IS the equality test, counts as a change when the view has
+// not moved. Both spellings mean the same thing at this resolution.
+function fix3(x) {
+  var s = x.toFixed(3);
+  return s === '-0.000' ? '0.000' : s;
 }
 
 // ── Parsing ───────────────────────────────────────────────────────────────────
@@ -196,19 +226,21 @@ function parseFromHash(hash) {
   }
 
   var mode = ('rot' in query || 'speed' in query) ? 'spaceship' : 'satellite';
+  // The third component is log10(metres) — its fallback is a log too, so a
+  // missing field and a present one decode through exactly the same path.
   var posArr = parseFloats3(query.pos,
-    defaultConfig.pos.ra, defaultConfig.pos.dec, defaultConfig.pos.r);
+    defaultConfig.pos.ra, defaultConfig.pos.dec, LOG_POS_R);
 
   if (mode === 'satellite') {
     var zenArr    = parseFloats2(query.zen,
       defaultConfig.zen.ra, defaultConfig.zen.dec);
     var azaltrArr = parseFloats3(query.azaltr,
-      defaultConfig.azaltr.az, defaultConfig.azaltr.alt, defaultConfig.azaltr.r);
+      defaultConfig.azaltr.az, defaultConfig.azaltr.alt, LOG_RADIUS);
     return {
       mode:   'satellite',
-      pos:    { ra: posArr[0],    dec: posArr[1],    r: posArr[2] },
+      pos:    { ra: posArr[0],    dec: posArr[1],    r: fromLog(posArr[2])    },
       zen:    { ra: zenArr[0],    dec: zenArr[1] },
-      azaltr: { az: azaltrArr[0], alt: azaltrArr[1], r: azaltrArr[2] },
+      azaltr: { az: azaltrArr[0], alt: azaltrArr[1], r: fromLog(azaltrArr[2]) },
       rot:    { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
       speed:  defaultConfig.speed,
       visibleTracers: visibleTracers
@@ -218,11 +250,11 @@ function parseFromHash(hash) {
       defaultConfig.rot.x, defaultConfig.rot.y, defaultConfig.rot.z);
     return {
       mode:   'spaceship',
-      pos:    { ra: posArr[0], dec: posArr[1], r: posArr[2] },
+      pos:    { ra: posArr[0], dec: posArr[1], r: fromLog(posArr[2]) },
       zen:    { ra: defaultConfig.zen.ra, dec: defaultConfig.zen.dec },
       azaltr: { az: defaultConfig.azaltr.az, alt: defaultConfig.azaltr.alt, r: defaultConfig.azaltr.r },
       rot:    { x: rotArr[0], y: rotArr[1], z: rotArr[2] },
-      speed:  getNumber(query.speed, defaultConfig.speed),
+      speed:  fromLog(getNumber(query.speed, LOG_SPEED)),
       visibleTracers: visibleTracers
     };
   }
@@ -241,35 +273,6 @@ function cloneDefault() {
 }
 
 // ── Equality helpers ──────────────────────────────────────────────────────────
-
-function stateEqual(a, b) {
-  if (a.mode !== b.mode) return false;
-  if (!sameRaDecR(a.pos, b.pos)) return false;
-  if (a.mode === 'satellite') {
-    return sameRaDec(a.zen, b.zen) &&
-      Math.abs(a.azaltr.az  - b.azaltr.az)  < 1e-4 &&
-      Math.abs(a.azaltr.alt - b.azaltr.alt) < 1e-4 &&
-      Math.abs(a.azaltr.r   - b.azaltr.r)   < 1e-4;
-  }
-  return sameVec3(a.rot, b.rot) && Math.abs(a.speed - b.speed) < 1e-4;
-}
-
-function sameRaDecR(a, b) {
-  if (!a || !b) return false;
-  return Math.abs(a.ra  - b.ra)  < 1e-4 &&
-         Math.abs(a.dec - b.dec) < 1e-4 &&
-         Math.abs(a.r   - b.r)   < 1e-4;
-}
-
-function sameRaDec(a, b) {
-  if (!a || !b) return false;
-  return Math.abs(a.ra - b.ra) < 1e-4 && Math.abs(a.dec - b.dec) < 1e-4;
-}
-
-function sameVec3(v1, v2) {
-  if (!v1 || !v2) return false;
-  return v1.x === v2.x && v1.y === v2.y && v1.z === v2.z;
-}
 
 function sameTracers(a, b) {
   if (a === b) return true;

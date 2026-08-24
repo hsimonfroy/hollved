@@ -19,7 +19,10 @@
  *   Scroll     → zoom (change radius)
  *
  * Keyboard (via shared keyState from baseControl, always active):
- *   W/A/S/D/Space/Ctrl → translate pivot in camera-local space
+ *   W/A/S/D/Space/Shift → drive the parked spaceship in the ORBIT PLANE: heading
+ *                         from the azimuth, sideways across it, up along upAxis.
+ *                         Rate is a fraction of the orbit radius per second, so it
+ *                         scales with zoom exactly as a mouse drag does.
  *   Arrow keys         → orbit (theta / phi), same as left-drag
  *   Q/E               → tilt orbit frame (rotate upAxis around camera forward)
  *
@@ -58,13 +61,24 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   // Zoom constants
   var MIN_RADIUS    = 3.7e-16;          // minimum orbit radius
 //   var MIN_RADIUS    = 1e-5;          // minimum orbit radius
-  var SWITCH_RADIUS = 100;        // orbit radius when entering satellite from spaceship
   var SWITCH_ANGLE  = Math.PI / 16; // elevation above equatorial plane on satellite entry (rad)
   var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel
   // Keyboard-driven rates (per second)
-  var MOVE_SPEED  = 100; // pivot translate speed
+  // Translation is a mouse drag by another name, so it moves a FRACTION of the
+  // orbit radius per second rather than a fixed distance -- PAN_SPEED above is
+  // 0.001 radii per pixel, making this exactly a steady 500 px/s drag. An
+  // absolute rate (it was 100 Mpc/s) is meaningless at a scene spanning 25 orders
+  // of magnitude: one keypress crossed a 1e-15 Mpc orbit 1e17 times over.
+  var PAN_RATE    = 0.5; // orbit radii per second
   var ORBIT_SPEED = 0.4; // arrow-key orbit speed (rad/s)
   var ROLL_SPEED  = 0.4; // Q/E upAxis tilt speed (rad/s)
+
+  // Scratch for the per-frame keyboard frame; update() ran three allocations a
+  // frame while a key was held.
+  var _fwd   = new THREE.Vector3();
+  var _right = new THREE.Vector3();
+  var _step  = new THREE.Vector3();
+  var _axis  = new THREE.Vector3();   // flatForward's own, so it never trades scratch
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });
@@ -80,16 +94,12 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     getRadius:         function() { return radius; },
     getUpAxis:         function() { return upAxis; },
     restoreFromAzAlt:  restoreFromAzAlt,
-    getFlatForward:  function() {
-      // Equatorial direction the spaceship faces when returning from satellite:
-      // opposite of the horizontal component of the direction from pivot to camera.
-      var fwdAxis = new THREE.Vector3().crossVectors(upAxis, fwdRef).normalize();
-      return new THREE.Vector3(
-        -(Math.cos(theta) * fwdRef.x + Math.sin(theta) * fwdAxis.x),
-        -(Math.cos(theta) * fwdRef.y + Math.sin(theta) * fwdAxis.y),
-        -(Math.cos(theta) * fwdRef.z + Math.sin(theta) * fwdAxis.z)
-      ).normalize();
-    },
+    getFlatForward:    function() { return flatForward(new THREE.Vector3()); },
+    // The keyboard pan rate, in Mpc/s -- and, on a mode switch, the speed the
+    // spaceship inherits. radiusForSpeed is its inverse, for the return trip, so
+    // the rule that ties zoom to speed lives here rather than in renderer.js.
+    getMoveSpeed:      function() { return PAN_RATE * radius; },
+    radiusForSpeed:    function(v) { return v / PAN_RATE; },
     onTouchRotate:   onTouchRotate,
     onTouchZoom:     onTouchZoom,
     onTouchPan:      onTouchPan,
@@ -102,15 +112,27 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     if (!enabled || !keyState) return;
     var hasMoved = false;
 
-    // WASD / Space / Ctrl → translate pivot in camera-local space
-    var dFwd   = (keyState.forward - keyState.back ) * MOVE_SPEED * delta;
-    var dRight = (keyState.right   - keyState.left ) * MOVE_SPEED * delta;
-    var dUp    = (keyState.up      - keyState.down ) * MOVE_SPEED * delta;
+    // WASD / Space / Shift → translate the pivot in the ORBIT PLANE.
+    //
+    // Satellite mode is a third-person view of a spaceship parked flat in that
+    // plane -- which is why leaving the mode drops the camera back into it, as if
+    // returning to the cockpit. So the ship drives along its own ground: heading
+    // from flatForward (the only part that follows the camera), sideways across
+    // it, and up along the orbit axis. Driving from camera-local axes instead, as
+    // this used to, sent W diagonally out of the plane the moment the view was
+    // tilted -- at 45 deg of altitude, half of "forward" was "up".
+    var step   = PAN_RATE * radius * delta;
+    var dFwd   = (keyState.forward - keyState.back ) * step;
+    var dRight = (keyState.right   - keyState.left ) * step;
+    var dUp    = (keyState.up      - keyState.down ) * step;
     if (dFwd || dRight || dUp) {
-      var fwd   = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(dFwd);
-      var right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(dRight);
-      var up    = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(dUp);
-      pivot.add(fwd).add(right).add(up);
+      flatForward(_fwd);
+      _right.crossVectors(_fwd, upAxis);   // right = forward x up, the camera convention
+      _step.set(0, 0, 0)
+        .addScaledVector(_fwd,   dFwd)
+        .addScaledVector(_right, dRight)
+        .addScaledVector(upAxis, dUp);
+      pivot.add(_step);
       hasMoved = true;
     }
 
@@ -184,11 +206,12 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     if (val && cam) initFromCamera(cam, startRadius);
   }
 
+  // startRadius is required: renderer.js always derives it from the flying speed
+  // via radiusForSpeed(), so the orbit you arrive in matches the one you left.
   function initFromCamera(cam, startRadius) {
     // Pivot = spaceship position (where the camera was in spaceship mode).
-    // Camera steps back by startRadius (or SWITCH_RADIUS if not given).
     pivot.copy(cam.position);
-    radius = (startRadius !== undefined) ? startRadius : SWITCH_RADIUS;
+    radius = startRadius;
 
     // North pole = camera's current screen-up direction in world space
     upAxis.set(0, 1, 0).applyQuaternion(cam.quaternion).normalize();
@@ -279,6 +302,18 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   }
 
   // ── Shared math ───────────────────────────────────────────────────────────
+
+  // Equatorial direction the parked spaceship faces: the opposite of the
+  // horizontal component of the direction from pivot to camera. Used both to
+  // orient the ship when returning to spaceship mode and to drive W/S/A/D here.
+  function flatForward(out) {
+    var fwdAxis = _axis.crossVectors(upAxis, fwdRef).normalize();
+    return out.set(
+      -(Math.cos(theta) * fwdRef.x + Math.sin(theta) * fwdAxis.x),
+      -(Math.cos(theta) * fwdRef.y + Math.sin(theta) * fwdAxis.y),
+      -(Math.cos(theta) * fwdRef.z + Math.sin(theta) * fwdAxis.z)
+    ).normalize();
+  }
 
   function applyRotate(dx, dy) {
     theta -= dx * ROT_SPEED;
