@@ -25,6 +25,8 @@ import createSatelliteControl from './satelliteControl.js';
 import createMobileControl   from './mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
 import createSolarRenderer    from './solarRenderer.js';
+import createStarField       from './starField.js';
+import createLabelLayer      from './labelLayer.js';
 import { cartToRaDecR, dirToAzAlt, getLocalFrame } from './coordUtils.js';
 import { createGlowMaterial, makeRadarLabel } from './radarStyle.js';
 
@@ -39,6 +41,8 @@ function sceneRenderer(container) {
   var cmbVisible = true;
   var detailedGalaxies = null;
   var solarRenderer    = null;
+  var starField        = null;
+  var labels           = null;   // the one label layer; see createLabelLayer
   var radarEnabled = false;
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
@@ -46,7 +50,17 @@ function sceneRenderer(container) {
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
   var _rulerDir = null, _rulerQuat = null; // per-frame ruler scratch
-  var RING_ALPHA         = 0.01; // peak ring alpha, once fully faded in
+  // The default label zoom window, both ends an apparent DIAMETER, so one rule
+  // covers ten galaxies spanning 2 to 44 kpc: below MIN_DIAM_PX the object is a
+  // speck you have dezoomed past; above MAX_DIAM_FRAC of the viewport it
+  // overflows the frame and you are inside it rather than looking at it. The
+  // dwarfs therefore name themselves only once you are in the M31 group, and the
+  // Milky Way only from outside it, with nothing authored per galaxy. Sources
+  // whose sizes are floored on screen -- the solar bodies -- override it.
+  var LABEL_MIN_DIAM_PX   = 1.5;
+  var LABEL_MAX_DIAM_FRAC = 0.5;
+
+  var RING_ALPHA         = 0.005; // peak ring alpha, once fully faded in
   var RULER_LABEL_ALPHA  = 0.8;
   var RING_FADE_DECADES  = 1;    // fade in over one decade of camera distance
   var sliceEnabled = false;
@@ -336,10 +350,32 @@ function sceneRenderer(container) {
       cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
       cmbSphere.visible = cmbVisible;
 
-      detailedGalaxies = createDetailedGalaxies(renderer, renderer.markDirty);
-      solarRenderer    = createSolarRenderer(renderer, renderer.markDirty);
+      // ONE label layer for the whole scene, created before its clients and so
+      // registered first in the afterToneMap list -- it must run before the solar
+      // pass and before postScene is drawn. Planets, stars, constellations and
+      // galaxies then declutter against each other and fade against a single
+      // nearest, which is what makes the names hand over cleanly from one scale
+      // to the next. Its default zoom window is the galaxies'; the other sources
+      // override it (see labelLayer.add).
+      labels = createLabelLayer(renderer, renderer.markDirty, {
+        minDiamPx:   LABEL_MIN_DIAM_PX,
+        maxDiamFrac: LABEL_MAX_DIAM_FRAC
+      });
+
+      starField        = createStarField(renderer, renderer.markDirty, labels);
+      detailedGalaxies = createDetailedGalaxies(renderer, renderer.markDirty, labels,
+        function(mwFrame) {
+          // The Milky Way's own frame, from the one manifest fetch, handed to the
+          // layer that draws the Sun's orbit in it. Routed rather than re-derived
+          // so the orbit cannot end up in a different plane from the disc.
+          starField.setGalaxyFrame(mwFrame);
+        });
+      solarRenderer    = createSolarRenderer(renderer, renderer.markDirty, labels,
+        function(sunPos) {
+          starField.setOrigin(sunPos);
+        });
       if (configVisible && configVisible.indexOf('local') < 0) {
-        detailedGalaxies.setVisible(false);
+        setLocalVisible(false);
       }
 
       radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
@@ -405,9 +441,16 @@ function sceneRenderer(container) {
     });
   }
 
+  // The HYG stars ARE the Milky Way, so they ride the same switch as the galaxy
+  // clouds; toggling one without the other was the odd thing.
+  function setLocalVisible(visible) {
+    if (detailedGalaxies) detailedGalaxies.setVisible(visible);
+    if (starField)        starField.setVisible(visible);
+  }
+
   function handleSetTracerVisibility(tracerId, visible) {
     if (tracerId === 'local') {
-      if (detailedGalaxies) detailedGalaxies.setVisible(visible);
+      setLocalVisible(visible);
       return;
     }
     if (tracerId === 'slice') {
@@ -494,9 +537,7 @@ function sceneRenderer(container) {
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
       cmbSphere.visible = cmbVisible;
     }
-    if (detailedGalaxies) {
-      detailedGalaxies.setVisible(configVisible ? configVisible.indexOf('local') >= 0 : true);
-    }
+    setLocalVisible(configVisible ? configVisible.indexOf('local') >= 0 : true);
 
     updateRadarVisibility();
 
@@ -641,8 +682,10 @@ function sceneRenderer(container) {
   function updateRadarVisibility() {
     // Same toggle materialises the solar orbit paths and body name labels, and
     // the local group's galaxy names.
+    // ... the constellation figures and names, and the Sun's galactic orbit.
     if (solarRenderer)    solarRenderer.setRadarVisible(radarEnabled);
     if (detailedGalaxies) detailedGalaxies.setRadarVisible(radarEnabled);
+    if (starField)        starField.setRadarVisible(radarEnabled);
     if (renderer) renderer.markDirty();
   }
 
@@ -738,6 +781,9 @@ function sceneRenderer(container) {
     }
     rulerObjects = [];
     if (solarRenderer)    { solarRenderer.dispose();    solarRenderer    = null; }
+    if (starField)        { starField.dispose();        starField        = null; }
+    // Last: its clients only hold a reference, they never own it.
+    if (labels)           { labels.dispose();           labels           = null; }
     if (baseControl)      { baseControl.destroy();      baseControl      = null; }
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (satelliteControl) { satelliteControl.destroy(); satelliteControl = null; }

@@ -1,56 +1,80 @@
 import config from '../../config.js';
-import { raDec2Cart } from './coordUtils.js';
-import createLabelLayer from './labelLayer.js';
+import { galaxyFrame } from './coordUtils.js';
 
-// A galaxy's name is drawn only inside a zoom window, both ends expressed as its
-// apparent DIAMETER, so one rule covers ten objects spanning 2 to 44 kpc:
-//   below MIN_DIAM_PX the galaxy is a speck — you have dezoomed past it;
-//   above MAX_DIAM_FRAC of the viewport it overflows the frame — you are inside
-//   it rather than looking at it.
-// The dwarfs therefore name themselves only once you are in the M31 group, and
-// the Milky Way only once you are outside it, with nothing authored per galaxy.
-var LABEL_MIN_DIAM_PX   = 1.5;
-var LABEL_MAX_DIAM_FRAC = 0.5;
-
-export default function createDetailedGalaxies(unrenderObj, markDirty) {
+/**
+ * @param {object}   labels        the scene-wide label layer; galaxy names go in
+ *                                 its 'galaxies' group and take its default zoom
+ *                                 window, which was authored for them.
+ * @param {function} onGalaxyFrame called with the Milky Way's frame once the
+ *                                 manifest resolves, so starField can lay the
+ *                                 Sun's orbit in the same plane this disc is
+ *                                 drawn in. One manifest fetch, one definition.
+ */
+export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
+                                               onGalaxyFrame) {
   var container      = unrenderObj.getContainer();
   var scene          = unrenderObj.scene();
-  var viewportWidth  = container.clientWidth  || 800;
   var viewportHeight = container.clientHeight || 600;
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
-  var RES_FACTOR              = 9;   // resolution in px/kpc
+  var RES_FACTOR              = 10;   // resolution in px/kpc
   var DEFAULT_THICK_DIAM_RATIO = 3/4; // default thickness = 3/4 of diameter, if unspecified
   var ALPHA_THRESH            = 5; // min pixel alpha to qualify
   var N_SAMPLES               = 2; // points per qualifying pixel
   var SMOOTH_ALPHA            = 10; // Gaussian alpha smoothing strength
-  var PART_SIZE               = 4.0; // particle size in px
+  var PART_SIZE               = 4.0; // particle size in picture pixel
+
+  // A grain stands for a patch 444 pc across (PART_SIZE / RES_FACTOR / 1000).
+  // Far away that patch is unresolved and the cloud reads as the long-exposure
+  // photograph it was sampled from; close up it is resolved, drawing it as one
+  // blob becomes a lie, and it shrinks and dims into a star, handing the volume to
+  // the real HYG catalogue.
+  //
+  // The whole cloud shrinks TOGETHER, on one uniform, so ordinary 1/d perspective
+  // survives inside it. Judging each grain by its own distance instead inverts
+  // that -- the drawn size goes as c*d/D^2, which makes the FAR grains the large
+  // ones.
+  //
+  // The driver is the MAHALANOBIS radius of the camera in the galaxy's own
+  // ellipsoid (diam, diam, thick): 0 at the centre, 1 on the ellipse, 2 twice as
+  // far. Dimensionless, so both anchors are galaxy scales and mean the same thing
+  // for a 1.5 kpc dwarf and 44 kpc M31. It measures distance in units of the
+  // galaxy's own size IN THAT DIRECTION, so for the Milky Way's 9:1 disc, k = 2 is
+  // 27 kpc out edge-on but 3 kpc out face-on -- the grains are chunkier over the
+  // poles by roughly the axis ratio. That is accepted, deliberately.
+  var FLOOR_AT_SCALE          = 0.61;   // floors reached at and inside this. Sun is at about 0.61 in the Milky Way, so should be higher
+  var SHRINK_AT_SCALE         = 5.0;   // full nominal size at and beyond this
+  // The floor cannot go below 1.415 px, and that number is exact. The fragment
+  // shader discards at r2 > 0.25, so the sprite is a disc of radius 0.5*S pixels,
+  // while the worst a point centre can sit from every pixel centre is sqrt(0.5) =
+  // 0.707 (a lattice-cell corner). At S = 1 the disc reaches no fragment at all
+  // for 1 - pi/4 = 21.5% of sub-pixel positions -- the dot is DROPPED, and re-rolled
+  // every time it moves. That is the flicker, and it is invisible to any aggregate:
+  // the count of lit pixels barely moves because the dots dropping out are replaced
+  // by others reappearing. At 1.5 px it is 0.00%. Quiet the near field with
+  // MIN_PART_ALPHA instead, which costs nothing.
+  var MIN_PART_PX             = 1.5;
+  var MIN_PART_ALPHA          = 0.3;   // what a fully shrunk grain keeps of its own alpha
 
   var allPoints = [];
   var _visible  = true;
   var _radarVisible = false;
 
-  // Labels go in the post-tone-map scene, like the ruler rings': white text
-  // written straight to LDR is truly white.
-  var labels = createLabelLayer(unrenderObj.postScene(), unrenderObj.camera(), markDirty, {
-    minDiamPx:   LABEL_MIN_DIAM_PX,
-    maxDiamFrac: LABEL_MAX_DIAM_FRAC
-  });
-
   unrenderObj.onResize(function() {
-    viewportWidth  = container.clientWidth  || 800;
     viewportHeight = container.clientHeight || 600;
     allPoints.forEach(function(pts) {
       pts.material.uniforms.uViewportHeight.value = viewportHeight;
     });
   });
 
-  // onAfterToneMap, not onFrame: a registered onFrame callback keeps
-  // rafCallbacks.length > 0 and so defeats unrender's stop-on-idle. This one
-  // fires only on frames that actually render, right before postScene is drawn.
-  function labelPass() {
-    labels.update(viewportWidth, viewportHeight);
+  // The camera's Mahalanobis radius in this galaxy's ellipsoid: exact, and one
+  // line, because a normalised radius needs no closest-point solve.
+  var _local = new THREE.Vector3();
+  function galaxyScale(pts, camPos) {
+    pts.worldToLocal(_local.copy(camPos));
+    return Math.hypot(_local.x / pts.userData.a,
+                      _local.y / pts.userData.a,
+                      _local.z / pts.userData.c);
   }
-  unrenderObj.onAfterToneMap(labelPass);
 
   fetch(config.dataUrl + 'aux/local/manifest.json')
     .then(function(r) {
@@ -59,11 +83,13 @@ export default function createDetailedGalaxies(unrenderObj, markDirty) {
     })
     .then(function(manifest) {
       manifest.galaxies.forEach(function(gal) {
+        var frame = galaxyFrame(gal);
         // Registered before the PNG arrives, so a name never waits on megabytes
-        // of texture. kpc -> Mpc, and the radius is the physical one: the
-        // PADDING_FACTOR below is an image-framing artefact, not a size.
-        labels.add(gal.name, raDec2Cart(gal.ra, gal.dec, gal.dist / 1000),
-                   gal.diam / 2 / 1000);
+        // of texture. The radius is the PHYSICAL one: the PADDING_FACTOR below is
+        // an image-framing artefact, not a size.
+        labels.add(gal.name, frame.centre, gal.diam / 2 / 1000,
+                   { group: 'galaxies' });
+        if (gal.id === 'mw' && onGalaxyFrame) onGalaxyFrame(frame);
         loadGalaxy(gal);
       });
     })
@@ -84,52 +110,16 @@ export default function createDetailedGalaxies(unrenderObj, markDirty) {
   }
 
   function buildPoints(gal, img) {
-    var PI = Math.PI;
-    var ra_rad   = gal.ra   * PI / 180;
-    var dec_rad  = gal.dec  * PI / 180;
-    var pa_rad   = gal.pa   * PI / 180;
-    var incl_rad = gal.incl * PI / 180;
-
-    var dist      = gal.dist  / 1000; // kpc → Mpc
     var half_diam = (gal.diam / 2 / 1000) * PADDING_FACTOR;
     var half_thick = (gal.thick !== null ? gal.thick : DEFAULT_THICK_DIAM_RATIO * gal.diam) / 2 / 1000;
     var res        = Math.round(gal.diam * RES_FACTOR * PADDING_FACTOR);
 
-    // Galaxy center in ICRS Cartesian
-    var center = raDec2Cart(gal.ra, gal.dec, dist);
-
-    // Local orthonormal frame at (RA, Dec)
-    var r_hat_x = Math.cos(dec_rad) * Math.cos(ra_rad);
-    var r_hat_y = Math.cos(dec_rad) * Math.sin(ra_rad);
-    var r_hat_z = Math.sin(dec_rad);
-
-    var north_x = -Math.sin(dec_rad) * Math.cos(ra_rad);
-    var north_y = -Math.sin(dec_rad) * Math.sin(ra_rad);
-    var north_z =  Math.cos(dec_rad);
-
-    var east_x = -Math.sin(ra_rad);
-    var east_y =  Math.cos(ra_rad);
-    var east_z =  0;
-
-    // Major axis: PA degrees East of North
-    var cos_pa = Math.cos(pa_rad), sin_pa = Math.sin(pa_rad);
-    var major_x = north_x * cos_pa + east_x * sin_pa;
-    var major_y = north_y * cos_pa + east_y * sin_pa;
-    var major_z = north_z * cos_pa + east_z * sin_pa;
-
-    // Rotation matrix: tilt sky frame by incl around major axis
-    // Columns = where sky-north, sky-east, -r_hat land after inclination
-    var q = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(major_x, major_y, major_z), -incl_rad);
-    var vN = new THREE.Vector3(north_x, north_y, north_z).applyQuaternion(q);
-    var vE = new THREE.Vector3(east_x,  east_y,  east_z ).applyQuaternion(q);
-    var vZ = new THREE.Vector3(-r_hat_x, -r_hat_y, -r_hat_z).applyQuaternion(q);
-    var rotMat = new THREE.Matrix4().set(
-      vN.x, vE.x, vZ.x, 0,
-      vN.y, vE.y, vZ.y, 0,
-      vN.z, vE.z, vZ.z, 0,
-      0,    0,    0,    1
-    );
+    // Position and orientation come from coordUtils.galaxyFrame, which starField
+    // also uses to lay the Sun's orbit in this disc. One definition: a second one
+    // here would drift the moment the manifest is retuned.
+    var frame  = galaxyFrame(gal);
+    var center = frame.centre;
+    var rotMat = frame.rotMat;
 
     // Sample image on canvas
     var canvas = document.createElement('canvas');
@@ -191,26 +181,37 @@ export default function createDetailedGalaxies(unrenderObj, markDirty) {
 
     var uSize = PART_SIZE / RES_FACTOR / 1000;
     var mat = new THREE.ShaderMaterial({
-      uniforms: { uSize: { value: uSize }, uViewportHeight: { value: viewportHeight } },
+      uniforms: {
+        uSize:           { value: uSize },
+        uViewportHeight: { value: viewportHeight },
+        uShrink:         { value: 1.0 },        // set per frame, below
+        uMinPx:          { value: MIN_PART_PX },
+        uMinAlpha:       { value: MIN_PART_ALPHA }
+      },
       vertexShader: [
         'uniform float uSize;',
         'uniform float uViewportHeight;',
+        'uniform float uShrink;',
+        'uniform float uMinPx;',
+        'uniform float uMinAlpha;',
         'attribute vec4 color;',
         'varying vec4 vColor;',
         'varying float vPointSize;',
         'void main() {',
-        '  vColor = color;',
         '  vec4 mvPos = modelViewMatrix * vec4(position, 1.0);',
+        // The fade rides in vColor.a rather than a varying of its own, so the
+        // fragment shader needs no knowledge of it and the cull below drops a
+        // faded grain before it ever rasterises.
+        '  vColor = vec4(color.rgb, color.a * mix(uMinAlpha, 1.0, uShrink));',
         '  if (vColor.a < 0.004 || mvPos.z > 0.0) {',
         '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
         '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
         '  }',
+        // vPointSize stays NOMINAL: the fragment's min(vPointSize, 1.0) is the
+        // far-field distance-flux law and must not follow the shrink. -mvPos.z,
+        // not the radial length, because that is what the perspective divide does.
         '  vPointSize = uSize * projectionMatrix[1][1] * uViewportHeight * 0.5 / -mvPos.z;',
-        '  if (vPointSize < 0.01) {',
-        '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
-        '    gl_PointSize = 0.0; vPointSize = 0.0; return;',
-        '  }',
-        '  gl_PointSize = vPointSize;',
+        '  gl_PointSize = max(vPointSize * uShrink, uMinPx);',
         '  gl_Position  = projectionMatrix * mvPos;',
         '}'
       ].join('\n'),
@@ -233,15 +234,26 @@ export default function createDetailedGalaxies(unrenderObj, markDirty) {
     });
 
     var pts = new THREE.Points(geo, mat);
+    // The PHYSICAL semi-axes, so k = 1 is the ellipse the manifest describes and
+    // the Sun lands at k = 0.61. The padding is an image-framing artefact, and
+    // FLOOR_AT_SCALE is what accounts for the material it leaves outside.
+    pts.userData = { a: gal.diam / 2 / 1000, c: half_thick };
     pts.position.set(center.x, center.y, center.z);
     pts.setRotationFromMatrix(rotMat);
+    // onBeforeRender, not the afterToneMap pass: matrixWorld is current here and
+    // there is no frame of latency.
+    pts.onBeforeRender = function(renderer, scene, camera) {
+      var k = galaxyScale(pts, camera.position);
+      mat.uniforms.uShrink.value = Math.min(Math.max(
+        (k - FLOOR_AT_SCALE) / (SHRINK_AT_SCALE - FLOOR_AT_SCALE), 0), 1);
+    };
     return pts;
   }
 
   // Two independent gates: the `local` tracer draws the galaxies at all, the
   // radar toggle draws the annotation over them.
   function applyLabelVisibility() {
-    labels.setVisible(_visible && _radarVisible);
+    labels.setGroupVisible('galaxies', _visible && _radarVisible);
   }
 
   return {
@@ -256,8 +268,7 @@ export default function createDetailedGalaxies(unrenderObj, markDirty) {
       applyLabelVisibility();
     },
     dispose: function() {
-      unrenderObj.offAfterToneMap(labelPass);
-      labels.dispose();
+      // The label layer is the scene's, not ours; renderer.js disposes it.
       allPoints.forEach(function(pts) {
         scene.remove(pts);
         pts.geometry.dispose();

@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import config from '../../config.js';
 import { raDec2UnitVec } from './coordUtils.js';
 import { createOrbitLineMaterial } from './radarStyle.js';
-import createLabelLayer from './labelLayer.js';
+import { magnitudeRank } from './labelLayer.js';
 import createHeliosphere from './heliosphere.js';
 import createStarMaterial from '../../unrender/lib/star-material.js';
 
@@ -26,7 +26,12 @@ var DEG2RAD   = Math.PI / 180;
 var J2000_JD  = 2451545.0;
 
 var SOLAR_CAM_NEAR = 1e-17; // Mpc — floor for the dynamic near plane
-var SOLAR_CAM_FAR  = 3e-3;  // Mpc — comfortably past Neptune
+// 10 pc, where the Sun's apparent magnitude equals its absolute one. Past this
+// the Sun is dimmer than 4.8 and belongs to the star catalogue -- which now
+// carries it, so nothing is cut off here any more. Bounded from both sides: too
+// small clips the heliosphere instead of letting its own MIN_PX rule hide it
+// (~2.5e-6), too large and the near plane below has nowhere safe to sit.
+var SOLAR_CAM_FAR  = 1e-5;
 var SOLAR_CAM_FOV  = 70;
 
 // Earth's centre relative to the Earth-Moon barycentre, which is what JPL's
@@ -35,7 +40,7 @@ var EMB_FACTOR = 0.012150585;
 
 // Rendering constants, not physical data, so they live here and not
 // in the manifest.
-var SUN_BRIGHTNESS  = 6.0;
+var SUN_BRIGHTNESS  = 6.0; // brightness of texture, not glow
 var BODY_BRIGHTNESS = 1.5;
 var BODY_AMBIENT    = 0.03;
 // A ring's "ambient" is Saturnshine and multiple scattering between particles,
@@ -48,9 +53,14 @@ var RING_AMBIENT    = 0.1;
 // deliberately NOT a glow -- a glow would make a planet read as a star, and stars
 // are coming later as their own particles.
 var SUN_GLOW_SCALE  = 14;   // corona physical radius in sun radius, while resolved
-var SUN_GLOW_MIN_PX = 5;  // ...but never smaller on screen, so it still reads at 200 AU
+var SUN_GLOW_MIN_PX = 5;  // ...but never smaller on screen; it dims instead, see below
 // Screen RADIUS of the stand-in dot, and how bright it is. DOT_PX is the fade
 // width too
+// The Sun's absolute visual magnitude -- row 0 of the HYG catalogue, which also
+// carries it as a star. Used only to rank its LABEL on the same scale as every
+// other star's; nothing about the Sun's rendering reads it.
+var SUN_ABSMAG      = 4.831;
+
 var DOT_PX          = 1.0;
 var DOT_ALPHA       = 0.5;
 
@@ -60,7 +70,7 @@ var TRAIL_SEGMENTS  = 512;
 // A decade covers ~36 AU, which reads as a direction of travel from outside the
 // planets; a single year is a tick mark at any zoom that fits the Voyagers in.
 var ESCAPE_TRAIL_DAYS = 15 * 365.25;
-var ORBIT_MAX_ALPHA = 0.5; // alpha at the body; renders post-tone-map onto LDR
+var ORBIT_MAX_ALPHA = 0.5; // alpha at the body.
 
 // Inside a body you see its inner surface, faintly, so the sky still reads through
 // it. The texture is shown unlit there (uAmbient driven to 1) -- a terminator on a
@@ -161,10 +171,9 @@ var RING_VERT = [
 // and the only part of ring lighting that varies across the surface (a flat
 // ring has a constant normal, so its Lambert term does not).
 //
-// All of this works in PLANET RADII, deliberately. Ring radii in Mpc are ~4e-15
-// and length() squares them to ~1e-29, which underflows below full float32 --
-// the same trap that turned every body into a flat NaN-UV disc. As ratios the
-// ring spans 1.28..2.41 and the shadow cylinder has radius exactly 1.
+// All of this works in PLANET RADII, deliberately: ring radii in Mpc are ~4e-15
+// and length() squares them to ~1e-29, which underflows below full float32. As
+// ratios the ring spans 1.28..2.41 and the shadow cylinder has radius exactly 1.
 var RING_FRAG = [
   'uniform sampler2D tRing;',
   'uniform vec3  uSunDirLocal;',   // unit, ring-local frame: pole is +Z
@@ -190,12 +199,10 @@ var RING_FRAG = [
   '}'
 ].join('\n');
 
-// Common settings for every map in this pass. The shaders all encode to sRGB on
+// Common settings for every map in this pass. The shaders encode to sRGB on
 // output, so a map has to be decoded on the way in or it round-trips through only
-// half a transfer. No mip chain either: a 3 px dot against a 64 px texture selects
-// a level coarse enough to average its bright core away -- measured, the dot
-// rendered at 15/255 where its centre should give ~137 -- and none of these maps
-// carries detail a mip chain would preserve.
+// half a transfer. No mip chain: at a few pixels across a mip level averages the
+// bright core away, and none of these maps carries detail one would preserve.
 function solarTexture(tex) {
   tex.colorSpace      = THREE.SRGBColorSpace;
   tex.generateMipmaps = false;
@@ -333,7 +340,7 @@ function applyPoleOrientation(mesh, pole, d) {
 
 // -----------------------------------------------------------------------------
 
-export default function createSolarRenderer(unrenderObj, markDirty) {
+export default function createSolarRenderer(unrenderObj, markDirty, labels, onSunPos) {
   var container   = unrenderObj.getContainer();
   var solarScene  = new THREE.Scene();
   var solarCamera = new THREE.PerspectiveCamera(
@@ -351,7 +358,6 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   var bodyById  = {};
   var orbitMats = {};   // body id -> orbital-plane to ICRS matrix (Kepler bodies)
   var epochDays = 0;
-  var labels    = createLabelLayer(solarScene, solarCamera, markDirty);
   var records   = [];   // one per body: mesh, world position; glow = Sun only
   var sunRec    = null; // the Sun's record; its .dist is the heliosphere's fade input
   var helio     = null; // the heliopause shell, centred on the Sun
@@ -362,7 +368,6 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   var _visible  = true;
   var _radarVisible = false; // may be set before the manifest resolves
 
-  var viewportWidth  = container.clientWidth  || 800;
   var viewportHeight = container.clientHeight || 600;
   var _sunDir = new THREE.Vector3();
   var _invQuat = new THREE.Quaternion();
@@ -370,7 +375,6 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   var maxAniso = unrenderObj.renderer().capabilities.getMaxAnisotropy();
 
   unrenderObj.onResize(function() {
-    viewportWidth  = container.clientWidth  || 800;
     viewportHeight = container.clientHeight || 600;
     solarCamera.aspect = container.clientWidth / container.clientHeight;
     solarCamera.updateProjectionMatrix();
@@ -395,6 +399,10 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
       // Earth -> Sun first: the Sun's position *relative to Earth* is what
       // places the whole system on the RA/Dec sky. Then Sun -> everything else.
       sunGroup.position.copy(positionAt(bodyById.earth, epochDays)).negate();
+      // The star catalogue is measured from the barycentre and the scene's origin
+      // is Earth, so the star field needs this offset -- most of all for row 0,
+      // which is the Sun.
+      if (onSunPos) onSunPos(sunGroup.position);
 
       m.bodies.forEach(loadBody);
       buildDots();          // needs every record, so it runs after the loop
@@ -434,16 +442,11 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   // Straight-line coast out of the system, for the Voyagers: position plus
   // velocity times elapsed time, both straight from the Horizons state vector.
   //
-  // The line does NOT pass through the Sun, and that is the whole point. Both
-  // craft carry angular momentum from their flybys -- Voyager 1's asymptote misses
-  // the Sun by 11.3 AU, so its velocity sits 4.0 deg off its radius vector. A
-  // purely radial model (distance along a fixed ra/dec) was tried first and is
-  // wrong by 6.6% for Voyager 1 and 19.5% for Voyager 2 back in 2000, because it
-  // forces both paths to converge on the Sun. This form is within 2% everywhere
-  // from 2000 to 2100 and ~0.2% across 2010-2050.
-  //
-  // Residual error is real gravity: the Sun still pulls at 2.6e-7 m/s^2 at 150 AU,
-  // which bends the true path very slightly. Nothing else is approximated.
+  // The line does NOT pass through the Sun, and that is the point: both craft
+  // carry angular momentum from their flybys, so Voyager 1's asymptote misses the
+  // Sun by 11.3 AU and its velocity sits 4.0 deg off its radius vector. A radial
+  // model cannot represent that. This form is within 2% from 2000 to 2100, the
+  // residual being real solar gravity still bending the path.
   //
   // The vectors are ICRF EQUATORIAL, so this returns the frame the ecliptic
   // elements only reach after orbitalToEquatorial; no obliquity rotation applies.
@@ -592,10 +595,9 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
   // planet looks like one more particle rather than a star. Only its alpha varies,
   // through the customColor attribute the material's vertex shader reads.
   //
-  // Points rather than billboards because the rasteriser aligns a point to the
-  // pixel grid: a ~3 px quad lands on a different sub-pixel offset for each body,
-  // and identical planets measured 15..101 out of 255 purely from where they fell.
-  // A point of a given gl_PointSize always covers the same pixels.
+  // Points rather than billboards because the rasteriser snaps a point to the
+  // pixel grid, so every body gets identical coverage; a small quad lands on a
+  // different sub-pixel offset for each one and their brightnesses diverge.
   function buildDots() {
     var bodies = records.filter(function(rec) { return !rec.isSun; });
     if (!bodies.length) return;
@@ -614,7 +616,12 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     geo.computeBoundingSphere();   // nothing moves after load
 
     dots = new THREE.Points(geo, createStarMaterial(2 * DOT_PX));
-    dots.renderOrder = 2;
+    // Before the bodies (renderOrder 0/1), not after: the dots cannot depth-test
+    // -- a body writes depth at its surface and would kill the dot at its own
+    // centre -- so ordering is what occludes them. Drawing first is also right in
+    // the interesting case: a far planet's dot lying in front of a near planet's
+    // disc should be hidden, and now is.
+    dots.renderOrder = -1;
     sunGroup.add(dots);
   }
 
@@ -704,7 +711,25 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     records.push(rec);
     if (isSun) sunRec = rec;
     // Nothing moves after load, so the label layer's copy of worldPos is final.
-    labels.add(body.name, rec.worldPos, radius);
+    //
+    // No zoom window: these bodies are drawn at FLOORED screen sizes, so apparent
+    // diameter stops describing what is on screen -- Neptune's disc is 2e-3 px
+    // from Earth while its dot is DOT_PX. The whole group is switched off instead
+    // by the setGroupAlpha below, one decade before the far plane.
+    //
+    // The Sun is ranked as the STAR it is, not by its disc, because it is the one
+    // object in the scene that belongs to both classes -- the star catalogue also
+    // carries it, as row 0. Ranked by size it would sort below every star the
+    // moment you left the planets, and lose its name to whichever one happened to
+    // overlap it. On the shared magnitude scale it instead wins out to 0.655 pc and
+    // then yields to Sirius -- which is exactly what the sky does, since the Sun is
+    // a tenth of Sirius's luminosity and Sirius is only 2.64 pc away.
+    labels.add(body.name, rec.worldPos, radius, {
+      group:       'solar',
+      minRank:     0,
+      maxDiamFrac: Infinity,
+      rank:        isSun ? magnitudeRank(SUN_ABSMAG) : undefined
+    });
     // The ring never moves, so its pole is fixed; only the camera swings across
     // the ring plane. Holding the record avoids a second copy of worldPos.
     if (ring) {
@@ -746,6 +771,18 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     var camPos   = solarCamera.position;
     var nearest  = Infinity;
 
+    // The overlay fades out over the last decade before its own far plane, so
+    // nothing it draws is ever CLIPPED by that plane -- which is what made the
+    // Sun's label vanish mid-air. Derived from SOLAR_CAM_FAR, so the two cannot
+    // drift apart. The range means something: 1 pc, where the Sun is as bright as
+    // Vega, to 10 pc, where it is an ordinary magnitude 4.8 star. Its own row in
+    // the star catalogue has been carrying it since 20 AU.
+    var fade = 1 - Math.log10(sunRec.worldPos.distanceTo(camPos)
+                              / (0.01 * SOLAR_CAM_FAR));
+    fade = Math.min(1, Math.max(0, fade));
+    labels.setGroupAlpha('solar', fade);
+    trails.forEach(function(t) { t.material.opacity = ORBIT_MAX_ALPHA * fade; });
+
     records.forEach(function(rec) {
       var dist = rec.worldPos.distanceTo(camPos);
       rec.dist = dist;
@@ -753,27 +790,37 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
       nearest  = Math.min(nearest, dist - rec.radius);
 
       updateBodyFace(rec, dist < rec.radius);
+      // A mesh below half a pixel covers a sample only intermittently as the
+      // camera moves, which reads as blinking -- the Sun's is 0.013 px at 200 AU
+      // and was still being submitted. Its dot has already faded in by then
+      // (alpha goes as 1 - rPx), so the two are complementary by construction.
+      if (rec.mesh) rec.mesh.visible = rec.rPx > 0.5;
 
-      // The Sun keeps a real corona while it is resolved, floored on screen so it
-      // still reads as a light source from 200 AU, where its disc is 0.015 px.
       if (rec.isSun) {
-        var w = Math.max(rec.rPx * SUN_GLOW_SCALE, SUN_GLOW_MIN_PX) / pxPerRad * dist;
+        // Floor it on screen so the Sun still reads from Neptune, then dim it by
+        // exactly how much that floor inflated it. This is the redshift
+        // catalogue's own pairing (max size, min alpha), and linear rather than
+        // squared for the same reason: strict conservation would collapse it as
+        // 1/d^4, where this lingers -- 0.37 at 20 AU, 0.07 at 100 -- and hands
+        // over to the Sun's own row in the star catalogue, which is a saturated
+        // dot from 20 AU out. One law, no extra constant.
+        var truePx = rec.rPx * SUN_GLOW_SCALE;
+        var w = Math.max(truePx, SUN_GLOW_MIN_PX) / pxPerRad * dist;
         rec.glow.scale.set(2 * w, 2 * w, 1);
+        rec.glow.material.opacity = Math.min(truePx / SUN_GLOW_MIN_PX, 1) * fade;
         return;
       }
       // Every other body is one point in `dots`, at a fixed DOT_PX, so only its
-      // alpha changes: full while the body is too small to rasterise, fading to
-      // nothing as its own disc grows to take over. Deliberately not
-      // flux-conserving -- real flux falls as rPx^2 and the planet would vanish --
-      // and carrying no phase term, so it stays visible from its night side.
-      // ...fading out over the last pixel before the body itself starts to draw,
-      // which is a resolution threshold rather than a tunable, so DOT_PX is free to
-      // set the dot's size without also setting how long it lingers.
-      dotColors[rec.dotIndex * 4 + 3] = DOT_ALPHA * Math.max(0, 1 - rec.rPx);
+      // alpha changes: full while the body is too small to rasterise, fading out
+      // over the last pixel before its own disc takes over. Deliberately not
+      // flux-conserving (real flux falls as rPx^2 and the planet would vanish) and
+      // carrying no phase term, so it stays visible from its night side. The fade
+      // width is a resolution threshold, not a tunable, so DOT_PX sets the dot's
+      // size without also setting how long it lingers.
+      dotColors[rec.dotIndex * 4 + 3] = DOT_ALPHA * Math.max(0, 1 - rec.rPx) * fade;
     });
     if (dots) dots.geometry.attributes.customColor.needsUpdate = true;
 
-    labels.update(viewportWidth, viewportHeight);
     updateRingFacing(camPos);
     // The heliosphere is centred on the Sun, so it fades on the Sun's distance --
     // already measured above, so this costs one call and no new geometry maths.
@@ -784,13 +831,13 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
     // (Jupiter at 0.1 AU: 3), so its trail z-fights against it. Tracking the
     // nearest body instead gives ~1e5 levels.
     //
-    // The ceiling is 1e-8 of the far plane (~6 AU) rather than the 1e-6 (~619 AU)
-    // the depth budget alone would allow, because `nearest` only sees BODIES. Once
-    // the camera is far from all of them -- which is exactly where you are when
-    // looking back up the heliosphere's tail -- a 619 AU near plane would clip the
-    // tail wall right beside you. Lowering the ceiling only ever reduces `near`,
-    // and only out where every body is already sub-pixel.
-    var near = Math.min(Math.max(nearest * 0.5, SOLAR_CAM_NEAR), SOLAR_CAM_FAR * 1e-8);
+    // The ceiling must stay at 1e-6 of the far plane. three builds
+    // m10 = (far+near)/(near-far), and below about 6e-8 that rounds to exactly -1
+    // in float32, which collapses the far-plane clip test to `d <= d` and DELETES
+    // the far plane: the Sun then draws at any distance. 1e-8 was tried and did
+    // exactly that. With SOLAR_CAM_FAR at 10 pc the ceiling is 2 AU, small enough
+    // that the heliosphere's tail wall is never clipped either.
+    var near = Math.min(Math.max(nearest * 0.5, SOLAR_CAM_NEAR), SOLAR_CAM_FAR * 1e-6);
     if (near !== solarCamera.near) {
       solarCamera.near = near;
       solarCamera.updateProjectionMatrix();
@@ -840,7 +887,7 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
 
   function applyRadarVisibility() {
     trails.forEach(function(t) { t.visible = _radarVisible; });
-    labels.setVisible(_radarVisible);
+    labels.setGroupVisible('solar', _radarVisible);
   }
 
   function solarPass(threeRenderer, mainCamera) {
@@ -893,7 +940,6 @@ export default function createSolarRenderer(unrenderObj, markDirty) {
           disposeMaterial(rec.glow.material);
         }
       });
-      labels.dispose();
       if (helio) { helio.dispose(); helio = null; }
       trails.forEach(function(t) {
         sunGroup.remove(t);

@@ -39,15 +39,15 @@ var TAIL_LENGTH_AU = 1000;  // L  -- how far the tube runs before it closes
 // The nose is the measured part, and the part you fly through, so it gets the
 // density; the tail is a tube and needs almost none.
 var NOSE_PTS   = 40;
-var TAIL_PTS   = 80;
-var CAP_PTS    = 24;
+var TAIL_PTS   = 40;
+var CAP_PTS    = 10;
 var LATHE_SEGS = 128;
 
 // -----------------------------------------------------------------------------
 // Look. All rendering, so none of it belongs in the manifest.
 var SHELL_COLOR = new THREE.Vector3(0.35, 0.55, 1.0); // pale blue, against the warm Sun
 var PEAK_ALPHA  = 0.03;  // at normal incidence
-var LIMB_CAP    = 3.0;   // most the limb may brighten; DoubleSide doubles it again
+var LIMB_CAP    = 3;   // most the limb may brighten; DoubleSide doubles it again
 
 // Tail fade: exp(z / TAIL_FADE_AU) downstream of the terminator plane, 1 upwind,
 // so everything the Voyagers measured stays at full strength and only the
@@ -59,7 +59,7 @@ var TAIL_FADE_AU = 200;
 // in, so the inner solar system is never washed blue. Full strength at the
 // standoff, zero FADE_DECADES decades inside it -- 0.5 means "off below 38 AU".
 // A large value means "never off".
-var FADE_DECADES = 0.5;
+var FADE_DECADES = 1.0;
 var MIN_PX       = 4;    // below this apparent size, skip the draw entirely
 
 /**

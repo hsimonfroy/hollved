@@ -16,6 +16,7 @@
  *   ▾                            ← expand/collapse chart (only when densities present)
  *   ─────────────────────
  *   ☑ ■ Local                   ← aux tracers (swatch when color is set)
+ *   ☑ ■ Stars
  *   ☐ ■ CMB
  *   ☐ ■ Radar
  *   [satellite only:]

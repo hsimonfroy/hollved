@@ -3,7 +3,10 @@ var combineOptions = require('./options.js');
 var createParticleView = require('./lib/particle-view.js');
 
 var CAMERA_FOV  = 70; // vertical field of view (degrees), human central vision is about 60
-var CAMERA_NEAR = 3e-3;
+// Safe because NOTHING drawn with this camera uses depth: the HDR target has no
+// depth buffer, the particle material sets depthWrite false, the CMB sphere sets
+// both off, and every label sets depthTest false. Only clipping changes.
+var CAMERA_NEAR = 1e-17;
 var CAMERA_FAR  = 1e5;
 
 // Expose three.js as well, so simple clients do not have to require it
