@@ -1,5 +1,6 @@
 var THREE       = require('three');
 var starTexture = require('./particle-texture.js');
+var slice       = require('./slice.js');
 
 /**
  * A point light source drawn at a fixed SCREEN size: star catalogues, and any body
@@ -37,6 +38,11 @@ module.exports = createStarMaterial;
 // covers 20 magnitudes. uFluxScale sets which magnitude lands at the visible
 // threshold; nothing else about brightness is authored.
 var VERT = [
+  // Only the MAGNITUDE path slices: the same material draws the solar overlay's
+  // body dots, and a wedge cut through the planets would be nonsense.
+  '#ifdef MAGNITUDE',
+  slice.GLSL,
+  '#endif',
   'attribute vec4 customColor;',   // `color` would collide with three's own
   'uniform   float uSize;',
   'varying   vec4  vColor;',
@@ -75,6 +81,9 @@ var VERT = [
   '  float d2 = dot(mv.xyz, mv.xyz) * uUnitsToPc2;',
   '  vColor = vec4(customColor.rgb,',
   '                uFluxScale * pow(10.0, -0.4 * aAbsMag) / max(d2, 1e-12));',
+  // Folded into the flux, so the existing uMinFlux cull drops a sliced-out star
+  // before it ever rasterises.
+  '  vColor.a *= sliceAlpha((modelMatrix * vec4(position, 1.0)).xyz);',
   '#else',
   '  vColor = customColor;',
   '#endif',
@@ -143,6 +152,7 @@ function createStarMaterial(size, opts) {
     uSize: { value: size }
   };
   if (magnitude) {
+    uniforms = slice.withSlice(uniforms);
     uniforms.uUnitsToPc2 = { value: opts.unitsToPc2 };
     uniforms.uFluxScale  = { value: opts.fluxScale };
     // Cull in the unit the caller thinks in. flux = fluxScale * 10^(-0.4*m) / 100

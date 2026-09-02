@@ -54,6 +54,11 @@ var Y_DECADES = [3, 4, 5, 6, 7, 8];
 var X_TICKS = [];
 for (var yr = 1980; yr <= 2030; yr += 5) { X_TICKS.push(yr); }
 
+// Half-width of the lit band, in card heights. Relative, so the band tracks the
+// cards when the SVG scales down on a narrow screen (1.1 is the 100px it used to
+// be, against a full-scale 91px card).
+var FOCAL_RADIUS = 1.1;
+
 // Compute logo top-left position for a survey given its loaded programs
 function computeLogoPos(survey, progs) {
   if (!progs.length) return null;
@@ -88,24 +93,34 @@ function SurveyTimeline({ SURVEYS, surveysData, logoErrors, onLogoError }) {
     if (!appEl) return;
 
     function handleScroll() {
-      var focalY = window.innerHeight * 0.30;
-      var RADIUS = 100;
-      var next = {};
+      var scrollTop = appEl.scrollTop;
+      var centers = {}, cardH = 0, focalY = Infinity;
       Object.keys(cardRefs.current).forEach(function(id) {
         var el = cardRefs.current[id];
         if (!el) return;
         var rect = el.getBoundingClientRect();
-        var centerY = (rect.top + rect.bottom) / 2;
-        var dist = Math.abs(centerY - focalY);
-        next[id] = Math.max(0, 1 - dist / RADIUS);
+        centers[id] = (rect.top + rect.bottom) / 2;
+        cardH = Math.max(cardH, rect.height);
+        // + scrollTop puts the centre in document space, i.e. where the card
+        // sits on screen at the top of the page; the highest one is the line.
+        focalY = Math.min(focalY, centers[id] + scrollTop);
+      });
+      var radius = FOCAL_RADIUS * cardH;
+      var next = {};
+      Object.keys(centers).forEach(function(id) {
+        next[id] = Math.max(0, 1 - Math.abs(centers[id] - focalY) / radius);
       });
       setFocalT(next);
     }
 
     appEl.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
     handleScroll();
-    return function() { appEl.removeEventListener('scroll', handleScroll); };
-  }, []);
+    return function() {
+      appEl.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [surveysData]);
 
   // Build flat program list, carrying cardSide from the parent survey
   var programs = [];

@@ -1,5 +1,6 @@
 import config from '../../config.js';
 import { galaxyFrame } from './coordUtils.js';
+import slice from '../../unrender/lib/slice.js';
 
 /**
  * @param {object}   labels        the scene-wide label layer; galaxy names go in
@@ -181,14 +182,15 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
 
     var uSize = PART_SIZE / RES_FACTOR / 1000;
     var mat = new THREE.ShaderMaterial({
-      uniforms: {
+      uniforms: slice.withSlice({
         uSize:           { value: uSize },
         uViewportHeight: { value: viewportHeight },
         uShrink:         { value: 1.0 },        // set per frame, below
         uMinPx:          { value: MIN_PART_PX },
         uMinAlpha:       { value: MIN_PART_ALPHA }
-      },
+      }),
       vertexShader: [
+        slice.GLSL,
         'uniform float uSize;',
         'uniform float uViewportHeight;',
         'uniform float uShrink;',
@@ -203,6 +205,8 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
         // fragment shader needs no knowledge of it and the cull below drops a
         // faded grain before it ever rasterises.
         '  vColor = vec4(color.rgb, color.a * mix(uMinAlpha, 1.0, uShrink));',
+        // Folded into vColor.a, so the cull below drops a sliced-out grain for free.
+        '  vColor.a *= sliceAlpha((modelMatrix * vec4(position, 1.0)).xyz);',
         '  if (vColor.a < 0.004 || mvPos.z > 0.0) {',
         '    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);',
         '    gl_PointSize = 0.0; vPointSize = 0.0; return;',

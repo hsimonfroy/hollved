@@ -47,5 +47,7 @@ This work makes use of public data from multiple types and sources:
 * CMB 100GHz map from [Planck](https://www.cosmos.esa.int/web/planck/planck-data-use).
 * Main local group galaxy pictures: [M31](https://www.reddit.com/user/Correct_Presence_936/), [MW](https://www.esa.int/ESA_Multimedia/Images/2025/01/The_best_Milky_Way_map_by_Gaia), [M33](https://www.eso.org/public/images/eso1424a/), [LMC](https://www.esa.int/ESA_Multimedia/Images/2018/04/Large_Magellanic_Cloud), [SMC](https://www.esa.int/ESA_Multimedia/Images/2018/04/Small_Magellanic_Cloud), [M110](https://noirlab.edu/public/images/noao-m110/), [M32](https://pages.astronomy.ua.edu/gifimages/m32.html), [NGC 147](https://simbad.u-strasbg.fr/simbad/sim-id?Ident=NGC%20147), [NGC 185](https://simbad.u-strasbg.fr/simbad/sim-id?Ident=NGC+185), [NGC 6822](https://www.esa.int/Science_Exploration/Space_Science/Euclid/Euclid_s_view_of_irregular_galaxy_NGC_6822), [IC 1613](https://www.eso.org/public/images/eso1603a/), [IC 10](https://noirlab.edu/public/images/noirlab2013a/), [WLM](https://noirlab.edu/public/images/noao-wlm/).
 * Redshift-independent distance catalog from [CF4](https://iopscience.iop.org/article/10.3847/1538-4357/ac94d8).
+* Planets, Moon, and probes trajectories from [JPL Solar System Dynamics](https://ssd.jpl.nasa.gov/).
+* Stars from [AT-HYG](https://www.astronexus.com/projects/at-hyg) and constellations from [Stellarium](https://stellarium.org/).
 
 

@@ -29,6 +29,7 @@ import createStarField       from './starField.js';
 import createLabelLayer      from './labelLayer.js';
 import { cartToRaDecR, dirToAzAlt, getLocalFrame } from './coordUtils.js';
 import { createGlowMaterial, makeRadarLabel } from './radarStyle.js';
+import slice from '../../unrender/lib/slice.js';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -64,9 +65,6 @@ function sceneRenderer(container) {
   var RULER_LABEL_ALPHA  = 0.8;
   var RING_FADE_DECADES  = 1;    // fade in over one decade of camera distance
   var sliceEnabled = false;
-  var SLICE_ANGLE     = Math.PI / 20; // angle between the two cones
-  var IN_SLICE_ALPHA  = 2.0;
-  var OUT_SLICE_ALPHA = 0.02;
   var currentMode = appConfig.getControlMode();
   var queryUpdateId = setInterval(updateQuery, 200);
   var rulerDefs = [];
@@ -211,7 +209,7 @@ function sceneRenderer(container) {
       spaceshipControl.movementSpeed = satelliteControl.getMoveSpeed();
 
       currentMode = 'spaceship';
-      if (sliceEnabled) renderer.getParticleView().getPointCloud().material.uniforms.uSliceEnabled.value = 0.0;
+      applySlice();
       if (mobileControl) mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
@@ -259,12 +257,8 @@ function sceneRenderer(container) {
         cam.position.copy(endPos);
         cam.quaternion.copy(endQuat);
         satelliteControl.setEnabled(true); // no cam arg → preserves computed state
-        if (sliceEnabled) {
-          var mat = renderer.getParticleView().getPointCloud().material;
-          mat.uniforms.uSliceEnabled.value = 1.0;
-          updateSliceUniforms(mat);
-          renderer.markDirty();
-        }
+        applySlice();
+        renderer.markDirty();
       });
     }
   }
@@ -324,9 +318,7 @@ function sceneRenderer(container) {
           appEvents.cameraSpeedUpdate.fire(spaceshipControl.currentSpeed, spaceshipControl.movementSpeed);
         }
         if (baseControl.isActive()) renderer.markDirty();
-        if (sliceEnabled && currentMode === 'satellite') {
-          updateSliceUniforms(renderer.getParticleView().getPointCloud().material);
-        }
+        if (sliceEnabled && currentMode === 'satellite') applySlice();
         if (rulerObjects.length) updateRulers();
       };
 
@@ -389,19 +381,9 @@ function sceneRenderer(container) {
 
     renderer.particles(positions);
 
-    // Sync slice constants and URL state to material (pointCloud exists after particles() call)
-    if (_sliceFwd) {
-      var mat = renderer.getParticleView().getPointCloud().material;
-      var _halfAngle = (Math.PI - SLICE_ANGLE) / 2;
-      var _cosHalf   = Math.cos(_halfAngle);
-      mat.uniforms.uSliceCosHalf2.value = _cosHalf * _cosHalf;
-      mat.uniforms.uInSliceAlpha.value  = IN_SLICE_ALPHA;
-      mat.uniforms.uOutSliceAlpha.value = OUT_SLICE_ALPHA;
-      var _cv = appConfig.getVisibleTracers();
-      sliceEnabled = _cv ? _cv.indexOf('slice') >= 0 : false;
-      mat.uniforms.uSliceEnabled.value = (sliceEnabled && currentMode === 'satellite') ? 1.0 : 0.0;
-      if (sliceEnabled && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(mat);
-    }
+    var _cv = appConfig.getVisibleTracers();
+    sliceEnabled = _cv ? _cv.indexOf('slice') >= 0 : false;
+    applySlice();
 
     renderer.markDirty();
   }
@@ -455,11 +437,7 @@ function sceneRenderer(container) {
     }
     if (tracerId === 'slice') {
       sliceEnabled = visible;
-      var pc = renderer && renderer.getParticleView() && renderer.getParticleView().getPointCloud();
-      if (pc) {
-        pc.material.uniforms.uSliceEnabled.value = (visible && currentMode === 'satellite') ? 1.0 : 0.0;
-        if (visible && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(pc.material);
-      }
+      applySlice();
       renderer.markDirty();
       return;
     }
@@ -500,17 +478,25 @@ function sceneRenderer(container) {
     renderer.markDirty();
   }
 
-  function updateSliceUniforms(mat) {
-    var cam    = renderer.camera();
+  // The slice uniforms are shared by reference with every material that honours
+  // it -- the catalogue, the local-group clouds, the star field and the
+  // constellation and orbit lines -- so this one call sets the whole scene. There
+  // is no per-material plumbing and no registry to keep in step.
+  //
+  // Satellite-only: the wedge is defined by the orbit plane and the pivot, which
+  // is a construct of that control and means nothing free-flying.
+  function applySlice() {
+    var u = slice.uniforms;
+    var on = sliceEnabled && currentMode === 'satellite' && satelliteControl;
+    u.uSliceEnabled.value = on ? 1.0 : 0.0;
+    if (!on || !_sliceFwd) return;
     var upAxis = satelliteControl.getUpAxis();
-    var pivot  = satelliteControl.getPivot();
-    _sliceFwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    _sliceFwd.set(0, 0, -1).applyQuaternion(renderer.camera().quaternion);
     _sliceFwd.addScaledVector(upAxis, -_sliceFwd.dot(upAxis));
     var len = _sliceFwd.length();
-    if (len < 0.001) return;
-    _sliceFwd.divideScalar(len);
-    mat.uniforms.uSliceNormal.value.copy(_sliceFwd);
-    mat.uniforms.uSlicePivot.value.copy(pivot);
+    if (len < 0.001) return;          // looking straight up the axis: keep the last plane
+    u.uSliceNormal.value.copy(_sliceFwd.divideScalar(len));
+    u.uSlicePivot.value.copy(satelliteControl.getPivot());
   }
 
   function handleTracersChangedFromURL() {
@@ -518,11 +504,7 @@ function sceneRenderer(container) {
     var configVisible = appConfig.getVisibleTracers();
     radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
     sliceEnabled  = configVisible ? configVisible.indexOf('slice') >= 0 : false;
-    var _pc = renderer.getParticleView().getPointCloud();
-    if (_pc) {
-      _pc.material.uniforms.uSliceEnabled.value = (sliceEnabled && currentMode === 'satellite') ? 1.0 : 0.0;
-      if (sliceEnabled && currentMode === 'satellite' && satelliteControl) updateSliceUniforms(_pc.material);
-    }
+    applySlice();
     tracerRanges.forEach(function(tracer) {
       tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
     });

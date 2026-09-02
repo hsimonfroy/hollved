@@ -148,7 +148,7 @@ var ORBIT_SEGMENTS = 512;     // per lap; matches the solar trails'
 // first, and the rosette becomes obvious. Three laps also gives 9 vertical cycles
 // instead of 3, which is the only way the +-90 pc wobble reads at all edge-on.
 var ORBIT_LAPS     = 1.;
-var ORBIT_ALPHA    = 0.2;    // pre-tone-map, alongside LINE_ALPHA
+var ORBIT_ALPHA    = 0.5;    // pre-tone-map, alongside LINE_ALPHA
 // Fades IN over the decade right after the planet trails die (the solar overlay
 // is gone by 10 pc), so the two never share the frame -- which is the whole of
 // "do not mix it with the orbits of the planets".

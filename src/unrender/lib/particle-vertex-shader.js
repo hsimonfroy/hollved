@@ -1,26 +1,17 @@
+var slice = require('./slice.js');
+
 module.exports = [
+slice.GLSL,
 'attribute vec4 customColor;',
 'uniform float uSize;',
 'uniform float uViewportHeight;',
-'uniform float uSliceEnabled;',
-'uniform vec3  uSliceNormal;',   // double-cone axis (unit vec, projected forward in orbit plane)
-'uniform vec3  uSlicePivot;',
-'uniform float uSliceCosHalf2;', // cos²((π - SLICE_ANGLE) / 2) — inside-cone threshold
-'uniform float uInSliceAlpha;',  // alpha factor for galaxies inside the slice
-'uniform float uOutSliceAlpha;', // alpha factor for galaxies outside the slice
 '',
 'varying vec4 vColor;',
 'varying float vPointSize;',
 '',
 'void main() {',
 '  vColor = customColor;  // GPU normalizes Uint8 [0,255] → [0.0,1.0] via normalized=true',
-'',
-'  if (uSliceEnabled > 0.5) {',
-'    vec3 rel = (modelMatrix * vec4(position, 1.0)).xyz - uSlicePivot;',
-'    float dAlong = dot(rel, uSliceNormal);',
-'    float dLen2  = dot(rel, rel);',
-'    vColor.a *= (dLen2 > 0.0001 && dAlong * dAlong > uSliceCosHalf2 * dLen2) ? uOutSliceAlpha : uInSliceAlpha;',
-'  }',
+'  vColor.a *= sliceAlpha((modelMatrix * vec4(position, 1.0)).xyz);',
 '',
 '  // Cull invisible nodes (alpha == 0)',
 '  if (vColor.a < 0.004) {',

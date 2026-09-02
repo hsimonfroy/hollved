@@ -20,6 +20,7 @@
  */
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
+import slice from '../../unrender/lib/slice.js';
 
 // facing = |dot(N, V)| → 0 at the silhouette, 1 where the tube faces the camera.
 // pow(2) gives a Gaussian-like radial falloff that reaches 0 at the silhouette,
@@ -212,8 +213,10 @@ export function createOrbitLineMaterial(opacity, color) {
 // mat3() drops the translation on purpose: (position - camera) already carries
 // it, and the 3x3 still holds the object's pc -> Mpc scale.
 var RTE_LINE_VERT = [
+  slice.GLSL,
   'uniform vec3 uCamHi;',   // camera in the object's own units, float32-rounded
   'uniform vec3 uCamLo;',   // and the remainder it could not hold
+  'varying float vSlice;',
   '#ifdef VERTEX_ALPHA',
   'attribute float aAlpha;',
   'varying   float vAlpha;',
@@ -222,6 +225,9 @@ var RTE_LINE_VERT = [
   '#ifdef VERTEX_ALPHA',
   '  vAlpha = aAlpha;',
   '#endif',
+  // Per ENDPOINT, then interpolated, so a segment crossing the wedge boundary
+  // fades along its own length instead of switching whole.
+  '  vSlice = sliceAlpha((modelMatrix * vec4(position, 1.0)).xyz);',
   '  vec3 rel = (position - uCamHi) - uCamLo;',
   '  gl_Position = projectionMatrix * vec4(mat3(modelViewMatrix) * rel, 1.0);',
   '}'
@@ -238,14 +244,15 @@ var RTE_LINE_VERT = [
 var RTE_LINE_FRAG = [
   'uniform vec3  uColor;',
   'uniform float uOpacity;',
+  'varying float vSlice;',
   '#ifdef VERTEX_ALPHA',
   'varying float vAlpha;',
   '#endif',
   'void main() {',
   '#ifdef VERTEX_ALPHA',
-  '  gl_FragColor = vec4(uColor, uOpacity * vAlpha);',
+  '  gl_FragColor = vec4(uColor, uOpacity * vAlpha * vSlice);',
   '#else',
-  '  gl_FragColor = vec4(uColor, uOpacity);',
+  '  gl_FragColor = vec4(uColor, uOpacity * vSlice);',
   '#endif',
   '}'
 ].join('\n');
@@ -265,12 +272,12 @@ var RTE_LINE_FRAG = [
  */
 export function createRteLineMaterial(opacity, color, camHi, camLo, vertexAlpha) {
   return new THREE.ShaderMaterial(Object.assign({}, GLOW_COMMON, {
-    uniforms: {
+    uniforms: slice.withSlice({
       uColor:   { value: new THREE.Color(color === undefined ? 0xffffff : color) },
       uOpacity: { value: opacity },
       uCamHi:   camHi,
       uCamLo:   camLo
-    },
+    }),
     defines:        vertexAlpha ? { VERTEX_ALPHA: '' } : {},
     vertexShader:   RTE_LINE_VERT,
     fragmentShader: RTE_LINE_FRAG,

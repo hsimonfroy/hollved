@@ -726,6 +726,7 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
     // a tenth of Sirius's luminosity and Sirius is only 2.64 pc away.
     labels.add(body.name, rec.worldPos, radius, {
       group:       'solar',
+      sliced:      false,   // a wedge cut through the planets would be nonsense
       minRank:     0,
       maxDiamFrac: Infinity,
       rank:        isSun ? magnitudeRank(SUN_ABSMAG) : undefined

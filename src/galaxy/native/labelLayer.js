@@ -29,6 +29,7 @@
  */
 import * as THREE from 'three';
 import { makeRadarLabel, LABEL_STYLE_NAME } from './radarStyle.js';
+import slice from '../../unrender/lib/slice.js';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -139,6 +140,10 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
    *              than a surface: a constellation lifted by its own angular radius
    *              lands on its outer edge, and for a big figure well inside a
    *              neighbour.
+   *   sliced     false to ignore the slice wedge. The solar bodies opt out: their
+   *              names are an inner-system annotation, and a wedge cut through the
+   *              planets would be nonsense — the same exclusion star-material makes
+   *              by gating its slice behind #ifdef MAGNITUDE.
    *   depthFade  false to opt out of the nearest-relative fade. That fade is a
    *              DEPTH CUE -- "this label is further from you than that one" -- and
    *              a constellation has no depth: it is a direction, and the anchor
@@ -175,6 +180,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
       minRank:   o.minRank !== undefined ? o.minRank : minDiamPx / 2,
       offset:    o.offset  !== undefined ? o.offset  : radius,
       depthFade: o.depthFade !== false,
+      sliced:    o.sliced    !== false,
       maxFrac:   o.maxDiamFrac !== undefined ? o.maxDiamFrac : maxDiamFrac,
       dist:      0,
       rank:      0,
@@ -216,7 +222,8 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
       var g   = groups[it.group];
       it.show = g.visible && g.alpha > 0 &&
                 it.rank >= it.minRank &&
-                apparentSize(it, it.dist, pxPerRad) <= it.maxFrac * halfH;
+                apparentSize(it, it.dist, pxPerRad) <= it.maxFrac * halfH &&
+                (!it.sliced || slice.inside(it.worldPos));
       if (it.show && it.dist < nearest) nearest = it.dist;
     }
 

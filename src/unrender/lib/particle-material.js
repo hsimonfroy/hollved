@@ -2,23 +2,19 @@ var THREE = require('three');
 var defaultTexture = require('./particle-texture.js');
 var vertexShader = require('./particle-vertex-shader.js');
 var fragmentShader = require('./particle-fragment-shader.js');
+var slice = require('./slice.js');
 
 module.exports = createParticleMaterial;
 
 function createParticleMaterial() {
-    var uniforms = {
+    // The slice uniforms are shared with every other layer that honours it, so
+    // they are merged in by reference rather than declared here — see slice.js.
+    var uniforms = slice.withSlice({
         color:        { value: new THREE.Color(0xffffff) },
         pointTexture: { value: new THREE.TextureLoader().load(defaultTexture) },
         uSize:           { value: 0.05 },
-        uViewportHeight: { value: 600.0 },
-    // Declared here as uniform, actual values are set by renderer.js
-    uSliceEnabled:   { value: 0.0 },
-    uSliceNormal:    { value: new THREE.Vector3(0, 0, 1) },
-    uSlicePivot:     { value: new THREE.Vector3(0, 0, 0) },
-    uSliceCosHalf2:  { value: 0.03 },
-    uInSliceAlpha:   { value: 2.0 },
-    uOutSliceAlpha:  { value: 0.03 }
-  };
+        uViewportHeight: { value: 600.0 }
+    });
 
   var material = new THREE.ShaderMaterial({
     uniforms: uniforms,
