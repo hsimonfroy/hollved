@@ -40,7 +40,10 @@ var defaultConfig = {
   azaltr: { az:  28.000, alt:  0.000, r: fromLog(LOG_RADIUS) },
   rot:    { x: 0.760, y: 0.000, z: 3.048 },
   speed:  fromLog(LOG_SPEED), // Mpc/s
-  visibleTracers: null
+  visibleTracers: null,
+  // null means "whenever the page is opened". Like visibleTracers, the default is
+  // absence: the hash carries `t` only once a moment other than now is asked for.
+  epoch:  null
 };
 
 export default appConfig();
@@ -58,6 +61,7 @@ function appConfig() {
     getSpeed:           getSpeed,
     getVisibleTracers:  getVisibleTracers,
     setVisibleTracers:  setVisibleTracers,
+    getEpoch:           getEpoch,
     getControlMode:     getControlMode,
     setControlMode:     setControlMode,
     setSatelliteState:  setSatelliteState,
@@ -107,6 +111,13 @@ function appConfig() {
     return hashConfig.mode;
   }
 
+  // Unix ms for the moment the scene depicts, or null for "now". Null rather
+  // than Date.now() so the caller can tell an authored time from the default —
+  // the same distinction visibleTracers draws with null.
+  function getEpoch() {
+    return hashConfig.epoch;
+  }
+
   // ── Setters ─────────────────────────────────────────────────────────────────
 
   // Both setters write first and compare afterwards: two states are "the same
@@ -154,6 +165,9 @@ function appConfig() {
     if (hashConfig.visibleTracers !== null) {
       hash += '&trace=' + hashConfig.visibleTracers.join(',');
     }
+    if (hashConfig.epoch !== null) {
+      hash += '&t=' + formatEpoch(hashConfig.epoch);
+    }
 
     setHash(hash);
   }
@@ -177,10 +191,12 @@ function appConfig() {
 
     var cameraChanged  = formatCamera(next) !== formatCamera(hashConfig);
     var tracersChanged = !sameTracers(next.visibleTracers, hashConfig.visibleTracers);
+    var epochChanged   = next.epoch !== hashConfig.epoch;
 
-    if (cameraChanged || tracersChanged) hashConfig = next;
+    if (cameraChanged || tracersChanged || epochChanged) hashConfig = next;
     if (cameraChanged)  api.fire('camera');
     if (tracersChanged) api.fire('tracersChanged');
+    if (epochChanged)   api.fire('epochChanged');
   }
 }
 
@@ -225,6 +241,8 @@ function parseFromHash(hash) {
       : [];
   }
 
+  var epoch = parseEpoch(query.t);
+
   var mode = ('rot' in query || 'speed' in query) ? 'spaceship' : 'satellite';
   // The third component is log10(metres) — its fallback is a log too, so a
   // missing field and a present one decode through exactly the same path.
@@ -243,7 +261,8 @@ function parseFromHash(hash) {
       azaltr: { az: azaltrArr[0], alt: azaltrArr[1], r: fromLog(azaltrArr[2]) },
       rot:    { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
       speed:  defaultConfig.speed,
-      visibleTracers: visibleTracers
+      visibleTracers: visibleTracers,
+      epoch:  epoch
     };
   } else {
     var rotArr = parseFloats3(query.rot,
@@ -255,7 +274,8 @@ function parseFromHash(hash) {
       azaltr: { az: defaultConfig.azaltr.az, alt: defaultConfig.azaltr.alt, r: defaultConfig.azaltr.r },
       rot:    { x: rotArr[0], y: rotArr[1], z: rotArr[2] },
       speed:  fromLog(getNumber(query.speed, LOG_SPEED)),
-      visibleTracers: visibleTracers
+      visibleTracers: visibleTracers,
+      epoch:  epoch
     };
   }
 }
@@ -268,8 +288,38 @@ function cloneDefault() {
     azaltr: { az: defaultConfig.azaltr.az, alt: defaultConfig.azaltr.alt, r: defaultConfig.azaltr.r },
     rot:    { x: defaultConfig.rot.x, y: defaultConfig.rot.y, z: defaultConfig.rot.z },
     speed:  defaultConfig.speed,
-    visibleTracers: defaultConfig.visibleTracers
+    visibleTracers: defaultConfig.visibleTracers,
+    epoch:  defaultConfig.epoch
   };
+}
+
+// ── Epoch ─────────────────────────────────────────────────────────────────────
+//
+// `t=YYYY-MM-DDThh:mm:ss`, always UTC. Seconds are the finest resolution worth
+// carrying: the solar overlay's own model is the JPL approximate elements, good
+// to arcminutes over 1800-2050, and a second of Earth rotation is 15 arcseconds.
+//
+// The trailing 'Z' on the way in is load-bearing and is the classic trap here:
+// ECMAScript parses a date-TIME string with no offset as LOCAL time (a date-only
+// string is UTC), so 't=2026-09-09T12:00:00' would mean something different in
+// every timezone and a shared link would not show the same sky twice.
+function parseEpoch(str) {
+  if (!str) return null;
+  // Accepts any prefix of YYYY-MM-DDThh:mm:ss and fills the rest in from the
+  // template, so `t=2026` is midnight on 1 January and `t=2026-06-06` is midnight
+  // on the 6th. The trailing Z is what makes it UTC: ECMAScript reads a date-TIME
+  // string with no offset as LOCAL time, so without it a shared link would show a
+  // different sky in every timezone.
+  var t = String(str).replace(/Z$/, '');
+  var ms = Date.parse(t + '0000-01-01T00:00:00'.slice(t.length) + 'Z');
+  return isNaN(ms) ? null : ms;
+}
+
+
+// toISOString is always UTC and always this exact layout, so the slice is safe:
+// '2026-09-09T12:00:00.000Z' -> '2026-09-09T12:00:00'.
+function formatEpoch(ms) {
+  return new Date(ms).toISOString().slice(0, 19);
 }
 
 // ── Equality helpers ──────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
  */
 import * as THREE from 'three';
 import config from '../../config.js';
+import appConfig from './appConfig.js';
 import { raDec2UnitVec } from './coordUtils.js';
 import { createOrbitLineMaterial } from './radarStyle.js';
 import { magnitudeRank } from './labelLayer.js';
@@ -226,8 +227,11 @@ function solarTexture(tex) {
 // -----------------------------------------------------------------------------
 
 // Days elapsed since the J2000.0 epoch. Unix epoch = JD 2440587.5.
+// The moment comes from the URL's `t=` when one is given.
 function daysSinceJ2000() {
-  return (Date.now() / 86400000) + 2440587.5 - J2000_JD;
+  var ms = appConfig.getEpoch();
+  if (ms === null) ms = Date.now();
+  return (ms / 86400000) + 2440587.5 - J2000_JD;
 }
 
 // Solve M = E - e*sin(E) for the eccentric anomaly. Newton converges in a
@@ -566,7 +570,7 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
 
   // The Sun's corona: a billboard, because it has to scale with the disc and
   // reaches ~1300 px across from close range, well past any gl_PointSize limit.
-  function buildCorona(pos) {
+  function buildCorona() {
     var sz = 128, c = sz / 2;
     var canvas = document.createElement('canvas');
     canvas.width = sz; canvas.height = sz;
@@ -585,7 +589,6 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
       transparent: true
     }));
     glow.renderOrder = 2;
-    glow.position.copy(pos);
     sunGroup.add(glow);
     return glow;
   }
@@ -672,10 +675,60 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
     trails.push(line);
   }
 
+  // Where a body is at `epochDays`. The ONE place that answers that: loadBody
+  // calls it to place a body it has just built, and placeAt calls it for all of
+  // them when the URL's `t` changes. Written twice, the two drifted.
+  function placeBody(rec) {
+    rec.pos.copy(positionAt(rec.body, epochDays));
+    rec.worldPos.copy(sunGroup.position).add(rec.pos);
+    // The label layer copies the vector it is given, so it needs telling.
+    if (rec.label) rec.label.worldPos.copy(rec.worldPos);
+    // -pos is the direction to the Sun: sunGroup's origin IS the Sun.
+    if (!rec.isSun) rec.sunDir.copy(rec.pos).negate().normalize();
+    if (rec.glow) rec.glow.position.copy(rec.pos);
+    if (rec.mesh) {
+      rec.mesh.position.copy(rec.pos);
+      // Pole and spin phase are both functions of the date. The ring is a child
+      // of the mesh, so it follows for free.
+      if (rec.body.pole) applyPoleOrientation(rec.mesh, rec.body.pole, epochDays);
+    }
+    if (rec.dotIndex !== undefined) {
+      rec.pos.toArray(dots.geometry.getAttribute('position').array, rec.dotIndex * 3);
+    }
+  }
+
+  // Retyping `t=` in the URL is a hashchange, not a reload, so the moment is
+  // re-applied here exactly as the camera is. Nothing is rebuilt but the trails,
+  // whose geometry IS the epoch; no mesh, material or texture is recreated. This
+  // runs on a hash edit and never per frame.
+  function placeAt(days) {
+    epochDays = days;
+    // Earth -> Sun first, as at load: the Sun's position *relative to Earth* is
+    // what places the whole system on the RA/Dec sky.
+    sunGroup.position.copy(positionAt(bodyById.earth, epochDays)).negate();
+    if (onSunPos) onSunPos(sunGroup.position);
+
+    records.forEach(placeBody);
+    if (dots) {
+      dots.geometry.getAttribute('position').needsUpdate = true;
+      dots.geometry.computeBoundingSphere();
+    }
+    trails.forEach(function(t) {
+      sunGroup.remove(t); t.geometry.dispose(); t.material.dispose();
+    });
+    trails.length = 0;
+    manifest.bodies.forEach(buildTrail);
+
+    updateSunDirs();
+    markDirty();
+  }
+  appConfig.on('epochChanged', function() {
+    if (manifest) placeAt(daysSinceJ2000());
+  });
+
   function loadBody(body) {
     var isSun  = body.id === 'sun';
     var radius = (body.diam / 2) * KM_TO_MPC;
-    var pos    = positionAt(body, epochDays);
 
     // A spacecraft gets no mesh and no material: 5 m across it is sub-pixel at
     // every zoom this scene reaches, and there is no surface map to put on it. It
@@ -684,11 +737,7 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
     if (!isEscaping(body)) {
       mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 5),
                             makeBodyMaterial(body));
-      mesh.position.copy(pos);
       mesh.renderOrder = isSun ? 1 : 0;
-      // Real axial tilt and spin phase, for every body including Earth: local +Z
-      // to the IAU north pole, local +X to the prime meridian at angle W(d).
-      if (body.pole) applyPoleOrientation(mesh, body.pole, epochDays);
       sunGroup.add(mesh);
     }
 
@@ -697,19 +746,20 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
 
     var rec = {
       name:      body.name,
+      body:      body,        // placeAt re-evaluates its orbit
       mesh:      mesh,        // null for a spacecraft
-      pos:       pos,         // heliocentric; what the dot is built from
-      glow:      isSun ? buildCorona(pos) : null,
+      pos:       new THREE.Vector3(),   // heliocentric; placeBody fills these
+      glow:      isSun ? buildCorona() : null,
       radius:    radius,
-      worldPos:  sunGroup.position.clone().add(pos),
-      // -pos is the direction to the Sun: sunGroup's origin IS the Sun.
-      sunDir:    isSun ? new THREE.Vector3() : pos.clone().negate().normalize(),
+      worldPos:  new THREE.Vector3(),
+      sunDir:    new THREE.Vector3(),
       isSun:     isSun,
       dist:      0,
       rPx:       0
     };
     records.push(rec);
     if (isSun) sunRec = rec;
+    placeBody(rec);          // real axial tilt and spin phase included
     // Nothing moves after load, so the label layer's copy of worldPos is final.
     //
     // No zoom window: these bodies are drawn at FLOORED screen sizes, so apparent
@@ -724,7 +774,7 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
     // overlap it. On the shared magnitude scale it instead wins out to 0.655 pc and
     // then yields to Sirius -- which is exactly what the sky does, since the Sun is
     // a tenth of Sirius's luminosity and Sirius is only 2.64 pc away.
-    labels.add(body.name, rec.worldPos, radius, {
+    rec.label = labels.add(body.name, rec.worldPos, radius, {
       group:       'solar',
       sliced:      false,   // a wedge cut through the planets would be nonsense
       minRank:     0,

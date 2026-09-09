@@ -33,12 +33,12 @@ var MIN_PX         = 2.0;
 
 // The one brightness constant, measured through the shipped tone curve.
 // Raising it flattens the sky toward white: the curve compresses hard at the top.
-var STAR_FLUX = 1000.0;
+var STAR_FLUX = 1200.0;
 
 // Faintest magnitude worth a fragment -- a cull, not a look control, so it sits
 // below anything the tone curve can still show. It has to clear 11.19, or Proxima
 // Centauri, the nearest star to the Sun, is not drawn at all.
-var STAR_MAG_LIMIT = 12;
+var STAR_MAG_LIMIT = 12.3;
 
 // WHICH stars get a name. Two clauses, because "notable" is genuinely two things:
 // bright enough to be a landmark in the sky, or close enough to be a neighbour.
@@ -46,17 +46,12 @@ var STAR_MAG_LIMIT = 12;
 // magnitude 9.8 at 1.8 pc -- and a rule with only the first would miss every red
 // dwarf next door, which is most of what is next door. Together: 57 of 637.
 //
-// 2.1 rather than a round 2.0 for one reason: POLARIS is magnitude 2.04, and a
-// limit that drops the pole star is the wrong limit.
+// 2.1 mag to include POLARIS, 
+// 12.3 mag to include Ross 248 the future nearest star to the Sun in 40,000 years,
+// 3.3 pc to include Lacaille 9352. 
 var STAR_LABEL_MAG = 2.1;
-var STAR_LABEL_PC  = 3.0;
-
-// ...and when a name drops out again: once the star has faded past this APPARENT
-// magnitude from wherever the camera now is. Fainter than naked-eye on purpose, or
-// Proxima (11.19) and Barnard (9.78) would never be named even from Earth. Because
-// it is apparent, a bright star keeps its name much further out than a near one:
-// Sirius is still magnitude 8.9 from 264 pc away, Proxima is gone by 13 pc.
-var STAR_LABEL_LIMIT_MAG = 12;
+var STAR_LABEL_PC  = 3.3;
+var STAR_LABEL_LIMIT_MAG = 12.3;
 
 // ...and a second, independent retirement, on distance from the Sun. The magnitude
 // rule alone cannot do this job: it has to stay faint enough to admit Proxima

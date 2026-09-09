@@ -165,7 +165,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
     var group = o.group || 'names';
     if (!groups[group]) groups[group] = { alpha: 1, visible: true };
 
-    items.push({
+    var item = {
       name:      name,
       label:     label,
       worldPos:  new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z),
@@ -186,7 +186,12 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
       rank:      0,
       show:      false,
       box:       [0, 0, 0, 0]   // reused every frame; never reallocated
-    });
+    };
+    items.push(item);
+    // Returned so a caller whose object MOVES can follow it: write into
+    // item.worldPos. `add` copies the vector it is given, so there is no other
+    // way to keep a label with a body once the solar epoch changes.
+    return item;
   }
 
   // Greedy screen-space decluttering. Labels are a constant LABEL_PX tall, so two
