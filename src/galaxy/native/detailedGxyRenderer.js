@@ -43,7 +43,7 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
   // 27 kpc out edge-on but 3 kpc out face-on -- the grains are chunkier over the
   // poles by roughly the axis ratio. That is accepted, deliberately.
   var FLOOR_AT_SCALE          = 0.61;   // floors reached at and inside this. Sun is at about 0.61 in the Milky Way, so should be higher
-  var SHRINK_AT_SCALE         = 5.0;   // full nominal size at and beyond this
+  var SHRINK_AT_SCALE         = 6.0;   // full nominal size at and beyond this
   // The floor cannot go below 1.415 px, and that number is exact. The fragment
   // shader discards at r2 > 0.25, so the sprite is a disc of radius 0.5*S pixels,
   // while the worst a point centre can sit from every pixel centre is sqrt(0.5) =
@@ -145,32 +145,26 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
         var alpha = pixels[idx + 3];
         if (alpha < ALPHA_THRESH) continue;
 
-        // Jitter sample position to break up regular grid effect.
-        var u  = (i + Math.random() - 0.5) / (res - 1);
-        var v  = (j + Math.random() - 0.5) / (res - 1);
-        
-        // Apply Gaussian alpha smoothing
-        var du = u - 0.5, dv = v - 0.5;
-        var gauss = Math.exp(-SMOOTH_ALPHA * (du * du + dv * dv));
-        var a = Math.round((alpha / N_SAMPLES) * gauss);
-
         var r = pixels[idx];
         var g = pixels[idx + 1];
         var b = pixels[idx + 2];
-
-        var x = (0.5 - v) * 2.0 * half_diam;  // sky north (image top)
-        var y = (0.5 - u) * 2.0 * half_diam;  // sky east (image left)
-
         var zScale = (alpha / 255) * half_thick;
+
         for (var si = 0; si < N_SAMPLES; si++) {
-          var z = (Math.random() * 2.0 - 1.0) * zScale;
-          positions[pix * 3]     = x;
-          positions[pix * 3 + 1] = y;
-          positions[pix * 3 + 2] = z;
+          // Jitter sample position to break up regular grid effect.
+          var u = (i + Math.random() - 0.5) / (res - 1);
+          var v = (j + Math.random() - 0.5) / (res - 1);
+          var du = u - 0.5, dv = v - 0.5;
+          var gauss = Math.exp(-SMOOTH_ALPHA * (du * du + dv * dv));
+
+          positions[pix * 3]     = (0.5 - v) * 2.0 * half_diam;  // sky north (image top)
+          positions[pix * 3 + 1] = (0.5 - u) * 2.0 * half_diam;  // sky east (image left)
+          positions[pix * 3 + 2] = (Math.random() * 2.0 - 1.0) * zScale;
           colors[pix * 4]     = r;
           colors[pix * 4 + 1] = g;
           colors[pix * 4 + 2] = b;
-          colors[pix * 4 + 3] = a;
+          // Gaussian alpha smoothing.
+          colors[pix * 4 + 3] = Math.round((alpha / N_SAMPLES) * gauss);
           pix++;
         }
       }
