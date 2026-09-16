@@ -19,7 +19,7 @@ This work is currently in development. If you find it useful, consider sharing i
 
 <div align="center">
     <picture>
-        <img alt="Mobile Demo" src="assets/mobile_demo.png" width="700">
+        <img alt="Mobile Demo" src="assets/mobile_demo1.png" width="700">
     </picture>
 </div>
 
@@ -28,9 +28,16 @@ This work is currently in development. If you find it useful, consider sharing i
 * Angular and redshift data are converted into 3D positions in comoving Mpc assuming [Planck2018](https://arxiv.org/pdf/1807.06209) fiducial cosmology.
 * **Rendering millions of galaxies interactively requires careful performance trade-offs**, especially for mobile devices. Coordinates are stored as Float16 in binary files to minimise load times. On the rendering side, additive blending combined with generalized Reinhard luminance tone mapping eliminates the need for depth-buffer sorting, while maintaining some visual quality.
 * Tracer densities are computed from Kernel Density Estimation (KDE) over comoving distances. In particular, redshift densities are computed by forwarding distance densities to avoid KDE over redshifts. Volume densities are compensated from tracer footprint to be meaningful, while radial densities are not.
-* Local group galaxies are rendered by first obtaining pictures cleaned from foreground and background stars and dusts, and deprojected in case of spiral galaxies. Pictures are then randomly sampled and extruded according to alpha channel to provide thickness.
 * For redshift-independent catalogs, luminosity distances are converted into comoving distances, again assuming [Planck2018](https://arxiv.org/pdf/1807.06209) fiducial cosmology, regardless of potential Hubble tensions.
+* Local group galaxies are rendered by first obtaining pictures cleaned from foreground and background stars and dusts, and deprojected in case of spiral galaxies. Pictures are then randomly sampled and extruded according to alpha channel to provide thickness.
+* Local stars are rendered at their measured position, color, and luminosity, so that their apparent brightness follows the observer's position, and only their on-screen size is floored for visibility purposes. The principal stars, spread into the 88 IAU constellation regions, are linked by typical Western constellation lines.
+* The Solar System is rendered in real time, based on a Kepler solver of orbital elements for the planets and on lunar series for the Moon, to guarantee sub-percent accurate positions for the century. The heliosphere is rendered with its more informed shape and orientation, along with the two further interstellar probes that crossed it.
 
+<div align="center">
+    <picture>
+        <img alt="Mobile Demo" src="assets/mobile_demo2.png" width="700">
+    </picture>
+</div>
 
 ## Acknowledgements
 This work has been deeply inspired by Andrei Kashcha's [software package visualizer](https://github.com/anvaka/pm), Charlie Hoey's [Gaia DR1 rendering](https://cdn.charliehoey.com/threejs-demos/gaia_dr1.html), and Claire Lamman's [DESI visuals](https://cmlamman.github.io/science_art.html). See also Otávio Alves' [fly-through](https://github.com/otavioalonso/spaceship/tree/main).
@@ -48,6 +55,6 @@ This work makes use of public data from multiple types and sources:
 * Main local group galaxy pictures: [M31](https://www.reddit.com/user/Correct_Presence_936/), [MW](https://www.esa.int/ESA_Multimedia/Images/2025/01/The_best_Milky_Way_map_by_Gaia), [M33](https://www.eso.org/public/images/eso1424a/), [LMC](https://www.esa.int/ESA_Multimedia/Images/2018/04/Large_Magellanic_Cloud), [SMC](https://www.esa.int/ESA_Multimedia/Images/2018/04/Small_Magellanic_Cloud), [M110](https://noirlab.edu/public/images/noao-m110/), [M32](https://pages.astronomy.ua.edu/gifimages/m32.html), [NGC 147](https://simbad.u-strasbg.fr/simbad/sim-id?Ident=NGC%20147), [NGC 185](https://simbad.u-strasbg.fr/simbad/sim-id?Ident=NGC+185), [NGC 6822](https://www.esa.int/Science_Exploration/Space_Science/Euclid/Euclid_s_view_of_irregular_galaxy_NGC_6822), [IC 1613](https://www.eso.org/public/images/eso1603a/), [IC 10](https://noirlab.edu/public/images/noirlab2013a/), [WLM](https://noirlab.edu/public/images/noao-wlm/).
 * Redshift-independent distance catalog from [CF4](https://iopscience.iop.org/article/10.3847/1538-4357/ac94d8).
 * Planets, Moon, and probes trajectories from [JPL Solar System Dynamics](https://ssd.jpl.nasa.gov/).
-* Stars from [AT-HYG](https://www.astronexus.com/projects/at-hyg) and constellations from [Stellarium](https://stellarium.org/).
+* Stars from [AT-HYG](https://www.astronexus.com/projects/at-hyg) and constellation lines from [Stellarium](https://stellarium.org/).
 
 
