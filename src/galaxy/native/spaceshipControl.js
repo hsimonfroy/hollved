@@ -11,8 +11,15 @@
  *   mobileState.forward/back/left/right → movement
  *   mobileState.yawLeft / pitchDown     → look
  *
- * update(delta) must be called every RAF frame (wired via renderer.js).
+ * BOTH thrust and view ease: every input sets a target RATE and update() rides onto
+ * it exponentially, under the law and constants satelliteControl exports, so the two
+ * modes feel alike.
+ *
+ * update(delta) must be called every RAF frame (wired via renderer.js) and returns
+ * whether the ship is still in motion, which is what keeps the RAF loop running.
  */
+import { EASE_TAU, EASE_SETTLE } from './satelliteControl.js';
+
 export default createSpaceshipControl;
 export var MIN_MOVE_SPEED = 1e-16; // Mpc/s — exported so cameraHUD can derive its log scale
 // export var MIN_MOVE_SPEED = 1e-5; // Mpc/s — exported so cameraHUD can derive its log scale
@@ -35,11 +42,41 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var mousePitchDown = 0;  // -1..1: positive = cursor below center   → pitch down
 
   var MOVE_SPEED = DEFAULT_MOVE_SPEED;   // Mpc/s, set by cursor
-  var ROT_SPEED      = 0.4;  // Q/E roll speed (rad/s)
+  var ROT_SPEED      = 0.4;  // full-deflection turn rate (rad/s), all three axes
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
   var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
 
   var tmpQ = new THREE.Quaternion();
+
+  // What the input asks for, and what the ship is actually doing. Translation is in
+  // CAMERA-LOCAL axes (X right, Y up, -Z forward) and in units of MOVE_SPEED;
+  // rotation is (pitch, yaw, roll) in units of ROT_SPEED. Both are therefore
+  // THROTTLES running 0..1 per axis whatever the scene scale, which is what lets the
+  // satellite's EASE_SETTLE be read here as a thousandth of full deflection.
+  // Camera-local means a coast follows the nose if you turn during it, the same
+  // thrust-vectoring the instantaneous version had.
+  var _velT = new THREE.Vector3(), _vel = new THREE.Vector3();
+  var _rotT = new THREE.Vector3(), _rot = new THREE.Vector3();
+  var _step = new THREE.Vector3();   // scratch: this frame's integral
+
+  // Ease a rate toward what the input asks for and return how far that carries us
+  // this frame -- the EXACT integral of the exponential approach,
+  //   S(v -> v') = vT*dt + tau*(v - v'),
+  // not v'*dt. Plain v'*dt is first order in the frame time, and at 20 fps -- which
+  // is what a DESI frame costs -- a step is 0.6 tau, landing a half-second burn 5%
+  // further than the same burn at 144 fps. This form telescopes, so a whole coast
+  // sums to exactly tau*v however the frames fall.
+  //
+  // One function for both thrust and view: a rate is a rate, and the two have to
+  // feel alike. The result is written into _step, so there is one scratch vector.
+  function easeRate(vel, velT, delta) {
+    _step.copy(vel);
+    if (!vel.equals(velT)) {
+      vel.lerp(velT, 1 - Math.exp(-delta / EASE_TAU));
+      if (vel.distanceTo(velT) < EASE_SETTLE) vel.copy(velT);
+    }
+    return _step.sub(vel).multiplyScalar(EASE_TAU).addScaledVector(velT, delta);
+  }
 
   // ── Mouse handlers ─────────────────────────────────────────────────────────
 
@@ -95,37 +132,52 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   // ── Per-frame update ───────────────────────────────────────────────────────
 
   function update(delta) {
-    if (!enabled) return;
+    if (!enabled) return false;
 
-    var moveMult = delta * MOVE_SPEED;
-    var rotMult  = delta * ROT_SPEED / 2; // quaternion rotation is angle/2
-
-    // Translation in camera-local space
-    var fwd   = (keyState.forward + mobileState.forward) - (keyState.back  + mobileState.back);
-    var right = (keyState.right   + mobileState.right  ) - (keyState.left  + mobileState.left);
-    var up    =  keyState.up - keyState.down;
-
-    _currentSpeed = Math.sqrt(fwd*fwd + right*right + up*up) * MOVE_SPEED;
-
-    if (fwd || right || up) {
-      camera.translateZ(-fwd   * moveMult);
-      camera.translateX( right * moveMult);
-      camera.translateY( up    * moveMult);
+    // Translation: the keys set a TARGET velocity and the ship eases onto it, so a
+    // tap accelerates and a release coasts to a stop instead of both snapping.
+    _velT.set(
+      (keyState.right + mobileState.right  ) - (keyState.left + mobileState.left),
+       keyState.up    - keyState.down,
+      (keyState.back  + mobileState.back   ) - (keyState.forward + mobileState.forward)
+    );
+    easeRate(_vel, _velT, delta);
+    // The EASED speed, so the HUD reads what the ship is doing, not what the key is
+    // asking for.
+    _currentSpeed = _vel.length() * MOVE_SPEED;
+    if (_step.x || _step.y || _step.z) {
+      camera.translateX(_step.x * MOVE_SPEED);
+      camera.translateY(_step.y * MOVE_SPEED);
+      camera.translateZ(_step.z * MOVE_SPEED);
     }
 
-    // Rotation: arrow keys + mouse + mobile joystick
-    var yaw   = (-keyState.yawRight  + keyState.yawLeft ) / 2 + mouseYawLeft   + mobileState.yawLeft;
-    var pitch = (-keyState.pitchDown + keyState.pitchUp ) / 2 - mousePitchDown  - mobileState.pitchDown;
-    var roll  =  -keyState.rollRight + keyState.rollLeft;
-
-    if (yaw || pitch || roll) {
-      tmpQ.set(pitch * 2 * rotMult, yaw * 2 * rotMult, roll * rotMult, 1).normalize();
+    // The view eases the same way, off the same law: the cursor's offset from centre
+    // (or an arrow key, or the joystick) sets a target turn RATE and the camera rides
+    // onto it, so a look starts and stops smoothly instead of snapping to full rate
+    // on the first frame and to nothing on release.
+    _rotT.set(
+      (-keyState.pitchDown + keyState.pitchUp ) / 2 - mousePitchDown - mobileState.pitchDown,
+      (-keyState.yawRight  + keyState.yawLeft ) / 2 + mouseYawLeft   + mobileState.yawLeft,
+       -keyState.rollRight + keyState.rollLeft
+    );
+    easeRate(_rot, _rotT, delta);
+    if (_step.x || _step.y || _step.z) {
+      // Small-angle quaternion: the vector part is the half-angle per axis, which is
+      // where roll's extra /2 comes from. Scaling is unchanged -- _step is simply the
+      // eased integral where the frame's plain `delta` used to be.
+      tmpQ.set(_step.x * ROT_SPEED, _step.y * ROT_SPEED, _step.z * ROT_SPEED / 2, 1)
+          .normalize();
       camera.quaternion.multiply(tmpQ);
     }
 
-    // Keep RAF alive one extra frame after stopping so _currentSpeed is
-    // computed as 0 before the loop idles (otherwise stale value lingers in HUD)
-    if (_currentSpeed > 0) markDirty();
+    // What keeps the RAF loop running, and it reports the RATES rather than the
+    // displacement on purpose: the first frame after idle carries delta = 0 and so
+    // moves nothing, and answering "did the camera move?" there would park the loop
+    // again before the motion could ever start. The targets are in the test as well
+    // as the current rates, because on that very frame only the target is non-zero.
+    // markDirty() cannot do this job -- this frame's own render consumes it.
+    return _vel.lengthSq() > 0 || _velT.lengthSq() > 0 ||
+           _rot.lengthSq() > 0 || _rotT.lengthSq() > 0;
   }
 
   // ── Enable / disable ───────────────────────────────────────────────────────
@@ -136,6 +188,8 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
       isMouseLooking = false;
       mouseYawLeft = mousePitchDown = 0;
       _currentSpeed = 0;
+      _vel.set(0, 0, 0);  _velT.set(0, 0, 0);
+      _rot.set(0, 0, 0);  _rotT.set(0, 0, 0);
       for (var k in mobileState) mobileState[k] = 0;
     }
   }

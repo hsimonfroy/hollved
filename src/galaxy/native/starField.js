@@ -40,6 +40,15 @@ var STAR_FLUX = 1200.0;
 // Centauri, the nearest star to the Sun, is not drawn at all.
 var STAR_MAG_LIMIT = 12.3;
 
+// Past this distance from the Sun the BRIGHTEST star in the catalogue is already
+// fainter than STAR_MAG_LIMIT, so every vertex fails the shader's flux cull and the
+// draw call puts nothing on screen -- 119,477 vertex shader runs for an empty frame.
+// The cull saves the FRAGMENTS (it clips the vertex out of the clip volume, which is
+// the standard way to drop a point, since GLSL has no discard in a vertex shader);
+// only skipping the draw saves the vertices. Derived at load from the data and the
+// limit above, so it cannot drift from either.
+var starCutoffPc = Infinity;
+
 // WHICH stars get a name. Two clauses, because "notable" is genuinely two things:
 // bright enough to be a landmark in the sky, or close enough to be a neighbour.
 // Neither implies the other -- Deneb is magnitude 1.3 at 433 pc, Barnard's Star is
@@ -215,6 +224,11 @@ export default function createStarField(unrenderObj, markDirty, labels) {
     geo.setAttribute('aAbsMag',     new THREE.BufferAttribute(new Float32Array(magBuf), 1));
     geo.setAttribute('customColor', new THREE.BufferAttribute(new Uint8Array(colBuf), 3, true));
     geo.computeBoundingSphere();
+
+    // flux ~ 10^(-0.4*M)/d^2 falls below the limit's flux at d = 10^((lim-M)/5 + 1) pc
+    var mag = new Float32Array(magBuf), brightest = Infinity;
+    for (var mi = 0; mi < mag.length; ++mi) if (mag[mi] < brightest) brightest = mag[mi];
+    starCutoffPc = Math.pow(10, (STAR_MAG_LIMIT - brightest) / 5 + 1);
 
     stars = new THREE.Points(geo, createStarMaterial(2 * STAR_RADIUS_PC * PC_TO_MPC, {
       magnitude:  true,
@@ -595,6 +609,7 @@ export default function createStarField(unrenderObj, markDirty, labels) {
       orbit.material.uniforms.uOpacity.value = ORBIT_ALPHA * o;
     }
     labels.setGroupVisible('stars', on);
+    if (stars) stars.visible = _visible && d < starCutoffPc;
   }
   unrenderObj.onAfterToneMap(updateFade);
 

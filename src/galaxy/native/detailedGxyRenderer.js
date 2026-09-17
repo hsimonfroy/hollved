@@ -55,6 +55,24 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
   // MIN_PART_ALPHA instead, which costs nothing.
   var MIN_PART_PX             = 1.5;
   var MIN_PART_ALPHA          = 0.3;   // what a fully shrunk grain keeps of its own alpha
+  // Below this apparent DIAMETER the cloud is not submitted at all -- the same rule
+  // the heliosphere (MIN_PX 4) and the Sun's orbit (ORBIT_MIN_PX 8) already use on
+  // the annotations, which the point clouds never had.
+  //
+  // It is needed because the shader cannot do this job here. Far away uShrink
+  // saturates at 1, so a grain keeps its baked alpha and its size is floored at
+  // MIN_PART_PX: unlike the star field, whose flux cull clips every vertex at that
+  // range, these grains genuinely rasterise. Measured at the default 3.2 Gpc view,
+  // the local layers submitted 880,995 points in 14 draw calls -- 9% on top of
+  // DESI's 9,751,955 -- to paint a quarter-pixel speck.
+  //
+  // A QUARTER pixel, not the 4-8 those two use, because the grain floor and the
+  // dwarfs both push the other way: MIN_PART_PX keeps a cloud drawing a visible dot
+  // long after its true size is sub-pixel, and the dwarfs are genuinely tiny FROM
+  // EARTH -- IC 10 is 1.5 px at 1080p and 0.8 px in a small window -- so anything
+  // near 1 px would hide them exactly where they are meant to be seen. At 0.25 px
+  // every dwarf keeps a 3x margin.
+  var MIN_GALAXY_PX           = 0.25;
 
   var allPoints = [];
   var _visible  = true;
@@ -66,6 +84,24 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
       pts.material.uniforms.uViewportHeight.value = viewportHeight;
     });
   });
+
+  // Decided BEFORE the frame renders, from renderer.js's per-frame updater -- the
+  // same slot updateRulers() runs in, and for the same reason. Not each cloud's own
+  // onBeforeRender: that runs after the render list is built, so a cloud that hid
+  // itself there could never run the check again to come back. Not onAfterToneMap
+  // either: measured there, a galaxy coming into view read visible = true while the
+  // frame had already drawn 1 call, and it would stay undrawn until something else
+  // forced a redraw, since a markDirty() from there is cleared by that same frame.
+  function updateVisibility() {
+    if (!allPoints.length) return;
+    var camera   = unrenderObj.camera();
+    var pxPerRad = viewportHeight / (2 * Math.tan(camera.fov * Math.PI / 360));
+    allPoints.forEach(function(pts) {
+      var diam = 2 * pts.userData.a;   // PHYSICAL, not the PADDING_FACTOR-inflated one
+      pts.visible = _visible &&
+        diam / pts.position.distanceTo(camera.position) * pxPerRad >= MIN_GALAXY_PX;
+    });
+  }
 
   // The camera's Mahalanobis radius in this galaxy's ellipsoid: exact, and one
   // line, because a normalised radius needs no closest-point solve.
@@ -255,8 +291,11 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
   }
 
   return {
+    updateVisibility: updateVisibility,
     setVisible: function(visible) {
       _visible = visible;
+      // updateVisibility() re-imposes the distance rule on the next frame; this only
+      // has to make "off" take effect immediately.
       allPoints.forEach(function(pts) { pts.visible = visible; });
       applyLabelVisibility();
       markDirty();

@@ -35,6 +35,16 @@ import { getLocalFrame } from './coordUtils.js';
 
 export default createSatelliteControl;
 
+// The easing law, shared with spaceshipControl so the two modes feel alike: a gap
+// closes 63% of the way in EASE_TAU, 95% in three times that, and snaps once what
+// is left is under EASE_SETTLE. Both modes ease a RELATIVE quantity -- an angle, a
+// log radius, a pivot measured against the orbit radius, a velocity in units of the
+// throttle -- so one threshold serves them all. An absolute one would be meaningless
+// in a scene spanning 25 orders of magnitude. Lower EASE_TAU toward 0 for the old
+// instant response.
+export var EASE_TAU    = 0.08; // seconds
+export var EASE_SETTLE = 1e-3;
+
 function createSatelliteControl(camera, container, markDirty, keyState) {
   // window.THREE is set by renderer.js before this function is ever called
   var THREE = window.THREE;
@@ -47,6 +57,20 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   var phi    = Math.PI / 2;  // polar from upAxis (0 = top, π = bottom)
   var upAxis = new THREE.Vector3(0, 1, 0); // orbit north pole
   var fwdRef = new THREE.Vector3(0, 0, 1); // theta=0 reference direction
+
+  // Where input wants the orbit. update() eases the displayed orbit above toward
+  // it, and every getter still returns the DISPLAYED values, so the URL, the slice
+  // and a mode switch all describe what is on screen, not where it is heading.
+  var thetaT = theta, phiT = phi, logRT = Math.log(radius);
+  var pivotT = new THREE.Vector3();
+  // Roll is the one eased quantity with no target of its own: it rotates upAxis
+  // around the camera's CURRENT forward, so a total angle would mean nothing once
+  // the orbit has eased somewhere else. Only the gap matters, so it IS the gap --
+  // the angle still owed. That also keeps it from growing without bound over a long
+  // session, which an accumulating target would.
+  var rollOwed = 0;
+  var easing  = false;
+  var easeAge = 0;           // seconds since input last moved a target
 
   // Mouse drag state
   var isLeftDown  = false;
@@ -79,6 +103,9 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   var _right = new THREE.Vector3();
   var _step  = new THREE.Vector3();
   var _axis  = new THREE.Vector3();   // flatForward's own, so it never trades scratch
+  var _rollAxis = new THREE.Vector3();  // applyRoll's own, for the same reason
+  var _rollQ    = new THREE.Quaternion();
+  var _seed     = new THREE.Vector3();
 
   container.addEventListener('mousedown',    onMouseDown,  false);
   container.addEventListener('wheel',        onWheel,      { passive: false });
@@ -90,7 +117,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     update:            update,
     setEnabled:        setEnabled,
     getPivot:          function() { return pivot; },
-    setPivot:          function(x, y, z) { pivot.set(x, y, z); updateCamera(); },
+    setPivot:          function(x, y, z) { pivot.set(x, y, z); syncTargets(); updateCamera(); },
     getRadius:         function() { return radius; },
     getUpAxis:         function() { return upAxis; },
     restoreFromAzAlt:  restoreFromAzAlt,
@@ -109,8 +136,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   // ── Keyboard-driven per-frame update ──────────────────────────────────────
 
   function update(delta) {
-    if (!enabled || !keyState) return;
-    var hasMoved = false;
+    if (!enabled || !keyState) return false;
 
     // WASD / Space / Shift → translate the pivot in the ORBIT PLANE.
     //
@@ -121,51 +147,123 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     // it, and up along the orbit axis. Driving from camera-local axes instead, as
     // this used to, sent W diagonally out of the plane the moment the view was
     // tilted -- at 45 deg of altitude, half of "forward" was "up".
-    var step   = PAN_RATE * radius * delta;
-    var dFwd   = (keyState.forward - keyState.back ) * step;
-    var dRight = (keyState.right   - keyState.left ) * step;
-    var dUp    = (keyState.up      - keyState.down ) * step;
-    if (dFwd || dRight || dUp) {
+    // Each block tests the KEY, never the increment it produces. The first frame
+    // after idle carries delta = 0, so every increment below is 0 on it: keying off
+    // them would skip wake(), the loop would park on that frame, and the motion
+    // could never start. It only ever appeared to work because renderer.js also ORs
+    // in baseControl.isActive() -- the same accident that broke spaceship
+    // click-to-look. This makes the control self-sufficient.
+    var kFwd = keyState.forward - keyState.back;
+    var kRgt = keyState.right   - keyState.left;
+    var kUp  = keyState.up      - keyState.down;
+    if (kFwd || kRgt || kUp) {
+      var step = PAN_RATE * radius * delta;
       flatForward(_fwd);
       _right.crossVectors(_fwd, upAxis);   // right = forward x up, the camera convention
       _step.set(0, 0, 0)
-        .addScaledVector(_fwd,   dFwd)
-        .addScaledVector(_right, dRight)
-        .addScaledVector(upAxis, dUp);
-      pivot.add(_step);
-      hasMoved = true;
+        .addScaledVector(_fwd,   kFwd * step)
+        .addScaledVector(_right, kRgt * step)
+        .addScaledVector(upAxis, kUp  * step);
+      pivotT.add(_step);
+      wake();
     }
 
     // Arrow keys → orbit (same as left-drag)
-    var dTheta = (keyState.yawLeft  - keyState.yawRight ) * ORBIT_SPEED * delta;
-    var dPhi   = (keyState.pitchUp - keyState.pitchDown) * ORBIT_SPEED * delta;
-    if (dTheta || dPhi) {
-      theta += dTheta;
-      phi    = Math.max(0.01, Math.min(Math.PI - 0.01, phi + dPhi));
-      hasMoved = true;
+    var kYaw   = keyState.yawLeft - keyState.yawRight;
+    var kPitch = keyState.pitchUp - keyState.pitchDown;
+    if (kYaw || kPitch) {
+      thetaT += kYaw * ORBIT_SPEED * delta;
+      phiT    = Math.max(0.01, Math.min(Math.PI - 0.01,
+                                        phiT + kPitch * ORBIT_SPEED * delta));
+      wake();
     }
 
-    // Q/E → rotate upAxis around camera forward (tilts the orbit horizon)
-    var dRoll = (keyState.rollRight - keyState.rollLeft) * ROLL_SPEED * delta;
-    if (dRoll) {
-      var fwdDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-      upAxis.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(fwdDir, dRoll)).normalize();
-      // Re-orthogonalize fwdRef against the rotated upAxis
-      var d = fwdRef.dot(upAxis);
-      fwdRef.x -= upAxis.x * d;
-      fwdRef.y -= upAxis.y * d;
-      fwdRef.z -= upAxis.z * d;
-      if (fwdRef.lengthSq() < 1e-6) {
-        var seed = new THREE.Vector3(1, 0, 0);
-        if (Math.abs(upAxis.dot(seed)) > 0.9) seed.set(0, 0, 1);
-        fwdRef.crossVectors(seed, upAxis).normalize();
-      } else {
-        fwdRef.normalize();
+    // Q/E → tilt the orbit horizon. The key only adds to what is OWED; the ease
+    // block below pays it out, on the same law as every other input.
+    var kRoll = keyState.rollRight - keyState.rollLeft;
+    if (kRoll) {
+      rollOwed += kRoll * ROLL_SPEED * delta;
+      wake();
+    }
+
+    if (easing) {
+      // Frame-rate independent: the same glide at 20 fps as at 144, which matters
+      // when a frame carries millions of particles.
+      var k    = 1 - Math.exp(-delta / EASE_TAU);
+      var logR = Math.log(radius);
+      theta += (thetaT - theta) * k;
+      phi   += (phiT   - phi)   * k;
+      // In LOG radius, so a zoom glide is a constant ratio per frame. Easing the
+      // radius itself would spend the whole glide near the larger value and leap
+      // at the end -- across 25 orders of magnitude, no easing at all.
+      radius = Math.exp(logR + (logRT - logR) * k);
+      pivot.lerp(pivotT, k);
+      // Pay out k of the owed roll and keep the rest -- identical to the lines
+      // above, since easing a value toward a target IS draining the gap between
+      // them. Easing the owed ANGLE is also the same first-order response as
+      // easing the RATE, which is spaceshipControl's form: with p the owed angle,
+      // p' = R - p/tau, so the applied rate r = p/tau obeys r' = (R - r)/tau
+      // either way. Same feel, and here it needs no second variable.
+      if (rollOwed) { applyRoll(rollOwed * k); rollOwed *= 1 - k; }
+      easeAge += delta;
+      // Every test is relative -- angles are scale-free, the pivot is measured
+      // against the radius -- because an absolute epsilon means nothing in this
+      // scene. The age cap guarantees the loop idles even where float64 cannot
+      // resolve the last step (a tiny orbit around a far pivot) instead of
+      // rendering millions of particles forever.
+      // `delta > 0` because a frame in which no time passed has converged to
+      // nothing: the first frame after idle carries delta = 0, and on it a held key
+      // has not moved its target yet, so every gap below reads zero and the ease
+      // would declare itself finished before it began -- parking the loop and
+      // swallowing the keypress.
+      if (easeAge > 20 * EASE_TAU ||
+          (delta > 0 &&
+           Math.abs(thetaT - theta) < EASE_SETTLE && Math.abs(phiT - phi) < EASE_SETTLE &&
+           Math.abs(logRT - Math.log(radius)) < EASE_SETTLE &&
+           Math.abs(rollOwed) < EASE_SETTLE &&
+           pivot.distanceTo(pivotT) < EASE_SETTLE * radius)) {
+        theta = thetaT; phi = phiT; radius = Math.exp(logRT); pivot.copy(pivotT);
+        if (rollOwed) { applyRoll(rollOwed); rollOwed = 0; }
+        easing = false;
       }
-      hasMoved = true;
+      // Every input now routes through wake() and is paid out here, so this is the
+      // only place the camera moves -- there is no longer a `hasMoved` flag to keep
+      // in step with it. The roll was the last thing that bypassed the ease.
+      updateCamera();
     }
+    return easing;
+  }
 
-    if (hasMoved) updateCamera();
+  function wake() { easing = true; easeAge = 0; markDirty(); }
+
+  // Rotate the orbit frame around the camera's CURRENT forward. Was inline in
+  // update() and allocated a Vector3, a Quaternion and sometimes a seed every frame
+  // a key was held -- the very thing the scratch vectors above exist to avoid.
+  function applyRoll(angle) {
+    _rollAxis.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    upAxis.applyQuaternion(_rollQ.setFromAxisAngle(_rollAxis, angle)).normalize();
+    // Re-orthogonalize fwdRef against the rotated upAxis
+    var d = fwdRef.dot(upAxis);
+    fwdRef.x -= upAxis.x * d;
+    fwdRef.y -= upAxis.y * d;
+    fwdRef.z -= upAxis.z * d;
+    if (fwdRef.lengthSq() < 1e-6) {
+      _seed.set(1, 0, 0);
+      if (Math.abs(upAxis.dot(_seed)) > 0.9) _seed.set(0, 0, 1);
+      fwdRef.crossVectors(_seed, upAxis).normalize();
+    } else {
+      fwdRef.normalize();
+    }
+  }
+
+  // Programmatic moves -- URL restore, mode switch, setPivot -- JUMP; only input
+  // glides. So they pin the targets to the displayed orbit, or the next update()
+  // would ease the camera straight back to wherever input last left it.
+  function syncTargets() {
+    thetaT = theta; phiT = phi; logRT = Math.log(radius);
+    pivotT.copy(pivot);
+    rollOwed = 0;     // a programmatic move must not inherit a pending tilt
+    easing = false;
   }
 
   // ── Restore from az/alt (called by renderer.js on URL load/change) ──────────
@@ -196,6 +294,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
       fwdRef.crossVectors(seed, upAxis).normalize();
     }
     theta = 0;
+    syncTargets();
     updateCamera();
   }
 
@@ -239,6 +338,7 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     }
     theta = 0;
 
+    syncTargets();
     updateCamera();
   }
 
@@ -316,9 +416,9 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   }
 
   function applyRotate(dx, dy) {
-    theta -= dx * ROT_SPEED;
-    phi    = Math.max(0.01, Math.min(Math.PI - 0.01, phi - dy * ROT_SPEED));
-    updateCamera();
+    thetaT -= dx * ROT_SPEED;
+    phiT    = Math.max(0.01, Math.min(Math.PI - 0.01, phiT - dy * ROT_SPEED));
+    wake();
   }
 
   function applyPan(dx, dy) {
@@ -329,14 +429,16 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
     var scale = radius * PAN_SPEED;
     right.multiplyScalar(-dx * scale);
     up.multiplyScalar(dy * scale);
-    pivot.add(right);
-    pivot.add(up);
-    updateCamera();
+    pivotT.add(right);
+    pivotT.add(up);
+    wake();
   }
 
   function applyZoom(delta) {
-    radius = Math.max(MIN_RADIUS, radius * Math.exp(delta * ZOOM_SPEED));
-    updateCamera();
+    // Accumulated on the TARGET, so scrolling several notches during a glide adds
+    // up instead of each notch compounding from wherever the glide had got to.
+    logRT = Math.max(Math.log(MIN_RADIUS), logRT + delta * ZOOM_SPEED);
+    wake();
   }
 
   // ── Touch API (called by mobileControl.js) ────────────────────────────────
@@ -349,8 +451,8 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   function onTouchZoom(scale) {
     if (!enabled) return;
     // scale = newDist / prevDist: > 1 means fingers spread (zoom in = smaller radius)
-    radius = Math.max(MIN_RADIUS, radius / scale);
-    updateCamera();
+    logRT = Math.max(Math.log(MIN_RADIUS), logRT - Math.log(scale));
+    wake();
   }
 
   function onTouchPan(dx, dy) {

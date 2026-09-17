@@ -308,18 +308,22 @@ function sceneRenderer(container) {
       satelliteControl = createSatelliteControl(cam, container, renderer.markDirty, baseControl.keyState);
       spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty);
 
-      // Wire both controls into the per-frame update slot exposed by unrender.
-      // baseControl.isActive() keeps the loop alive while keys are held
-      // (camera may not have moved yet on the very first key-down frame).
+      // Wire both controls into the per-frame update slot exposed by unrender. It
+      // returns whether anything is still in motion -- a held key, a coasting ship,
+      // a gliding orbit -- so the loop keeps running on a frame where the camera
+      // has not moved yet. Both updates always run; neither may be short-circuited.
       renderer.input().update = function(delta) {
-        spaceshipControl.update(delta);
-        satelliteControl.update(delta);
+        var flying  = spaceshipControl.update(delta);
+        var gliding = satelliteControl.update(delta);
         if (currentMode === 'spaceship') {
           appEvents.cameraSpeedUpdate.fire(spaceshipControl.currentSpeed, spaceshipControl.movementSpeed);
         }
-        if (baseControl.isActive()) renderer.markDirty();
         if (sliceEnabled && currentMode === 'satellite') applySlice();
         if (rulerObjects.length) updateRulers();
+        // Same slot as the rulers, and for the same reason: it decides what is worth
+        // submitting, so it has to run BEFORE the frame is drawn.
+        if (detailedGalaxies) detailedGalaxies.updateVisibility();
+        return flying || gliding || baseControl.isActive();
       };
 
       if (currentMode === 'satellite') {

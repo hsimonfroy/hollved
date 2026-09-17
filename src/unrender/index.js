@@ -87,10 +87,13 @@ function unrender(container, options) {
   return api;
 
   function frame(time) {
-    // Update controls first (may move camera)
+    // Update controls first (may move camera). A control still in motion -- a held
+    // key, a gliding orbit -- returns true, which keeps the loop running even on a
+    // frame where the camera did not move. A markDirty() from in there cannot:
+    // this frame's own render consumes it.
     var delta = lastFrameTime ? Math.min((time - lastFrameTime) / 1000, 0.1) : 0;
     lastFrameTime = time;
-    input.update(delta);
+    var busy = input.update(delta);
 
     for (var i = 0; i < rafCallbacks.length; ++i) {
       rafCallbacks[i](time);
@@ -115,10 +118,14 @@ function unrender(container, options) {
     }
 
     // Continue loop only while there is work; otherwise pause until markDirty()
-    if (moved || _needsRender || rafCallbacks.length > 0) {
+    if (moved || _needsRender || busy || rafCallbacks.length > 0) {
       lastFrame = requestAnimationFrame(frame);
     } else {
       _loopRunning = false;
+      // So the first frame after idle measures no elapsed time rather than the
+      // whole idle gap, which the 0.1 s clamp turned into a jump at the start of
+      // every drag, glide and keypress.
+      lastFrameTime = 0;
     }
   }
 
