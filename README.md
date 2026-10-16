@@ -14,7 +14,8 @@ This work is currently in development. If you find it useful, consider sharing i
 
 ## Features
 * Visualize the evolution of spectroscopic surveys, that are mapping the Universe since the end of the 1970s.
-* Orbit or fly-through the galaxies. Get a grasp on the greatness of cosmic scales, from the Milky-Way to the Cosmic Microwave Background (CMB) and the observable Universe.
+* Orbit or fly-through the galaxies. Get a grasp on the greatness of cosmic scales, from the Earth via the Solar System and the Milky Way to the Cosmic Microwave
+Background (CMB) and the observable Universe.
 * Look at survey footprints, the large-scale structures of the cosmic web, and redshift-space distortions like the finger of god effect.  
 
 <div align="center">
@@ -31,7 +32,7 @@ This work is currently in development. If you find it useful, consider sharing i
 * For redshift-independent catalogs, luminosity distances are converted into comoving distances, again assuming [Planck2018](https://arxiv.org/pdf/1807.06209) fiducial cosmology, regardless of potential Hubble tensions.
 * Local group galaxies are rendered by first obtaining pictures cleaned from foreground and background stars and dusts, and deprojected in case of spiral galaxies. Pictures are then randomly sampled and extruded according to alpha channel to provide thickness.
 * Local stars are rendered at their measured position, color, and luminosity, so that their apparent brightness follows the observer's position, and only their on-screen size is floored for visibility purposes. The principal stars, spread into the 88 IAU constellation regions, are linked by typical Western constellation lines.
-* The Solar System is rendered in real time, based on a Kepler solver of orbital elements for the planets and on lunar series for the Moon, to guarantee sub-percent accurate positions for the century. The heliosphere is rendered with its more informed shape and orientation, along with the two further interstellar probes that crossed it.
+* **The Solar System is rendered in real time**, based on a Kepler solver of orbital elements for the planets and on lunar series for the Moon, to guarantee sub-percent accurate positions for the century. The heliosphere is rendered with its more informed shape and orientation, along with the two further interstellar probes that crossed it.
 
 <div align="center">
     <picture>
