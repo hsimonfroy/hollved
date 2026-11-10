@@ -31,7 +31,8 @@
  *   onTouchZoom(scale)    — scale = newPinchDist / prevPinchDist
  *   onTouchPan(dx, dy)
  */
-import { getLocalFrame } from './coordUtils.js';
+import * as THREE from 'three';
+import { getLocalFrame } from '../coordUtils.js';
 
 export default createSatelliteControl;
 
@@ -46,8 +47,6 @@ export var EASE_TAU    = 0.08; // seconds
 export var EASE_SETTLE = 1e-3;
 
 function createSatelliteControl(camera, container, markDirty, keyState) {
-  // window.THREE is set by renderer.js before this function is ever called
-  var THREE = window.THREE;
   var enabled = false;
 
   // Spherical coordinates in the custom (upAxis, fwdRef) basis

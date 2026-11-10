@@ -1,8 +1,8 @@
-import appEvents from '../service/appEvents.js';
+import appEvents from './appEvents.js';
 import eventify from 'ngraph.events';
 import scene from '../store/scene.js';
 import qs from 'qs';
-import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from './coordUtils.js';
+import { cartToRaDecR, raDec2Cart, unitVecToRaDec, raDec2UnitVec } from '../render/coordUtils.js';
 
 // Distances and speeds span 25 orders of magnitude — a spaceship crossing a
 // planet's surface at 1e-16 Mpc/s, a satellite orbit at 1e4 Mpc. Fixed-point

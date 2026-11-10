@@ -1,6 +1,6 @@
-var THREE       = require('three');
-var starTexture = require('./particle-texture.js');
-var slice       = require('./slice.js');
+import * as THREE from 'three';
+import starTexture from './sprite.js';
+import slice from './slice.js';
 
 /**
  * A point light source drawn at a fixed SCREEN size: star catalogues, and any body
@@ -25,7 +25,6 @@ var slice       = require('./slice.js');
  *                        `magLimit` the faintest magnitude worth a fragment, and
  *                        `minPx` the size floor.
  */
-module.exports = createStarMaterial;
 
 // Apparent brightness straight from the inverse-square law, with the magnitude
 // definition folded out so no logarithm survives into the shader:
@@ -137,7 +136,7 @@ var FRAG = [
   '}'
 ].join('\n');
 
-function createStarMaterial(size, opts) {
+export default function createStarMaterial(size, opts) {
   opts = opts || {};
   var magnitude = !!opts.magnitude;
 

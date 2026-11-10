@@ -18,7 +18,7 @@
  */
 export default createBaseControl;
 
-import appEvents from '../service/appEvents.js';
+import appEvents from '../../service/appEvents.js';
 
 function createBaseControl(markDirty) {
   var keyState = {

@@ -1,6 +1,7 @@
+import * as THREE from 'three';
 import config from '../../config.js';
 import { galaxyFrame } from './coordUtils.js';
-import slice from '../../unrender/lib/slice.js';
+import slice from './slice.js';
 
 /**
  * @param {object}   labels        the scene-wide label layer; galaxy names go in
@@ -11,10 +12,10 @@ import slice from '../../unrender/lib/slice.js';
  *                                 Sun's orbit in the same plane this disc is
  *                                 drawn in. One manifest fetch, one definition.
  */
-export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
+export default function createDetailedGalaxies(engine, markDirty, labels,
                                                onGalaxyFrame) {
-  var container      = unrenderObj.getContainer();
-  var scene          = unrenderObj.scene();
+  var container      = engine.getContainer();
+  var scene          = engine.scene();
   var viewportHeight = container.clientHeight || 600;
   var PADDING_FACTOR          = 1.5; // galaxy ~2/3 of image → ×3/2 so diam = physical world size
   var RES_FACTOR              = 10;   // resolution in px/kpc
@@ -78,14 +79,14 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
   var _visible  = true;
   var _radarVisible = false;
 
-  unrenderObj.onResize(function() {
+  engine.onResize(function() {
     viewportHeight = container.clientHeight || 600;
     allPoints.forEach(function(pts) {
       pts.material.uniforms.uViewportHeight.value = viewportHeight;
     });
   });
 
-  // Decided BEFORE the frame renders, from renderer.js's per-frame updater -- the
+  // Decided BEFORE the frame renders, from renderer.js's before-render hook -- the
   // same slot updateRulers() runs in, and for the same reason. Not each cloud's own
   // onBeforeRender: that runs after the render list is built, so a cloud that hid
   // itself there could never run the check again to come back. Not onAfterToneMap
@@ -94,7 +95,7 @@ export default function createDetailedGalaxies(unrenderObj, markDirty, labels,
   // forced a redraw, since a markDirty() from there is cleared by that same frame.
   function updateVisibility() {
     if (!allPoints.length) return;
-    var camera   = unrenderObj.camera();
+    var camera   = engine.camera();
     var pxPerRad = viewportHeight / (2 * Math.tan(camera.fov * Math.PI / 360));
     allPoints.forEach(function(pts) {
       var diam = 2 * pts.userData.a;   // PHYSICAL, not the PADDING_FACTOR-inflated one

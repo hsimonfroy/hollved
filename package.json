@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/hsimonfroy/hollved",
   "devDependencies": {
-    "@babel/core": "^7.24.0",
+    "@babel/core": "^7.29.13",
     "@babel/preset-env": "^7.24.0",
     "@babel/preset-react": "^7.24.0",
     "babel-loader": "^8.3.0",
@@ -33,19 +33,18 @@
     "less-loader": "^11.1.0",
     "mini-css-extract-plugin": "^2.8.1",
     "style-loader": "^3.3.4",
-    "webpack": "^5.91.0",
+    "webpack": "^5.112.2",
     "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^5.2.3"
   },
   "dependencies": {
-    "bluebird": "^2.9.25",
-    "ngraph.events": "0.0.3",
-    "qs": "^6.15.0",
+    "ngraph.events": "^1.4.0",
+    "qs": "^6.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.0",
-    "three": "^0.171.0",
-    "troika-three-text": "^0.52.4",
+    "three": "^0.187.0",
+    "troika-three-text": "^0.53.1",
     "webgl-enabled": "^1.0.3"
   }
 }

@@ -20,7 +20,7 @@
  */
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
-import slice from '../../unrender/lib/slice.js';
+import slice from './slice.js';
 
 // facing = |dot(N, V)| → 0 at the silhouette, 1 where the tube faces the camera.
 // pow(2) gives a Gaussian-like radial falloff that reaches 0 at the silhouette,
@@ -201,7 +201,7 @@ export function createOrbitLineMaterial(opacity, color) {
   return mat;
 }
 
-// Relative-to-eye, the star field's transform verbatim -- star-material.js
+// Relative-to-eye, the star field's transform verbatim -- starMaterial.js
 // carries the argument in full. Short version: `modelViewMatrix * position`
 // cancels catastrophically once the camera closes on a vertex whose coordinates
 // are large, and the constellation figures join stars whose coordinates are
@@ -240,7 +240,7 @@ var RTE_LINE_VERT = [
 // vertexColors attribute. It is a define rather than an always-on attribute
 // because GLSL cannot default one: a shader that reads `aAlpha` gets zero, not
 // one, from geometry that does not supply it -- and an additive line at alpha
-// zero is simply absent. Same reason star-material.js gates MAGNITUDE.
+// zero is simply absent. Same reason starMaterial.js gates MAGNITUDE.
 var RTE_LINE_FRAG = [
   'uniform vec3  uColor;',
   'uniform float uOpacity;',

@@ -6,7 +6,7 @@ import Info from './info.jsx';
 import TracerSelector from './tracerSelector.jsx';
 import CameraHUD from './cameraHUD.jsx';
 import LoadingIndicator from './loadingIndicator.jsx';
-import createNativeRenderer from './native/renderer.js';
+import createNativeRenderer from './render/renderer.js';
 import appEvents from './service/appEvents.js';
 
 var webglEnabled = require('webgl-enabled')();

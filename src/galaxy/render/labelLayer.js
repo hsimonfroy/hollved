@@ -29,7 +29,7 @@
  */
 import * as THREE from 'three';
 import { makeRadarLabel, LABEL_STYLE_NAME } from './radarStyle.js';
-import slice from '../../unrender/lib/slice.js';
+import slice from './slice.js';
 
 var DEG2RAD = Math.PI / 180;
 
@@ -72,21 +72,21 @@ export function rankForMagnitude(mag) {
 }
 
 /**
- * @param {object}   unrenderObj  supplies postScene, camera, container, hooks
+ * @param {object}   engine  supplies postScene, camera, container, hooks
  * @param {function} markDirty    wake the RAF loop (troika syncs async)
  * @param {object}  [opts]  default zoom window, in apparent DIAMETER:
  *   minDiamPx   hide once the object is this small -- too far out to matter
  *   maxDiamFrac hide once it exceeds this fraction of the viewport height --
  *               you are inside it, not looking at it
  */
-export default function createLabelLayer(unrenderObj, markDirty, opts) {
+export default function createLabelLayer(engine, markDirty, opts) {
   opts = opts || {};
   var minDiamPx   = opts.minDiamPx   !== undefined ? opts.minDiamPx   : 0;
   var maxDiamFrac = opts.maxDiamFrac !== undefined ? opts.maxDiamFrac : Infinity;
 
-  var scene     = unrenderObj.postScene();
-  var camera    = unrenderObj.camera();
-  var container = unrenderObj.getContainer();
+  var scene     = engine.postScene();
+  var camera    = engine.camera();
+  var container = engine.getContainer();
   var viewportWidth  = container.clientWidth  || 800;
   var viewportHeight = container.clientHeight || 600;
 
@@ -99,7 +99,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
   var _placed = {};    // declutter set -> array of accepted boxes
   var _counts = {};    // declutter set -> live entries in it
 
-  unrenderObj.onResize(function() {
+  engine.onResize(function() {
     viewportWidth  = container.clientWidth  || 800;
     viewportHeight = container.clientHeight || 600;
   });
@@ -142,7 +142,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
    *              neighbour.
    *   sliced     false to ignore the slice wedge. The solar bodies opt out: their
    *              names are an inner-system annotation, and a wedge cut through the
-   *              planets would be nonsense — the same exclusion star-material makes
+   *              planets would be nonsense — the same exclusion starMaterial makes
    *              by gating its slice behind #ifdef MAGNITUDE.
    *   depthFade  false to opt out of the nearest-relative fade. That fade is a
    *              DEPTH CUE -- "this label is further from you than that one" -- and
@@ -287,7 +287,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
       rec.label.outlineOpacity = rec.baseOutline * alpha;
     }
   }
-  unrenderObj.onAfterToneMap(update);
+  engine.onAfterToneMap(update);
 
   function byRank(a, b) { return b.rank - a.rank; }
 
@@ -336,7 +336,7 @@ export default function createLabelLayer(unrenderObj, markDirty, opts) {
     setGroupAlpha: function(name, a) { group(name).alpha = a; },
 
     dispose: function() {
-      unrenderObj.offAfterToneMap(update);
+      engine.offAfterToneMap(update);
       items.forEach(function(it) {
         scene.remove(it.label);
         it.label.dispose();

@@ -5,8 +5,10 @@
  *   <name>/<tracerId>/meta.json      — optional, flat { id, name, count, color }
  *
  * Fires on the global event bus:
- *   appEvents.positionsDownloaded — merged Uint16Array of all positions (raw float16 bits)
- *   appEvents.tracerRangesReady   — array of { id, name, color, startNode, nodeCount }
+ *   appEvents.positionsDownloaded — array of { id, color, positions }, one per
+ *                                   tracer, positions as raw float16 bits
+ *   appEvents.tracerRangesReady   — array of { id, name, color, count }, for the UI.
+ *                                   Kept apart so React never holds the buffers.
  */
 
 import config from '../../config.js';
@@ -24,7 +26,13 @@ async function loadGraph(name, progress) {
   var tracers = await Promise.all(manifest.tracers.map(function(tracerId) {
     return loadTracerData(config.dataUrl + name + '/' + tracerId, tracerId, name, progress);
   }));
-  mergeTracers(tracers, manifest.densities || null, manifest.footprint || null);
+  appEvents.positionsDownloaded.fire(tracers);
+  appEvents.tracerRangesReady.fire(tracers.map(function(t) {
+    return { id: t.id, name: t.name, color: t.color, count: t.count };
+  }));
+  if (manifest.densities) {
+    appEvents.densitiesReady.fire(Object.assign({}, manifest.densities, { footprint: manifest.footprint || [] }));
+  }
 }
 
 async function fetchRadar() {
@@ -47,50 +55,16 @@ async function loadTracerData(endpoint, tracerId, graphName, progress) {
   var expectedBytes = meta.count ? meta.count * 3 * 2 : null;
   var buffer = await request(endpoint + '/positions.bin', {
     responseType: 'arraybuffer',
-    progress: reportProgress(graphName + '/' + tracerId, 'positions', progress, expectedBytes)
+    progress: reportProgress(graphName + '/' + tracerId, progress, expectedBytes)
   });
-  var positions = new Uint16Array(buffer);  // raw float16 bits
 
   return {
     id:        meta.id    || tracerId,
     name:      meta.name  || tracerId,
     color:     parseColor(meta.color || '0xffffffff'),
     count:     meta.count || null,
-    positions: positions
+    positions: new Uint16Array(buffer)  // raw float16 bits
   };
-}
-
-function mergeTracers(tracerDataArray, densities, footprint) {
-  var totalNodes = tracerDataArray.reduce(function(sum, t) {
-    return sum + (t.positions.length / 3);
-  }, 0);
-
-  var allPositions = new Uint16Array(totalNodes * 3);
-  var tracerRanges = [];
-  var nodeOffset = 0;
-  var posOffset = 0;
-
-  tracerDataArray.forEach(function(tracer) {
-    var nodeCount = tracer.positions.length / 3;
-
-    allPositions.set(tracer.positions, posOffset);
-    posOffset += tracer.positions.length;
-
-    tracerRanges.push({
-      id:        tracer.id,
-      name:      tracer.name,
-      color:     tracer.color,
-      count:     tracer.count,
-      startNode: nodeOffset,
-      nodeCount: nodeCount
-    });
-
-    nodeOffset += nodeCount;
-  });
-
-  appEvents.positionsDownloaded.fire(allPositions);
-  appEvents.tracerRangesReady.fire(tracerRanges);
-  if (densities) appEvents.densitiesReady.fire(Object.assign({}, densities, { footprint: footprint || [] }));
 }
 
 function parseColor(colorStr) {
@@ -98,7 +72,7 @@ function parseColor(colorStr) {
   return parseInt(String(colorStr).replace(/^0x/i, ''), 16);
 }
 
-function reportProgress(name, file, progress, expectedBytes) {
+function reportProgress(name, progress, expectedBytes) {
   return function(e) {
     var progressInfo = { message: name + ' loading' };
     var total = e.total || expectedBytes;

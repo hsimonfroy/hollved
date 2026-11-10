@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
-import appConfig from './native/appConfig.js';
+import appConfig from './service/appConfig.js';
 import Key from './utils/key.js';
 
 var pointerCoarseQuery = window.matchMedia('(pointer: coarse)');

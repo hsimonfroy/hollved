@@ -1,9 +1,9 @@
 /**
- * Bridge between the particle renderer and the React world.
+ * Bridge between the app's events and the three.js scene.
  *
- * Listens to graph loading events. Once positions are downloaded it calls
- * the native renderer to display them. Tracer colors and visibility are
- * managed here.
+ * Creates the engine and every layer drawn in it -- the redshift catalogue, the
+ * local group, the stars, the solar system, the CMB and the radar -- and wires
+ * them to the loading events, the tracer toggles and the URL state.
  *
  * Control modes (F key or on-screen button to toggle)
  * ----------------------------------------------------
@@ -12,31 +12,30 @@
  *   Satellite — left-drag orbit, scroll zoom, right-drag pan
  *   Spaceship — hold left button to look (pitch/yaw, absolute screen-centre)
  */
-import unrender from '../../unrender';
-window.THREE = unrender.THREE;
-
-import eventify from 'ngraph.events';
+import * as THREE from 'three';
 import appEvents from '../service/appEvents.js';
-import appConfig from './appConfig.js';
+import appConfig from '../service/appConfig.js';
 import config from '../../config.js';
-import createBaseControl     from './baseControl.js';
-import createSpaceshipControl from './spaceshipControl.js';
-import createSatelliteControl from './satelliteControl.js';
-import createMobileControl   from './mobileControl.js';
+import createEngine          from './engine.js';
+import createCatalogue       from './catalogue.js';
+import createBaseControl     from './controls/baseControl.js';
+import createSpaceshipControl from './controls/spaceshipControl.js';
+import createSatelliteControl from './controls/satelliteControl.js';
+import createMobileControl   from './controls/mobileControl.js';
 import createDetailedGalaxies from './detailedGxyRenderer.js';
 import createSolarRenderer    from './solarRenderer.js';
 import createStarField       from './starField.js';
 import createLabelLayer      from './labelLayer.js';
 import { cartToRaDecR, dirToAzAlt, getLocalFrame } from './coordUtils.js';
 import { createGlowMaterial, makeRadarLabel } from './radarStyle.js';
-import slice from '../../unrender/lib/slice.js';
+import slice from './slice.js';
 
 var DEG2RAD = Math.PI / 180;
 
 export default sceneRenderer;
 
 function sceneRenderer(container) {
-  var renderer, positions, mobileControl, satelliteControl, spaceshipControl, baseControl;
+  var engine, catalogue, mobileControl, satelliteControl, spaceshipControl, baseControl;
   var cameraAnim = null; // active camera animation, or null
   var cmbSphere = null;
   var cmbVisible = true;
@@ -71,16 +70,13 @@ function sceneRenderer(container) {
   var cmbRadius = 14000;   // fallback; overwritten by radarReady before setPositions
 
   // Tracer state
-  var tracerRanges = null;   // [{ id, name, color, startNode, nodeCount }]
-  var baseColors = null;     // Uint8Array: per-node resting colors
-  var tracerVisibility = {}; // { tracerId: boolean }
+  var tracerRanges = null;   // [{ id, name, color, count }]
 
   appEvents.positionsDownloaded.on(setPositions);
   appEvents.tracerRangesReady.on(setTracerRanges);
   appEvents.setTracerVisibility.on(handleSetTracerVisibility);
   appEvents.toggleControlMode.on(toggleControlMode);
 
-  appEvents.focusScene.on(focusScene);
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
   appEvents.resetToOrigin.on(resetToOrigin);
@@ -88,23 +84,24 @@ function sceneRenderer(container) {
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
 
-  var api = {
-    destroy: destroy
-  };
+  return { destroy: destroy };
 
-  eventify(api);
-
-  return api;
+  function beforeRender() {
+    if (sliceEnabled && currentMode === 'satellite') applySlice();
+    if (rulerObjects.length) updateRulers();
+    if (detailedGalaxies) detailedGalaxies.updateVisibility();
+    if (starField)        starField.updateFade();
+  }
 
   function onSetMovementSpeed(v) {
     if (spaceshipControl) spaceshipControl.movementSpeed = v;
   }
 
   function resetToOrigin() {
-    if (!renderer) return;
+    if (!engine) return;
     if (cameraAnim) return;
 
-    var cam = renderer.camera();
+    var cam = engine.camera();
     var startPos  = cam.position.clone();
     var startQuat = cam.quaternion.clone();
 
@@ -122,8 +119,8 @@ function sceneRenderer(container) {
   }
 
   function updateQuery() {
-    if (!renderer) return;
-    var camera = renderer.camera();
+    if (!engine) return;
+    var camera = engine.camera();
     var cp = camera.position;
     // HUD always shows camera position (not pivot), even in satellite mode
     appEvents.cameraHUDUpdate.fire(cartToRaDecR(cp.x, cp.y, cp.z));
@@ -148,12 +145,12 @@ function sceneRenderer(container) {
     if (cameraAnim.startTime === null) cameraAnim.startTime = time;
     var t  = Math.min((time - cameraAnim.startTime) / cameraAnim.duration, 1.0);
     var te = easeInOutQuad(t);
-    var cam = renderer.camera();
+    var cam = engine.camera();
     cam.position.lerpVectors(cameraAnim.startPos, cameraAnim.endPos, te);
     cam.quaternion.slerpQuaternions(cameraAnim.startQuat, cameraAnim.endQuat, te);
-    renderer.markDirty();
+    engine.markDirty();
     if (t >= 1.0) {
-      renderer.offFrame(animFrame);
+      engine.offFrame(animFrame);
       cameraAnim.onDone();
       cameraAnim = null;
     }
@@ -167,15 +164,15 @@ function sceneRenderer(container) {
       startTime: null,
       onDone: onDone
     };
-    renderer.onFrame(animFrame);
-    renderer.markDirty();
+    engine.onFrame(animFrame);
+    engine.markDirty();
   }
 
   function toggleControlMode() {
-    if (!renderer) return;
+    if (!engine) return;
     if (cameraAnim) return; // ignore while animation is running
 
-    var cam = renderer.camera();
+    var cam = engine.camera();
 
     if (currentMode === 'satellite') {
       // Satellite → Spaceship: zoom camera in from orbit to pivot
@@ -258,7 +255,7 @@ function sceneRenderer(container) {
         cam.quaternion.copy(endQuat);
         satelliteControl.setEnabled(true); // no cam arg → preserves computed state
         applySlice();
-        renderer.markDirty();
+        engine.markDirty();
       });
     }
   }
@@ -274,57 +271,43 @@ function sceneRenderer(container) {
     cmbRadius = (data && data.sphere && data.sphere[0]) ? data.sphere[0].radius : 14000;
   }
 
-  function setPositions(_positions) {
-    positions = _positions;
-
+  // One { id, color, positions } per tracer; see graphLoader.
+  function setPositions(tracers) {
     // Reset tracer state when new positions arrive
     tracerRanges = null;
-    baseColors = null;
-    tracerVisibility = {};
 
     focusScene();
 
-    if (!renderer) {
-      renderer = unrender(container);
-      labelScene = renderer.postScene();
+    if (!engine) {
+      engine = createEngine(container);
+      labelScene = engine.postScene();
+      catalogue = createCatalogue(engine.scene());
+      catalogue.setViewportHeight(container.clientHeight);
+      engine.onResize(catalogue.setViewportHeight);
 
-      // Intercept setExposure/setPower so CMB sphere stays compensated
-      var _setExposure = renderer.setExposure;
-      renderer.setExposure = function(v) {
-        _setExposure(v);
-        if (cmbSphere) cmbSphere.material.uniforms.uExposure.value = v;
-      };
-      var _setPower = renderer.setPower;
-      renderer.setPower = function(v) {
-        _setPower(v);
-        if (cmbSphere) cmbSphere.material.uniforms.uPower.value = v;
-      };
-      var camera = renderer.camera();
+      var camera = engine.camera();
       camera.updateProjectionMatrix();
       moveCameraInternal();
 
-      var cam = renderer.camera();
-      baseControl      = createBaseControl(renderer.markDirty);
-      satelliteControl = createSatelliteControl(cam, container, renderer.markDirty, baseControl.keyState);
-      spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, renderer.markDirty);
+      var cam = engine.camera();
+      baseControl      = createBaseControl(engine.markDirty);
+      satelliteControl = createSatelliteControl(cam, container, engine.markDirty, baseControl.keyState);
+      spaceshipControl = createSpaceshipControl(cam, container, baseControl.keyState, engine.markDirty);
 
-      // Wire both controls into the per-frame update slot exposed by unrender. It
-      // returns whether anything is still in motion -- a held key, a coasting ship,
-      // a gliding orbit -- so the loop keeps running on a frame where the camera
-      // has not moved yet. Both updates always run; neither may be short-circuited.
-      renderer.input().update = function(delta) {
+      // Both controls step every frame; see engine.setUpdate. Neither may be
+      // short-circuited: each has to settle its own motion.
+      engine.setUpdate(function(delta) {
         var flying  = spaceshipControl.update(delta);
         var gliding = satelliteControl.update(delta);
         if (currentMode === 'spaceship') {
           appEvents.cameraSpeedUpdate.fire(spaceshipControl.currentSpeed, spaceshipControl.movementSpeed);
         }
-        if (sliceEnabled && currentMode === 'satellite') applySlice();
-        if (rulerObjects.length) updateRulers();
-        // Same slot as the rulers, and for the same reason: it decides what is worth
-        // submitting, so it has to run BEFORE the frame is drawn.
-        if (detailedGalaxies) detailedGalaxies.updateVisibility();
         return flying || gliding || baseControl.isActive();
-      };
+      });
+      // Everything that depends on where the camera ENDED UP this frame -- after
+      // the controls, and after a camera animation, which moves it later in the
+      // same frame -- and decides what is drawn, so it must run before the draw.
+      engine.onBeforeRender(beforeRender);
 
       if (currentMode === 'satellite') {
         spaceshipControl.setEnabled(false);
@@ -343,7 +326,7 @@ function sceneRenderer(container) {
 
       var configVisible = appConfig.getVisibleTracers();
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
-      cmbSphere = createCMBSphere(renderer.scene(), cmbRadius, renderer.getExposure(), renderer.getPower());
+      cmbSphere = createCMBSphere(engine.scene(), cmbRadius, engine.getExposure(), engine.getPower());
       cmbSphere.visible = cmbVisible;
 
       // ONE label layer for the whole scene, created before its clients and so
@@ -353,20 +336,20 @@ function sceneRenderer(container) {
       // nearest, which is what makes the names hand over cleanly from one scale
       // to the next. Its default zoom window is the galaxies'; the other sources
       // override it (see labelLayer.add).
-      labels = createLabelLayer(renderer, renderer.markDirty, {
+      labels = createLabelLayer(engine, engine.markDirty, {
         minDiamPx:   LABEL_MIN_DIAM_PX,
         maxDiamFrac: LABEL_MAX_DIAM_FRAC
       });
 
-      starField        = createStarField(renderer, renderer.markDirty, labels);
-      detailedGalaxies = createDetailedGalaxies(renderer, renderer.markDirty, labels,
+      starField        = createStarField(engine, engine.markDirty, labels);
+      detailedGalaxies = createDetailedGalaxies(engine, engine.markDirty, labels,
         function(mwFrame) {
           // The Milky Way's own frame, from the one manifest fetch, handed to the
           // layer that draws the Sun's orbit in it. Routed rather than re-derived
           // so the orbit cannot end up in a different plane from the disc.
           starField.setGalaxyFrame(mwFrame);
         });
-      solarRenderer    = createSolarRenderer(renderer, renderer.markDirty, labels,
+      solarRenderer    = createSolarRenderer(engine, engine.markDirty, labels,
         function(sunPos) {
           starField.setOrigin(sunPos);
         });
@@ -375,55 +358,37 @@ function sceneRenderer(container) {
       }
 
       radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
-      rulerObjects = createRadar(renderer.scene(), labelScene);
+      rulerObjects = createRadar(engine.scene(), labelScene);
       updateRadarVisibility();
 
-      mobileControl = createMobileControl(renderer, satelliteControl, spaceshipControl);
+      mobileControl = createMobileControl(engine, satelliteControl, spaceshipControl);
       mobileControl.setMode(currentMode);
       appEvents.controlModeChanged.fire(currentMode); // sync UI button on load
     }
 
-    renderer.particles(positions);
+    catalogue.setTracers(tracers);
 
     var _cv = appConfig.getVisibleTracers();
     sliceEnabled = _cv ? _cv.indexOf('slice') >= 0 : false;
     applySlice();
 
-    renderer.markDirty();
+    engine.markDirty();
   }
 
   function setTracerRanges(ranges) {
-    if (!renderer) return;
+    if (!engine) return;
     tracerRanges = ranges;
-
-    var configVisible = appConfig.getVisibleTracers();
-    ranges.forEach(function(tracer) {
-      tracerVisibility[tracer.id] = configVisible
-        ? configVisible.indexOf(tracer.id) >= 0
-        : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
-    });
-
-    var view = renderer.getParticleView();
-    var colors = view.colors();
-
-    applyTracerColors(colors);
-
-    // Snapshot as base colors
-    baseColors = new Uint8Array(colors.length);
-    baseColors.set(colors);
-
-    view.colors(colors);
-    renderer.markDirty();
+    applyTracerVisibility();
+    engine.markDirty();
   }
 
-  function applyTracerColors(colors) {
-    if (!tracerRanges) return;
+  // A hidden tracer is not drawn at all.
+  function applyTracerVisibility() {
+    var configVisible = appConfig.getVisibleTracers();
     tracerRanges.forEach(function(tracer) {
-      var visible = tracerVisibility[tracer.id] !== false;
-      var color = visible ? tracer.color : (tracer.color & 0xFFFFFF00);
-      for (var n = 0; n < tracer.nodeCount; ++n) {
-        colorNode(tracer.startNode + n, colors, color);
-      }
+      catalogue.setTracerVisible(tracer.id, configVisible
+        ? configVisible.indexOf(tracer.id) >= 0
+        : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0);
     });
   }
 
@@ -442,7 +407,7 @@ function sceneRenderer(container) {
     if (tracerId === 'slice') {
       sliceEnabled = visible;
       applySlice();
-      renderer.markDirty();
+      engine.markDirty();
       return;
     }
     if (tracerId === 'radar') {
@@ -452,34 +417,12 @@ function sceneRenderer(container) {
     }
     if (tracerId === 'cmb') {
       cmbVisible = visible;
-      if (cmbSphere) { cmbSphere.visible = visible; renderer.markDirty(); }
+      if (cmbSphere) { cmbSphere.visible = visible; engine.markDirty(); }
       return;
     }
-    if (!tracerRanges || !renderer) return;
-
-    var tracer = null;
-    for (var i = 0; i < tracerRanges.length; ++i) {
-      if (tracerRanges[i].id === tracerId) {
-        tracer = tracerRanges[i];
-        break;
-      }
-    }
-    if (!tracer) return;
-
-    tracerVisibility[tracerId] = visible;
-    var color = visible ? tracer.color : (tracer.color & 0xFFFFFF00);
-
-    var view = renderer.getParticleView();
-    var colors = view.colors();
-
-    for (var n = 0; n < tracer.nodeCount; ++n) {
-      colorNode(tracer.startNode + n, colors, color);
-      if (baseColors) {
-        colorNode(tracer.startNode + n, baseColors, color);
-      }
-    }
-    view.colors(colors);
-    renderer.markDirty();
+    if (!tracerRanges || !engine) return;
+    catalogue.setTracerVisible(tracerId, visible);
+    engine.markDirty();
   }
 
   // The slice uniforms are shared by reference with every material that honours
@@ -495,7 +438,7 @@ function sceneRenderer(container) {
     u.uSliceEnabled.value = on ? 1.0 : 0.0;
     if (!on || !_sliceFwd) return;
     var upAxis = satelliteControl.getUpAxis();
-    _sliceFwd.set(0, 0, -1).applyQuaternion(renderer.camera().quaternion);
+    _sliceFwd.set(0, 0, -1).applyQuaternion(engine.camera().quaternion);
     _sliceFwd.addScaledVector(upAxis, -_sliceFwd.dot(upAxis));
     var len = _sliceFwd.length();
     if (len < 0.001) return;          // looking straight up the axis: keep the last plane
@@ -504,20 +447,12 @@ function sceneRenderer(container) {
   }
 
   function handleTracersChangedFromURL() {
-    if (!tracerRanges || !renderer) return;
+    if (!tracerRanges || !engine) return;
     var configVisible = appConfig.getVisibleTracers();
     radarEnabled = configVisible ? configVisible.indexOf('radar') >= 0 : false;
     sliceEnabled  = configVisible ? configVisible.indexOf('slice') >= 0 : false;
     applySlice();
-    tracerRanges.forEach(function(tracer) {
-      tracerVisibility[tracer.id] = configVisible ? configVisible.indexOf(tracer.id) >= 0 : DEFAULT_HIDDEN_TRACERS.indexOf(tracer.id) < 0;
-    });
-    var view = renderer.getParticleView();
-    var colors = view.colors();
-    applyTracerColors(colors);
-    baseColors = new Uint8Array(colors.length);
-    baseColors.set(colors);
-    view.colors(colors);
+    applyTracerVisibility();
 
     if (cmbSphere) {
       cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
@@ -527,15 +462,7 @@ function sceneRenderer(container) {
 
     updateRadarVisibility();
 
-    renderer.markDirty();
-  }
-
-  function colorNode(nodeIndex, colors, color) {
-    var colorOffset = nodeIndex * 4;
-    colors[colorOffset + 0] = (color >> 24) & 0xff;
-    colors[colorOffset + 1] = (color >> 16) & 0xff;
-    colors[colorOffset + 2] = (color >> 8) & 0xff;
-    colors[colorOffset + 3] = (color & 0xff);
+    engine.markDirty();
   }
 
   function moveCamera() {
@@ -543,8 +470,8 @@ function sceneRenderer(container) {
   }
 
   function moveCameraInternal() {
-    if (!renderer) return;
-    var camera  = renderer.camera();
+    if (!engine) return;
+    var camera  = engine.camera();
     var newMode = appConfig.getControlMode();
 
     if (newMode !== currentMode && satelliteControl && spaceshipControl) {
@@ -566,7 +493,7 @@ function sceneRenderer(container) {
     } else {
       restoreSpaceshipFromConfig(camera);
     }
-    renderer.markDirty();
+    engine.markDirty();
   }
 
   function restoreSatelliteFromConfig() {
@@ -600,7 +527,7 @@ function sceneRenderer(container) {
     // Labels render post-tone-map (in postScene) so plain white is truly white.
     return makeRadarLabel(text, radius * 0.04, function() {
       // Text geometry is ready — wake the RAF loop so the label appears immediately.
-      if (renderer) renderer.markDirty();
+      if (engine) engine.markDirty();
     });
   }
 
@@ -624,7 +551,7 @@ function sceneRenderer(container) {
       rulerObjects.forEach(hideRuler);
       return;
     }
-    var cam     = renderer.camera();
+    var cam     = engine.camera();
     var camDist = cam.position.length();
     var upAxis  = satelliteControl.getUpAxis();
 
@@ -672,7 +599,7 @@ function sceneRenderer(container) {
     if (solarRenderer)    solarRenderer.setRadarVisible(radarEnabled);
     if (detailedGalaxies) detailedGalaxies.setRadarVisible(radarEnabled);
     if (starField)        starField.setRadarVisible(radarEnabled);
-    if (renderer) renderer.markDirty();
+    if (engine) engine.markDirty();
   }
 
   function createCMBSphere(scene, radius, exposure, power) {
@@ -681,7 +608,7 @@ function sceneRenderer(container) {
       base + 'px.jpg', base + 'nx.jpg',
       base + 'py.jpg', base + 'ny.jpg',
       base + 'pz.jpg', base + 'nz.jpg'
-    ], function() { if (renderer) renderer.markDirty(); });
+    ], function() { if (engine) engine.markDirty(); });
     cubeTexture.colorSpace      = THREE.LinearSRGBColorSpace;
     cubeTexture.generateMipmaps = true;
     cubeTexture.minFilter       = THREE.LinearMipmapLinearFilter;
@@ -745,18 +672,21 @@ function sceneRenderer(container) {
   }
 
   function destroy() {
-    if (renderer) renderer.input().update = function() {};
+    if (engine) {
+      engine.setUpdate(function() { return false; });
+      engine.offBeforeRender(beforeRender);
+    }
     if (detailedGalaxies) { detailedGalaxies.dispose(); detailedGalaxies = null; }
     if (cmbSphere) {
-      renderer.scene().remove(cmbSphere);
+      engine.scene().remove(cmbSphere);
       cmbSphere.geometry.dispose();
       if (cmbSphere.material.uniforms && cmbSphere.material.uniforms.tCube)
         cmbSphere.material.uniforms.tCube.value.dispose();
       cmbSphere.material.dispose();
       cmbSphere = null;
     }
-    if (renderer && rulerObjects.length) {
-      var sc = renderer.scene();
+    if (engine && rulerObjects.length) {
+      var sc = engine.scene();
       rulerObjects.forEach(function(r) {
         sc.remove(r.ring);
         r.ring.geometry.dispose();
@@ -766,6 +696,7 @@ function sceneRenderer(container) {
       });
     }
     rulerObjects = [];
+    if (catalogue)        { catalogue.setTracers([]);   catalogue        = null; }
     if (solarRenderer)    { solarRenderer.dispose();    solarRenderer    = null; }
     if (starField)        { starField.dispose();        starField        = null; }
     // Last: its clients only hold a reference, they never own it.
@@ -774,13 +705,12 @@ function sceneRenderer(container) {
     if (spaceshipControl) { spaceshipControl.destroy(); spaceshipControl = null; }
     if (satelliteControl) { satelliteControl.destroy(); satelliteControl = null; }
     if (mobileControl)    { mobileControl.destroy();    mobileControl    = null; }
-    if (renderer)         { renderer.destroy();         renderer         = null; }
+    if (engine)         { engine.destroy();         engine         = null; }
     appEvents.positionsDownloaded.off(setPositions);
     appEvents.tracerRangesReady.off(setTracerRanges);
     appEvents.setTracerVisibility.off(handleSetTracerVisibility);
     appEvents.toggleControlMode.off(toggleControlMode);
 
-    appEvents.focusScene.off(focusScene);
     appEvents.radarReady.off(onRadarReady);
     appEvents.setMovementSpeed.off(onSetMovementSpeed);
     appEvents.resetToOrigin.off(resetToOrigin);

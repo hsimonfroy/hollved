@@ -18,6 +18,7 @@
  * update(delta) must be called every RAF frame (wired via renderer.js) and returns
  * whether the ship is still in motion, which is what keeps the RAF loop running.
  */
+import * as THREE from 'three';
 import { EASE_TAU, EASE_SETTLE } from './satelliteControl.js';
 
 export default createSpaceshipControl;
@@ -29,7 +30,6 @@ export var MAX_MOVE_SPEED = 1e3;  // Mpc/s — exported so cameraHUD can derive 
 export var DEFAULT_MOVE_SPEED = 1;  // Mpc/s
 
 function createSpaceshipControl(camera, container, keyState, markDirty) {
-  var THREE = window.THREE;
   var enabled = false;
 
   // Mobile joystick state (written by mobileControl, read here in update)

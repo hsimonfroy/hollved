@@ -1,4 +1,4 @@
-var THREE = require('three');
+import * as THREE from 'three';
 
 /**
  * The slice: a thin wedge of sky, kept bright while everything outside it is
@@ -94,5 +94,5 @@ function withSlice(own) {
   return Object.assign({}, own, uniforms);
 }
 
-module.exports = { uniforms: uniforms, GLSL: GLSL, withSlice: withSlice,
-                   inside: inside };
+export default { uniforms: uniforms, GLSL: GLSL, withSlice: withSlice,
+                 inside: inside };

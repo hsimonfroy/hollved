@@ -1,6 +1,6 @@
 /**
  * Manages graph model life cycle. The low-level rendering of the particles
- * is handled by ../native/renderer.js
+ * is handled by ../render/renderer.js
  */
 import loadGraph from  '../service/graphLoader.js';
 import appEvents from '../service/appEvents.js';

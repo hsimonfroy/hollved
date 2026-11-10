@@ -38,17 +38,6 @@ export default eventMirror([
    */
   'controlModeChanged',
 
-  /**
-   * Fired when user wants to show or hide links
-   */
-  'toggleLinks',
-
-  /**
-   * fired when user requesed to show or hide help screen
-   */
-  'toggleHelp',
-
-  'focusScene',
   'queryChanged',
 
   /**

@@ -24,7 +24,7 @@
  */
 import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
-import appConfig from './native/appConfig.js';
+import appConfig from './service/appConfig.js';
 import DensityChart from './densityChart.jsx';
 
 var DEFAULT_HIDDEN    = ['cmb', 'radar', 'slice'];

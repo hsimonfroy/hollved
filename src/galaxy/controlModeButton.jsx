@@ -7,7 +7,7 @@
  */
 import { useState, useEffect } from 'react';
 import appEvents from './service/appEvents.js';
-import appConfig from './native/appConfig.js';
+import appConfig from './service/appConfig.js';
 
 export default function ControlModeButton() {
   var [mode, setMode] = useState(appConfig.getControlMode());

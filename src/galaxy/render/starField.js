@@ -18,7 +18,7 @@
  */
 import * as THREE from 'three';
 import config from '../../config.js';
-import createStarMaterial from '../../unrender/lib/star-material.js';
+import createStarMaterial from './starMaterial.js';
 import { createRteLineMaterial, LABEL_STYLE_REGION } from './radarStyle.js';
 import { magnitudeRank, rankForMagnitude } from './labelLayer.js';
 
@@ -169,14 +169,14 @@ var ORBIT_MIN_PX       = 8;
  *                        declutter set and a softer voice, because a region is not
  *                        a thing at a place.
  */
-export default function createStarField(unrenderObj, markDirty, labels) {
+export default function createStarField(engine, markDirty, labels) {
   // Both layers live in the HDR scene, which is drawn BEFORE the solar overlay.
   // That ordering is what makes planets occlude them: the solar pass renders
   // opaque bodies into the same framebuffer afterwards. Putting the lines in
   // postScene instead -- as they first were -- draws them after the solar pass,
   // and they show straight through Jupiter.
-  var scene     = unrenderObj.scene();
-  var camera    = unrenderObj.camera();
+  var scene     = engine.scene();
+  var camera    = engine.camera();
 
   var stars   = null;
   var lines   = null;
@@ -191,7 +191,7 @@ export default function createStarField(unrenderObj, markDirty, labels) {
   var _origin = new THREE.Vector3();   // the Sun: the catalogue's true origin
   var _rel    = new THREE.Vector3();
 
-  unrenderObj.onResize(function(h) {
+  engine.onResize(function(h) {
     if (stars) stars.material.uniforms.uViewportHeight.value = h;
   });
 
@@ -240,7 +240,7 @@ export default function createStarField(unrenderObj, markDirty, labels) {
       unitsToPc2: 1 / (PC_TO_MPC * PC_TO_MPC)
     }));
     stars.material.uniforms.uViewportHeight.value =
-      unrenderObj.getContainer().clientHeight || 600;
+      engine.getContainer().clientHeight || 600;
     // onBeforeRender, not the afterToneMap pass: this feeds the vertex transform,
     // so a frame of latency would smear the whole field while the camera moves.
     stars.onBeforeRender = syncCamera;
@@ -277,7 +277,7 @@ export default function createStarField(unrenderObj, markDirty, labels) {
   }
 
   // The camera in the field's own parsec units, split so float32 can hold it --
-  // see the relative-to-eye note in star-material.js. `_rel` is float64 here;
+  // see the relative-to-eye note in starMaterial.js. `_rel` is float64 here;
   // Math.fround gives exactly what the uniform will store, so the remainder is
   // exact by construction.
   function syncCamera() {
@@ -578,9 +578,11 @@ export default function createStarField(unrenderObj, markDirty, labels) {
 
   // ---- fades ---------------------------------------------------------------
 
-  // Runs after tone-mapping, so it lands on the NEXT frame -- fine while the
-  // camera is moving, since that frame is always drawn anyway. The setters call
-  // it directly so a toggle does not have to wait for one.
+  // Run by renderer.js before every frame is drawn, so what it decides applies to
+  // that frame. It used to run after tone-mapping, landing on the NEXT frame --
+  // which never comes when the camera stops: jump from a cosmic view to the
+  // solar system and the stars stayed hidden until something moved. The setters
+  // call it directly so a toggle does not have to wait for a frame.
   function updateFade() {
     var on = _visible && _radarVisible;
     _rel.subVectors(camera.position, _origin).divideScalar(PC_TO_MPC);
@@ -602,7 +604,7 @@ export default function createStarField(unrenderObj, markDirty, labels) {
       // Fade IN, so the sign is flipped against the house law above.
       var o = Math.log10(d / ORBIT_FADE_PC) / ORBIT_FADE_DECADES;
       o = on ? Math.min(1, Math.max(0, o)) : 0;
-      var pxPerRad = (unrenderObj.getContainer().clientHeight || 600) /
+      var pxPerRad = (engine.getContainer().clientHeight || 600) /
                      (2 * Math.tan(camera.fov * Math.PI / 360));
       if (orbit.userData.spanPc / d * pxPerRad < ORBIT_MIN_PX) o = 0;
       orbit.visible = o > 0;
@@ -611,9 +613,8 @@ export default function createStarField(unrenderObj, markDirty, labels) {
     labels.setGroupVisible('stars', on);
     if (stars) stars.visible = _visible && d < starCutoffPc;
   }
-  unrenderObj.onAfterToneMap(updateFade);
-
   return {
+    updateFade: updateFade,
     setVisible: function(v) {
       _visible = v;
       if (stars) stars.visible = v;
@@ -644,7 +645,6 @@ export default function createStarField(unrenderObj, markDirty, labels) {
       tryDeferred();
     },
     dispose: function() {
-      unrenderObj.offAfterToneMap(updateFade);
       if (stars) {
         scene.remove(stars);
         stars.geometry.dispose();

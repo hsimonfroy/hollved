@@ -16,8 +16,8 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
-import appConfig from './native/appConfig.js';
-import { MIN_MOVE_SPEED, MAX_MOVE_SPEED, DEFAULT_MOVE_SPEED } from './native/spaceshipControl.js';
+import appConfig from './service/appConfig.js';
+import { MIN_MOVE_SPEED, MAX_MOVE_SPEED, DEFAULT_MOVE_SPEED } from './render/controls/spaceshipControl.js';
 
 var LOG_MIN   = Math.floor(Math.log10(MIN_MOVE_SPEED));
 var LOG_RANGE = Math.ceil(Math.log10(MAX_MOVE_SPEED)) - LOG_MIN;

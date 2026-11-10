@@ -14,12 +14,12 @@
  */
 import * as THREE from 'three';
 import config from '../../config.js';
-import appConfig from './appConfig.js';
+import appConfig from '../service/appConfig.js';
 import { raDec2UnitVec } from './coordUtils.js';
 import { createOrbitLineMaterial } from './radarStyle.js';
 import { magnitudeRank } from './labelLayer.js';
 import createHeliosphere from './heliosphere.js';
-import createStarMaterial from '../../unrender/lib/star-material.js';
+import createStarMaterial from './starMaterial.js';
 
 var KM_TO_MPC = 1 / 3.085677581e19; // 1 km in Mpc
 var AU_TO_MPC = 1 / 2.06264806e11;  // 1 AU in Mpc
@@ -34,6 +34,8 @@ var SOLAR_CAM_NEAR = 1e-17; // Mpc — floor for the dynamic near plane
 // (~2.5e-6), too large and the near plane below has nowhere safe to sit.
 var SOLAR_CAM_FAR  = 1e-5;
 var SOLAR_CAM_FOV  = 70;
+// Nothing of the overlay can reach a pixel from further than this: see solarPass.
+var SOLAR_SKIP_DIST = SOLAR_CAM_FAR + 1e4 * AU_TO_MPC;
 
 // Earth's centre relative to the Earth-Moon barycentre, which is what JPL's
 // "EM Bary" elements actually describe: m_moon / (m_earth + m_moon).
@@ -344,8 +346,8 @@ function applyPoleOrientation(mesh, pole, d) {
 
 // -----------------------------------------------------------------------------
 
-export default function createSolarRenderer(unrenderObj, markDirty, labels, onSunPos) {
-  var container   = unrenderObj.getContainer();
+export default function createSolarRenderer(engine, markDirty, labels, onSunPos) {
+  var container   = engine.getContainer();
   var solarScene  = new THREE.Scene();
   var solarCamera = new THREE.PerspectiveCamera(
     SOLAR_CAM_FOV, container.clientWidth / container.clientHeight,
@@ -371,14 +373,15 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
   var rings     = [];
   var _visible  = true;
   var _radarVisible = false; // may be set before the manifest resolves
+  var _fade     = 0;         // see updateFade
 
   var viewportHeight = container.clientHeight || 600;
   var _sunDir = new THREE.Vector3();
   var _invQuat = new THREE.Quaternion();
   var _toCam  = new THREE.Vector3();
-  var maxAniso = unrenderObj.renderer().capabilities.getMaxAnisotropy();
+  var maxAniso = engine.renderer().capabilities.getMaxAnisotropy();
 
-  unrenderObj.onResize(function() {
+  engine.onResize(function() {
     viewportHeight = container.clientHeight || 600;
     solarCamera.aspect = container.clientWidth / container.clientHeight;
     solarCamera.updateProjectionMatrix();
@@ -815,23 +818,33 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
 
   // Per *rendered* frame (the RAF loop is stop-on-idle): size the Sun's corona,
   // set each dot's alpha, place the labels, and derive the near plane.
+  // The overlay fades out over the last decade before its own far plane, so
+  // nothing it draws is ever CLIPPED by that plane -- which is what made the
+  // Sun's label vanish mid-air. Derived from SOLAR_CAM_FAR, so the two cannot
+  // drift apart. The range means something: 1 pc, where the Sun is as bright as
+  // Vega, to 10 pc, where it is an ordinary magnitude 4.8 star. Its own row in
+  // the star catalogue has been carrying it since 20 AU.
+  //
+  // Before the frame is drawn, not in the solar pass: the label layer draws the
+  // names BEFORE that pass, so a fade set there reached them a frame late, and
+  // after a jump out of the solar system that late frame -- planet names over
+  // the cosmic web -- was the one left on screen.
+  function updateFade(camera) {
+    if (!sunRec) return;
+    var fade = 1 - Math.log10(sunRec.worldPos.distanceTo(camera.position)
+                              / (0.01 * SOLAR_CAM_FAR));
+    _fade = Math.min(1, Math.max(0, fade));
+    labels.setGroupAlpha('solar', _fade);
+  }
+  engine.onBeforeRender(updateFade);
+
   function updateSolarFrame() {
     if (!records.length) return;
     var halfFov  = SOLAR_CAM_FOV * DEG2RAD / 2;
     var pxPerRad = viewportHeight / (2 * Math.tan(halfFov));
     var camPos   = solarCamera.position;
     var nearest  = Infinity;
-
-    // The overlay fades out over the last decade before its own far plane, so
-    // nothing it draws is ever CLIPPED by that plane -- which is what made the
-    // Sun's label vanish mid-air. Derived from SOLAR_CAM_FAR, so the two cannot
-    // drift apart. The range means something: 1 pc, where the Sun is as bright as
-    // Vega, to 10 pc, where it is an ordinary magnitude 4.8 star. Its own row in
-    // the star catalogue has been carrying it since 20 AU.
-    var fade = 1 - Math.log10(sunRec.worldPos.distanceTo(camPos)
-                              / (0.01 * SOLAR_CAM_FAR));
-    fade = Math.min(1, Math.max(0, fade));
-    labels.setGroupAlpha('solar', fade);
+    var fade     = _fade;
     trails.forEach(function(t) { t.material.opacity = ORBIT_MAX_ALPHA * fade; });
 
     records.forEach(function(rec) {
@@ -943,6 +956,11 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
 
   function solarPass(threeRenderer, mainCamera) {
     if (!_visible) return;
+    // Past the far plane, plus the heliosphere's own length, every body, trail
+    // and the shell itself would be clipped: skip the bookkeeping and the pass.
+    // Not the 1 pc where the fade ends -- the heliosphere is still a few pixels
+    // across out to ~2 pc on a tall screen, and it has no fade of its own there.
+    if (sunRec && sunRec.worldPos.distanceTo(mainCamera.position) > SOLAR_SKIP_DIST) return;
     solarCamera.quaternion.copy(mainCamera.quaternion);
     solarCamera.position.copy(mainCamera.position);
     solarCamera.updateMatrixWorld();
@@ -951,7 +969,7 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
     threeRenderer.render(solarScene, solarCamera);
   }
 
-  unrenderObj.onAfterToneMap(solarPass);
+  engine.onAfterToneMap(solarPass);
 
   // Every map has exactly one owning material, so it goes with that material.
   function disposeMaterial(mat) {
@@ -977,7 +995,8 @@ export default function createSolarRenderer(unrenderObj, markDirty, labels, onSu
       markDirty();
     },
     dispose: function() {
-      unrenderObj.offAfterToneMap(solarPass);
+      engine.offAfterToneMap(solarPass);
+      engine.offBeforeRender(updateFade);
       records.forEach(function(rec) {
         if (rec.mesh) {
           rec.mesh.traverse(function(o) {        // picks up Saturn's ring child
