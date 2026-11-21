@@ -85,7 +85,8 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
   var MIN_RADIUS    = 3.7e-16;          // minimum orbit radius
 //   var MIN_RADIUS    = 1e-5;          // minimum orbit radius
   var SWITCH_ANGLE  = Math.PI / 16; // elevation above equatorial plane on satellite entry (rad)
-  var ZOOM_SPEED    = 0.002;      // exponential factor per clamped scroll pixel
+  var ZOOM_SPEED    = 0.003;      // exponential factor per clamped scroll pixel
+  var PINCH_POWER   = 2;          // radius changes as (finger spread)^PINCH_POWER
   // Keyboard-driven rates (per second)
   // Translation is a mouse drag by another name, so it moves a FRACTION of the
   // orbit radius per second rather than a fixed distance -- PAN_SPEED above is
@@ -449,8 +450,10 @@ function createSatelliteControl(camera, container, markDirty, keyState) {
 
   function onTouchZoom(scale) {
     if (!enabled) return;
-    // scale = newDist / prevDist: > 1 means fingers spread (zoom in = smaller radius)
-    logRT = Math.max(Math.log(MIN_RADIUS), logRT - Math.log(scale));
+    // scale = newDist / prevDist: > 1 means fingers spread (zoom in = smaller radius).
+    // Raised to PINCH_POWER, so one pinch covers more of the ~20 decades between
+    // Earth's surface and the CMB.
+    logRT = Math.max(Math.log(MIN_RADIUS), logRT - PINCH_POWER * Math.log(scale));
     wake();
   }
 

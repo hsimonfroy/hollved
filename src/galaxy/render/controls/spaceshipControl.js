@@ -44,7 +44,7 @@ function createSpaceshipControl(camera, container, keyState, markDirty) {
   var MOVE_SPEED = DEFAULT_MOVE_SPEED;   // Mpc/s, set by cursor
   var ROT_SPEED      = 0.4;  // full-deflection turn rate (rad/s), all three axes
   var _currentSpeed  = 0;    // actual speed magnitude this frame (Mpc/s)
-  var WHEEL_SPEED    = 0.002; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
+  var WHEEL_SPEED    = 0.003; // log-scale sensitivity (matches satelliteControl ZOOM_SPEED)
 
   var tmpQ = new THREE.Quaternion();
 

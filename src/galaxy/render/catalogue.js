@@ -16,23 +16,26 @@ var VERTEX_SHADER = [
   'uniform vec4 uColor;',
   'uniform float uSize;',
   'uniform float uViewportHeight;',
-  'varying float vAlpha;',
-  'varying float vPointSize;',
+  // The point's alpha, already dimmed for its sub-pixel size: the one value the
+  // fragment shader needs. A single varying keeps the per-vertex output small,
+  // which is what a tile-based (mobile) GPU writes to memory and reads back.
+  'varying float vFlux;',
   'void main() {',
   // The catalogue's model matrix is the identity, so `position` is already the
   // world position the slice is tested in.
-  '  vAlpha = uColor.a * sliceAlpha(position);',
+  '  float alpha = uColor.a * sliceAlpha(position);',
   '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
-  '  vPointSize = uSize * projectionMatrix[1][1] * uViewportHeight * 0.5 / length(mvPosition.xyz);',
+  '  float size = uSize * projectionMatrix[1][1] * uViewportHeight * 0.5 / length(mvPosition.xyz);',
   // Invisible, behind the camera (view-space z > 0), or far below a pixel.
-  '  if (vAlpha < 0.004 || mvPosition.z > 0.0 || vPointSize < 0.0003) {',
+  '  if (alpha < 0.004 || mvPosition.z > 0.0 || size < 0.0003) {',
   '    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
   '    gl_PointSize = 0.0;',
   '    return;',
   '  }',
-  // Never below a pixel; the fragment shader dims a sub-pixel point instead, so
-  // its flux falls with its size.
-  '  gl_PointSize = max(vPointSize, 1.0);',
+  // Never below a pixel; a sub-pixel point is dimmed instead, so its flux falls
+  // with its size.
+  '  vFlux = alpha * min(size, 1.0);',
+  '  gl_PointSize = max(size, 1.0);',
   '  gl_Position = projectionMatrix * mvPosition;',
   '}'
 ].join('\n');
@@ -40,12 +43,11 @@ var VERTEX_SHADER = [
 var FRAGMENT_SHADER = [
   'uniform vec4 uColor;',
   'uniform sampler2D pointTexture;',
-  'varying float vAlpha;',
-  'varying float vPointSize;',
+  'varying float vFlux;',
   'void main() {',
   '  vec4 tColor = texture2D(pointTexture, gl_PointCoord);',
   '  if (tColor.a < 0.01) discard;',
-  '  gl_FragColor = vec4(uColor.rgb, tColor.a * vAlpha * min(vPointSize, 1.0));',
+  '  gl_FragColor = vec4(uColor.rgb, tColor.a * vFlux);',
   '}'
 ].join('\n');
 
