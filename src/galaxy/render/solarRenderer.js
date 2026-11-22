@@ -206,6 +206,10 @@ var RING_FRAG = [
 // output, so a map has to be decoded on the way in or it round-trips through only
 // half a transfer. No mip chain: at a few pixels across a mip level averages the
 // bright core away, and none of these maps carries detail one would preserve.
+// What TextureLoader's flipY and unpremultiplied alpha did for an <img>; with a
+// bitmap they are done at decode (ImageBitmapLoader adds no colour conversion).
+var BITMAP_OPTIONS = { imageOrientation: 'flipY', premultiplyAlpha: 'none' };
+
 function solarTexture(tex) {
   tex.colorSpace      = THREE.SRGBColorSpace;
   tex.generateMipmaps = false;
@@ -380,6 +384,11 @@ export default function createSolarRenderer(engine, markDirty, labels, onSunPos)
   var _invQuat = new THREE.Quaternion();
   var _toCam  = new THREE.Vector3();
   var maxAniso = engine.renderer().capabilities.getMaxAnisotropy();
+  // Earth's two maps are asked for at high priority and every other download
+  // after the survey at low: Earth is where the Earth button goes. Only a hint
+  // to the browser and server, so nothing is held back or serialised.
+  var earthLoader = new THREE.ImageBitmapLoader().setOptions(BITMAP_OPTIONS).setPriority('high');
+  var otherLoader = new THREE.ImageBitmapLoader().setOptions(BITMAP_OPTIONS).setPriority('low');
 
   engine.onResize(function() {
     viewportHeight = container.clientHeight || 600;
@@ -412,6 +421,7 @@ export default function createSolarRenderer(engine, markDirty, labels, onSunPos)
       if (onSunPos) onSunPos(sunGroup.position);
 
       m.bodies.forEach(loadBody);
+      precompile();
       buildDots();          // needs every record, so it runs after the loop
       updateSunDirs();
       if (m.heliosphere) helio = createHeliosphere(sunGroup, m.heliosphere);
@@ -478,12 +488,32 @@ export default function createSolarRenderer(engine, markDirty, labels, onSunPos)
   // Construction
   // ---------------------------------------------------------------------------
 
+  // Decoded off the main thread (an ImageBitmap) and uploaded on arrival, not on
+  // first draw. Earth is only drawn from half a pixel up, so its two 8k maps used
+  // to be decoded and uploaded on the very frame a flight reached it: a 0.85 s
+  // freeze, the first time only.
   function loadTex(file) {
-    var tex = solarTexture(new THREE.TextureLoader().load(
-      config.dataUrl + 'aux/solar/' + file, function() { markDirty(); }));
+    var tex = solarTexture(new THREE.Texture());   // as TextureLoader's: empty until loaded
     tex.wrapS      = THREE.RepeatWrapping;
     tex.anisotropy = maxAniso;
+    tex.flipY      = false;   // flipped at decode instead: ignored for a bitmap
+    var loader = file.indexOf('earth') === 0 ? earthLoader : otherLoader;
+    loader.load(config.dataUrl + 'aux/solar/' + file, function(bitmap) {
+      tex.image = bitmap;
+      tex.needsUpdate = true;
+      engine.renderer().initTexture(tex);
+      markDirty();
+    }, undefined, function(err) { console.warn('[solarRenderer] ' + file + ':', err); });
     return tex;
+  }
+
+  // Every body's shader, compiled now rather than on the frame it first grows past
+  // half a pixel -- which, for Earth, is the end of a flight to it.
+  function precompile() {
+    var hidden = records.filter(function(rec) { return rec.mesh && !rec.mesh.visible; });
+    records.forEach(function(rec) { if (rec.mesh) rec.mesh.visible = true; });
+    engine.renderer().compile(solarScene, solarCamera);
+    hidden.forEach(function(rec) { rec.mesh.visible = false; });
   }
 
   function makeBodyMaterial(body) {

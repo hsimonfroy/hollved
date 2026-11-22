@@ -159,7 +159,7 @@ export default function Help() {
         <HelpRow keys={[keys.KeyQ, keys.KeyE]} label='Roll' />
         <div className='help-section'>Options</div>
         <HelpRow keys={[keys.KeyF]} label='Switch to satellite' />
-        <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
+        <HelpRow keys={[keys.KeyR]} label='Fly to / from origin' />
         <HelpRow keys={[keys.KeyI]} label='Show info' />
       </>}
 
@@ -176,7 +176,7 @@ export default function Help() {
         <HelpRow keys={['Scroll']} label='Zoom' />
         <div className='help-section'>Options</div>
         <HelpRow keys={[keys.KeyF]} label='Switch to spaceship' />
-        <HelpRow keys={[keys.KeyR]} label='Reset to origin' />
+        <HelpRow keys={[keys.KeyR]} label='Fly to / from origin' />
         <HelpRow keys={[keys.KeyI]} label='Show info' />
       </>}
 

@@ -26,7 +26,7 @@ import createDetailedGalaxies from './detailedGxyRenderer.js';
 import createSolarRenderer    from './solarRenderer.js';
 import createStarField       from './starField.js';
 import createLabelLayer      from './labelLayer.js';
-import { cartToRaDecR, dirToAzAlt, getLocalFrame } from './coordUtils.js';
+import { cartToRaDecR, dirToAzAlt, getLocalFrame, raDec2UnitVec } from './coordUtils.js';
 import { createGlowMaterial, makeRadarLabel } from './radarStyle.js';
 import slice from './slice.js';
 
@@ -47,6 +47,22 @@ function sceneRenderer(container) {
   var rulerObjects  = [];   // [{ ring, label, radius }, ...]
   var labelScene        = null; // separate scene rendered post-tone-map for crisp SDF text
   var DEFAULT_HIDDEN_TRACERS = ['cmb', 'radar'];
+  // The Earth button's two stops, both centred on Earth: the opening overview,
+  // and Earth close up in the equatorial frame -- the celestial pole up, looking
+  // at RA = Dec = 0 -- from where Earth spans about 20 degrees of the view.
+  var M_TO_MPC          = 1 / 3.085677581e22;
+  var EARTH_VIEW_RADIUS = 3.8e7 * M_TO_MPC;   // 38,000 km
+  var EARTH_VIEW_UP     = raDec2UnitVec(0, 90);
+  var EARTH_VIEW_FROM   = raDec2UnitVec(180, 0);   // the camera, opposite RA = Dec = 0
+  // Centred on Earth, an orbit wider than this flies in to Earth and a narrower
+  // one flies out to the overview: about the Sun's distance to the galactic plane.
+  var SWITCH_RADIUS     = 1e20 * M_TO_MPC;
+  var CENTRED_FRAC      = 1e-3;  // pivot this close to Earth, in orbit radii, counts as on it
+  // A flight between the two stops crosses 18.5 decades of scale, so it is timed
+  // by decades and the radius is interpolated in log: linearly, Earth would be
+  // gone in the first frame. 162 ms a decade makes Earth <-> overview 3 s.
+  var FLIGHT_MS_PER_DECADE = 500;
+  var homeAction = null;   // last value sent on homeActionChanged
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
   var _rulerDir = null, _rulerQuat = null; // per-frame ruler scratch
@@ -79,7 +95,7 @@ function sceneRenderer(container) {
 
   appEvents.radarReady.on(onRadarReady);
   appEvents.setMovementSpeed.on(onSetMovementSpeed);
-  appEvents.resetToOrigin.on(resetToOrigin);
+  appEvents.resetToOrigin.on(onHomePressed);
 
   appConfig.on('camera', moveCamera);
   appConfig.on('tracersChanged', handleTracersChangedFromURL);
@@ -97,10 +113,62 @@ function sceneRenderer(container) {
     if (spaceshipControl) spaceshipControl.movementSpeed = v;
   }
 
-  function resetToOrigin() {
-    if (!engine) return;
-    if (cameraAnim) return;
+  // The Earth button: back onto Earth if the orbit centre has moved off it;
+  // otherwise between the two stops, Earth close up and the overview.
+  function onHomePressed() {
+    if (!engine || cameraAnim) return;
+    var action = getHomeAction();
+    if (action === 'toEarth') {
+      var azAlt = dirToAzAlt(EARTH_VIEW_FROM, EARTH_VIEW_UP);
+      flyOrbit(EARTH_VIEW_RADIUS, EARTH_VIEW_UP, azAlt.az, azAlt.alt);
+    } else if (action === 'toOverview') {
+      var o = appConfig.getDefaultOrbit();
+      flyOrbit(o.r, o.up, o.az, o.alt);
+    } else {
+      resetToOrigin();
+    }
+  }
 
+  function getHomeAction() {
+    if (currentMode !== 'satellite' || !satelliteControl) return 'recenter';
+    var r = satelliteControl.getRadius();
+    if (satelliteControl.getPivot().length() > CENTRED_FRAC * r) return 'recenter';
+    return r >= SWITCH_RADIUS ? 'toEarth' : 'toOverview';
+  }
+
+  function updateHomeAction() {
+    var action = getHomeAction();
+    if (action !== homeAction) {
+      homeAction = action;
+      appEvents.homeActionChanged.fire(action);
+    }
+  }
+
+  // An orbit about the current pivot, flown to rather than jumped to. The
+  // control is set to the end state first, to read the end camera from it, and
+  // re-enabled there; in between, the camera's orientation is slerped and its
+  // radius eased in log (see animFrame).
+  function flyOrbit(r, up, az, alt) {
+    var cam = engine.camera();
+    var startPos  = cam.position.clone();
+    var startQuat = cam.quaternion.clone();
+    var pivot = satelliteControl.getPivot().clone();
+    satelliteControl.restoreFromAzAlt(pivot, r, up, az * DEG2RAD, alt * DEG2RAD);
+    var endPos  = cam.position.clone();
+    var endQuat = cam.quaternion.clone();
+    cam.position.copy(startPos);
+    cam.quaternion.copy(startQuat);
+    satelliteControl.setEnabled(false);
+
+    var decades = Math.abs(Math.log10(endPos.distanceTo(pivot) / startPos.distanceTo(pivot)));
+    var ms = Math.max(500, decades * FLIGHT_MS_PER_DECADE);
+    startCameraAnim(startPos, endPos, startQuat, endQuat, ms, function() {
+      satelliteControl.setEnabled(true);
+      updateHomeAction();
+    }, pivot);
+  }
+
+  function resetToOrigin() {
     var cam = engine.camera();
     var startPos  = cam.position.clone();
     var startQuat = cam.quaternion.clone();
@@ -120,6 +188,7 @@ function sceneRenderer(container) {
 
   function updateQuery() {
     if (!engine) return;
+    updateHomeAction();
     var camera = engine.camera();
     var cp = camera.position;
     // HUD always shows camera position (not pivot), even in satellite mode
@@ -146,8 +215,15 @@ function sceneRenderer(container) {
     var t  = Math.min((time - cameraAnim.startTime) / cameraAnim.duration, 1.0);
     var te = easeInOutQuad(t);
     var cam = engine.camera();
-    cam.position.lerpVectors(cameraAnim.startPos, cameraAnim.endPos, te);
-    cam.quaternion.slerpQuaternions(cameraAnim.startQuat, cameraAnim.endQuat, te);
+    var a = cameraAnim;
+    cam.quaternion.slerpQuaternions(a.startQuat, a.endQuat, te);
+    if (a.pivot) {
+      // An orbit: still looking at the pivot, at a radius eased in log.
+      var r = Math.exp(Math.log(a.startR) + (Math.log(a.endR) - Math.log(a.startR)) * te);
+      cam.position.set(0, 0, 1).applyQuaternion(cam.quaternion).multiplyScalar(r).add(a.pivot);
+    } else {
+      cam.position.lerpVectors(a.startPos, a.endPos, te);
+    }
     engine.markDirty();
     if (t >= 1.0) {
       engine.offFrame(animFrame);
@@ -156,13 +232,18 @@ function sceneRenderer(container) {
     }
   }
 
-  function startCameraAnim(startPos, endPos, startQuat, endQuat, duration, onDone) {
+  // With a pivot, the camera orbits it and the radius changes in log; see
+  // flyOrbit. Without, it moves in a straight line.
+  function startCameraAnim(startPos, endPos, startQuat, endQuat, duration, onDone, pivot) {
     cameraAnim = {
       startPos: startPos, endPos: endPos,
       startQuat: startQuat, endQuat: endQuat,
       duration: duration || 500,
       startTime: null,
-      onDone: onDone
+      onDone: onDone,
+      pivot:  pivot || null,
+      startR: pivot ? startPos.distanceTo(pivot) : 0,
+      endR:   pivot ? endPos.distanceTo(pivot)   : 0
     };
     engine.onFrame(animFrame);
     engine.markDirty();
@@ -454,10 +535,8 @@ function sceneRenderer(container) {
     applySlice();
     applyTracerVisibility();
 
-    if (cmbSphere) {
-      cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
-      cmbSphere.visible = cmbVisible;
-    }
+    cmbVisible = configVisible ? configVisible.indexOf('cmb') >= 0 : false;
+    if (cmbSphere) cmbSphere.visible = cmbVisible;
     setLocalVisible(configVisible ? configVisible.indexOf('local') >= 0 : true);
 
     updateRadarVisibility();
@@ -604,7 +683,8 @@ function sceneRenderer(container) {
 
   function createCMBSphere(scene, radius, exposure, power) {
     var base = config.dataUrl + 'aux/cmb/planck_100ghz_';
-    var cubeTexture = new THREE.CubeTextureLoader().load([
+    // Low priority, as everything after the survey but Earth: see solarRenderer.
+    var cubeTexture = new THREE.CubeTextureLoader().setPriority('low').load([
       base + 'px.jpg', base + 'nx.jpg',
       base + 'py.jpg', base + 'ny.jpg',
       base + 'pz.jpg', base + 'nz.jpg'
@@ -713,7 +793,7 @@ function sceneRenderer(container) {
 
     appEvents.radarReady.off(onRadarReady);
     appEvents.setMovementSpeed.off(onSetMovementSpeed);
-    appEvents.resetToOrigin.off(resetToOrigin);
+    appEvents.resetToOrigin.off(onHomePressed);
 
     clearInterval(queryUpdateId);
     appConfig.off('camera', moveCamera);

@@ -204,7 +204,8 @@ export default function createStarField(engine, markDirty, labels) {
       return Promise.all([meta].concat(
         ['positions.bin', 'absmag.bin', 'colors.bin', 'lines.bin', 'names.json']
           .map(function(f) {
-            return fetch(config.dataUrl + 'aux/stars/' + f).then(function(r) {
+            // Low priority, behind Earth's maps: see solarRenderer.
+            return fetch(config.dataUrl + 'aux/stars/' + f, { priority: 'low' }).then(function(r) {
               if (!r.ok) throw new Error(f + ': HTTP ' + r.status);
               return f.slice(-5) === '.json' ? r.json() : r.arrayBuffer();
             });

@@ -83,7 +83,14 @@ export default eventMirror([
   'setMovementSpeed',
 
   /**
-   * Fired when the user wants to reset camera/pivot position to the origin (0,0,0).
+   * The Earth button (or the R key). What it does depends on where the camera
+   * is: see homeActionChanged.
    */
-  'resetToOrigin'
+  'resetToOrigin',
+
+  /**
+   * What the Earth button would do now, re-evaluated as the camera moves.
+   * Arg: 'recenter' | 'toEarth' | 'toOverview'.
+   */
+  'homeActionChanged'
 ], appEvents);

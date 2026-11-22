@@ -144,6 +144,7 @@ export default function createDetailedGalaxies(engine, markDirty, labels,
       allPoints.push(pts);
       markDirty();
     };
+    img.fetchPriority = 'low';   // behind Earth's maps: see solarRenderer
     img.src = config.dataUrl + 'aux/local/' + gal.id + '.png';
   }
 

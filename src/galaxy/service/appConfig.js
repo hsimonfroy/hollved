@@ -30,7 +30,7 @@ function fromLog(log) {
 // Default view: Butterfly. Written the way the hash writes them, so the default
 // and its own serialisation are the same number and reloading never nudges it.
 var LOG_POS_R  = 0.000;   // 1 m from the origin — the origin, at scene scale
-var LOG_RADIUS = 26;  // ~ 4000 Mpc
+var LOG_RADIUS = Math.log10(5000 * MPC_TO_M);  // 5 Gpc
 var LOG_SPEED  = 22.5;  // ~ 1 Mpc/s
 
 var defaultConfig = {
@@ -58,6 +58,7 @@ function appConfig() {
     getAzAlt:           getAzAlt,
     getRadius:          getRadius,
     getCameraLookAt:    getCameraLookAt,
+    getDefaultOrbit:    getDefaultOrbit,
     getSpeed:           getSpeed,
     getVisibleTracers:  getVisibleTracers,
     setVisibleTracers:  setVisibleTracers,
@@ -92,6 +93,13 @@ function appConfig() {
 
   function getRadius() {
     return hashConfig.azaltr.r;
+  }
+
+  // The opening overview, whatever the URL says: where the Earth button flies
+  // back out to.
+  function getDefaultOrbit() {
+    var z = defaultConfig.zen, a = defaultConfig.azaltr;
+    return { up: raDec2UnitVec(z.ra, z.dec), az: a.az, alt: a.alt, r: a.r };
   }
 
   function getCameraLookAt() {
