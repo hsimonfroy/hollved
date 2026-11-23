@@ -59,13 +59,24 @@ export default function Help() {
   // All input listeners registered once; each handler checks isMobileRef.current
   useEffect(function() {
     function onDownloadRequested() { setVisible(false); }
-    function onModeChanged(m) { setMode(m); }
+    // A real switch (F, the mode button, a hash change) brings up the new mode's
+    // help. The renderer also fires on load just to sync the UI, with the mode
+    // unchanged, and that one must not pop the panel.
+    var lastMode = appConfig.getControlMode();
+    function onModeChanged(m) {
+      setMode(m);
+      if (m !== lastMode) setVisible(true);
+      lastMode = m;
+    }
 
     appEvents.downloadGraphRequested.on(onDownloadRequested);
     appEvents.controlModeChanged.on(onModeChanged);
 
     function onKeyDown(e) {
       if (isMobileRef.current) return;
+      // F switches mode, and the switch shows the help: hiding it here would race
+      // the mode change fired by the same key press.
+      if (e.code === 'KeyF') return;
       if (Key.isControlKey(e)) { setVisible(false); return; }
       if (Key.isModifier(e)) return;
       setVisible(true);
@@ -159,7 +170,7 @@ export default function Help() {
         <HelpRow keys={[keys.KeyQ, keys.KeyE]} label='Roll' />
         <div className='help-section'>Options</div>
         <HelpRow keys={[keys.KeyF]} label='Switch to satellite' />
-        <HelpRow keys={[keys.KeyR]} label='Fly to / from origin' />
+        <HelpRow keys={[keys.KeyR]} label='Fly to origin' />
         <HelpRow keys={[keys.KeyI]} label='Show info' />
       </>}
 

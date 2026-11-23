@@ -59,9 +59,21 @@ function sceneRenderer(container) {
   var SWITCH_RADIUS     = 1e20 * M_TO_MPC;
   var CENTRED_FRAC      = 1e-3;  // pivot this close to Earth, in orbit radii, counts as on it
   // A flight between the two stops crosses 18.5 decades of scale, so it is timed
-  // by decades and the radius is interpolated in log: linearly, Earth would be
-  // gone in the first frame. 162 ms a decade makes Earth <-> overview 3 s.
+  // by decades and the distance is interpolated in log: linearly, Earth would be
+  // gone in the first frame. 500 ms a decade makes Earth <-> overview 9 s.
   var FLIGHT_MS_PER_DECADE = 500;
+  // The spaceship's return to Earth is a utility move, not a view, so it runs
+  // faster: 300 ms a decade brings it home from 5 Gpc (19.8 decades of approach
+  // scale, see approachScale) in 5.9 s.
+  var APPROACH_MS_PER_DECADE = 300;
+  // ...and turns to face Earth in its first quarter (0.5 s at least), so that it
+  // looks where it is going for most of the way rather than swinging round late.
+  var APPROACH_TURN_FRAC     = 0.25;
+  var SHORT_FLIGHT_MS      = 1000;   // fixed-time moves, and the floor of the others
+  // Below this distance a flight onto a point goes linear instead of logarithmic
+  // (see approachScale). Earth's radius: the decades below it are flown inside
+  // Earth, where nothing on screen moves, and in log they never end.
+  var LINEAR_BELOW = 6.371e6 * M_TO_MPC;
   var homeAction = null;   // last value sent on homeActionChanged
   var _zUp = null;  // THREE.Vector3(0,0,1), allocated once for setFromUnitVectors
   var _sliceFwd = null; // pre-allocated for per-frame slice normal computation
@@ -144,10 +156,9 @@ function sceneRenderer(container) {
     }
   }
 
-  // An orbit about the current pivot, flown to rather than jumped to. The
-  // control is set to the end state first, to read the end camera from it, and
-  // re-enabled there; in between, the camera's orientation is slerped and its
-  // radius eased in log (see animFrame).
+  // The Earth button's fly in / fly out: an orbit about the current pivot, flown
+  // to rather than jumped to. The control is set to the end state first, to read
+  // the end camera from it, and re-enabled there.
   function flyOrbit(r, up, az, alt) {
     var cam = engine.camera();
     var startPos  = cam.position.clone();
@@ -160,14 +171,19 @@ function sceneRenderer(container) {
     cam.quaternion.copy(startQuat);
     satelliteControl.setEnabled(false);
 
-    var decades = Math.abs(Math.log10(endPos.distanceTo(pivot) / startPos.distanceTo(pivot)));
-    var ms = Math.max(500, decades * FLIGHT_MS_PER_DECADE);
-    startCameraAnim(startPos, endPos, startQuat, endQuat, ms, function() {
-      satelliteControl.setEnabled(true);
-      updateHomeAction();
-    }, pivot);
+    var startR = startPos.distanceTo(pivot), endR = endPos.distanceTo(pivot);
+    startCameraAnim(decadeMs(startR, endR, FLIGHT_MS_PER_DECADE),
+      orbitPose(pivot, startR, endR, startQuat, endQuat),
+      function() {
+        satelliteControl.setEnabled(true);
+        updateHomeAction();
+      });
   }
 
+  // Back to Earth. In satellite mode the orbit's centre slides onto Earth at fixed
+  // time, the view's orientation kept (the radius does not change, so there is no
+  // scale to cross). In spaceship mode the camera flies straight at Earth, timed by
+  // the decades of distance it closes, and turns to face it on the way.
   function resetToOrigin() {
     var cam = engine.camera();
     var startPos  = cam.position.clone();
@@ -178,11 +194,16 @@ function sceneRenderer(container) {
       var endPos  = cam.position.clone();
       var endQuat = cam.quaternion.clone();
       satelliteControl.setEnabled(false);
-      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
-        satelliteControl.setEnabled(true);
-      });
+      startCameraAnim(SHORT_FLIGHT_MS, lerpPose(startPos, endPos, startQuat, endQuat),
+        function() { satelliteControl.setEnabled(true); });
     } else {
-      startCameraAnim(startPos, new THREE.Vector3(), startQuat, startQuat, 500, function() {});
+      var earth = new THREE.Vector3();
+      var decades = (approachScale(startPos.length()) - approachScale(0)) / Math.LN10;
+      var ms = Math.max(SHORT_FLIGHT_MS, decades * APPROACH_MS_PER_DECADE);
+      var turnFrac = Math.min(1, Math.max(SHORT_FLIGHT_MS, APPROACH_TURN_FRAC * ms) / ms);
+      startCameraAnim(ms,
+        approachPose(earth, startPos, startQuat, facing(startQuat, startPos, earth), turnFrac),
+        function() {});
     }
   }
 
@@ -209,21 +230,89 @@ function sceneRenderer(container) {
     return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
   }
 
+  // ── Camera flights ─────────────────────────────────────────────────────────
+  //
+  // A flight is a duration and a pose: a function placing the camera at eased
+  // time te in [0, 1] (and given the raw time t too, for a pose that runs part
+  // of itself on a clock of its own). Three kinds of pose:
+  //   lerpPose      straight line, orientation slerped. Fixed time: mode switches,
+  //                 recentring the orbit on Earth.
+  //   orbitPose     about a pivot, radius in log, orientation slerped. Timed by
+  //                 decades: the Earth button's fly in / fly out.
+  //   approachPose  straight at a point, distance in log then linear (see
+  //                 approachScale), orientation slerped. Timed by decades: back
+  //                 to Earth in spaceship mode.
+  // The slerp is the same in all three: the shortest rotation between the two
+  // orientations, at a constant rate in eased time. The approach runs it over the
+  // first turnFrac of the flight only, eased on that shorter span.
+
+  function logLerp(a, b, t) {
+    return Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * t);
+  }
+
+  function decadeMs(r0, r1, msPerDecade) {
+    if (!(r0 > 0 && r1 > 0)) return SHORT_FLIGHT_MS;   // already there: no scale to cross
+    return Math.max(SHORT_FLIGHT_MS, Math.abs(Math.log10(r1 / r0)) * msPerDecade);
+  }
+
+  function lerpPose(startPos, endPos, startQuat, endQuat) {
+    return function(cam, te) {
+      cam.quaternion.slerpQuaternions(startQuat, endQuat, te);
+      cam.position.lerpVectors(startPos, endPos, te);
+    };
+  }
+
+  // Still looking at the pivot, at a radius eased in log.
+  function orbitPose(pivot, startR, endR, startQuat, endQuat) {
+    return function(cam, te) {
+      cam.quaternion.slerpQuaternions(startQuat, endQuat, te);
+      cam.position.set(0, 0, 1).applyQuaternion(cam.quaternion)
+        .multiplyScalar(logLerp(startR, endR, te)).add(pivot);
+    };
+  }
+
+  // The scale an approach is flown on, s(r) with r the distance left:
+  //   r >= R:  s = ln(r / R)     equal time per decade, as in the other flights
+  //   r <  R:  s = r / R - 1     equal time per metre, down to s = -1 at r = 0
+  // with R = LINEAR_BELOW. Value and slope (1/R) agree at r = R, so the switch from
+  // log to linear is one smooth motion, and the flight reaches the point itself,
+  // where log alone would spend the same time on every decade below R, forever.
+  function approachScale(r) {
+    return r >= LINEAR_BELOW ? Math.log(r / LINEAR_BELOW) : r / LINEAR_BELOW - 1;
+  }
+
+  function approachDist(s) {
+    return s >= 0 ? LINEAR_BELOW * Math.exp(s) : LINEAR_BELOW * (1 + s);
+  }
+
+  // The same straight line as lerpPose, travelled evenly in approachScale.
+  function approachPose(target, startPos, startQuat, endQuat, turnFrac) {
+    var dist = startPos.distanceTo(target);
+    var dir = dist > 0 ? startPos.clone().sub(target).divideScalar(dist) : new THREE.Vector3();
+    var s0 = approachScale(dist), s1 = approachScale(0);
+    return function(cam, te, t) {
+      cam.quaternion.slerpQuaternions(startQuat, endQuat,
+        easeInOutQuad(Math.min(t / turnFrac, 1)));
+      cam.position.copy(dir).multiplyScalar(approachDist(s0 + (s1 - s0) * te)).add(target);
+    };
+  }
+
+  // The orientation `quat` turned, by the smallest rotation, to look from `from`
+  // at `to`: the axis is normal to the plane of the line of sight and the
+  // direction of `to`, so the line of sight stays in that plane as it turns, and
+  // the roll about it is left as it was. Standing on `to`, nothing to face.
+  function facing(quat, from, to) {
+    var toDir = to.clone().sub(from);
+    if (toDir.lengthSq() === 0) return quat.clone();
+    var fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+    return new THREE.Quaternion().setFromUnitVectors(fwd, toDir.normalize()).multiply(quat);
+  }
+
   function animFrame(time) {
     if (!cameraAnim) return;
     if (cameraAnim.startTime === null) cameraAnim.startTime = time;
-    var t  = Math.min((time - cameraAnim.startTime) / cameraAnim.duration, 1.0);
-    var te = easeInOutQuad(t);
-    var cam = engine.camera();
-    var a = cameraAnim;
-    cam.quaternion.slerpQuaternions(a.startQuat, a.endQuat, te);
-    if (a.pivot) {
-      // An orbit: still looking at the pivot, at a radius eased in log.
-      var r = Math.exp(Math.log(a.startR) + (Math.log(a.endR) - Math.log(a.startR)) * te);
-      cam.position.set(0, 0, 1).applyQuaternion(cam.quaternion).multiplyScalar(r).add(a.pivot);
-    } else {
-      cam.position.lerpVectors(a.startPos, a.endPos, te);
-    }
+    var t = Math.min((time - cameraAnim.startTime) / cameraAnim.duration, 1.0);
+    cameraAnim.pose(engine.camera(), easeInOutQuad(t), t);
     engine.markDirty();
     if (t >= 1.0) {
       engine.offFrame(animFrame);
@@ -232,19 +321,8 @@ function sceneRenderer(container) {
     }
   }
 
-  // With a pivot, the camera orbits it and the radius changes in log; see
-  // flyOrbit. Without, it moves in a straight line.
-  function startCameraAnim(startPos, endPos, startQuat, endQuat, duration, onDone, pivot) {
-    cameraAnim = {
-      startPos: startPos, endPos: endPos,
-      startQuat: startQuat, endQuat: endQuat,
-      duration: duration || 500,
-      startTime: null,
-      onDone: onDone,
-      pivot:  pivot || null,
-      startR: pivot ? startPos.distanceTo(pivot) : 0,
-      endR:   pivot ? endPos.distanceTo(pivot)   : 0
-    };
+  function startCameraAnim(duration, pose, onDone) {
+    cameraAnim = { duration: duration, pose: pose, onDone: onDone, startTime: null };
     engine.onFrame(animFrame);
     engine.markDirty();
   }
@@ -292,7 +370,7 @@ function sceneRenderer(container) {
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
 
-      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+      startCameraAnim(SHORT_FLIGHT_MS, lerpPose(startPos, endPos, startQuat, endQuat), function() {
         cam.position.copy(endPos);
         cam.up.copy(upAxis);
         cam.quaternion.copy(endQuat);
@@ -331,7 +409,7 @@ function sceneRenderer(container) {
       appEvents.controlModeChanged.fire(currentMode);
       appConfig.setControlMode(currentMode);
 
-      startCameraAnim(startPos, endPos, startQuat, endQuat, 500, function() {
+      startCameraAnim(SHORT_FLIGHT_MS, lerpPose(startPos, endPos, startQuat, endQuat), function() {
         cam.position.copy(endPos);
         cam.quaternion.copy(endQuat);
         satelliteControl.setEnabled(true); // no cam arg → preserves computed state

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import appEvents from './service/appEvents.js';
 import config from '../config.js';
 
@@ -42,6 +42,12 @@ export default function Info() {
 
   useEffect(function() {
     function onDownloadRequested(name) {
+      // Opened on the default (Butterfly) view, i.e. no camera in the URL, as
+      // from the menu: start with the catalog info open. A shared link to a
+      // particular view opens straight onto that view.
+      var query = window.location.hash.split('?')[1] || '';
+      var hasCamera = /(^|&)(pos|zen|azaltr|rot|speed)=/.test(query);
+      setOpen(!hasCamera);
       setGraphName(name);
       setLogoError(false);
       setInfoHtml('');
@@ -64,11 +70,28 @@ export default function Info() {
     };
   }, []);
 
+  // No backdrop: the panel floats over a live scene, so you can orbit, fly or
+  // zoom with it open. It closes when a press outside it is released (the drag
+  // itself goes through to the scene). The 🔭 button toggles it on its own.
+  var panelRef = useRef(null);
+  var btnRef = useRef(null);
+  useEffect(function() {
+    if (!open) return;
+    function onPointerUp(e) {
+      var inside = function(ref) { return ref.current && ref.current.contains(e.target); };
+      if (!inside(panelRef) && !inside(btnRef)) setOpen(false);
+    }
+    // Capture phase, so a control that stops the event on the canvas still closes it.
+    document.addEventListener('pointerup', onPointerUp, true);
+    return function() { document.removeEventListener('pointerup', onPointerUp, true); };
+  }, [open]);
+
   var logoUrl = graphName ? config.dataUrl + graphName + '/logo.png' : null;
 
   return (
     <>
       <div
+        ref={btnRef}
         className='info-btn'
         title='Catalog info'
         onClick={function() { setOpen(function(v) { return !v; }); }}
@@ -78,8 +101,7 @@ export default function Info() {
       </div>
       {open && (
         <>
-          <div className='info-panel-backdrop' onClick={function() { setOpen(false); }} onContextMenu={function(e) { e.preventDefault(); setOpen(false); }} />
-          <div className='info-panel'>
+          <div className='info-panel' ref={panelRef}>
             <div className='info-panel-header'>Catalog Info</div>
             {logoUrl && !logoError && (
               <div className='info-logo-wrap'>
